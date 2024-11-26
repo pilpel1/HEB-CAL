@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}הוספת אירוע{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title">הוספת אירוע חדש</h5>
+    </div>
+    <div class="card-body">
+        <form id="eventForm">
+            <div class="mb-3">
+                <label for="title" class="form-label">כותרת</label>
+                <input type="text" class="form-control" id="title" required>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="gregorian_date" class="form-label">תאריך לועזי</label>
+                    <input type="date" class="form-control" id="gregorian_date" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="hebrew_date" class="form-label">תאריך עברי</label>
+                    <input type="text" class="form-control" id="hebrew_date" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="time" class="form-label">שעה (אופציונלי)</label>
+                    <input type="time" class="form-control" id="time">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="description" class="form-label">תיאור</label>
+                <textarea class="form-control" id="description" rows="3"></textarea>
+            </div>
+            <div class="form-group mb-3">
+                <label for="end_date">תאריך סיום (אופציונלי)</label>
+                <input type="date" id="end_date" name="end_date" class="form-control">
+            </div>
+            <div class="form-group mb-3">
+                <label for="color">צבע האירוע</label>
+                <select id="color" name="color" class="form-control">
+                    <option value="">ללא צבע</option>
+                    <option value="cyan">ציאן</option>
+                    <option value="yellow">צהוב</option>
+                    <option value="orange">כתום</option>
+                    <option value="green">ירוק</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">הוסף אירוע</button>
+        </form>
+    </div>
+</div>
+{% endblock %} 
