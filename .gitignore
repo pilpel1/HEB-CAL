@@ -29,11 +29,17 @@ ENV/
 # Flask
 instance/
 .webassets-cache
+*.pyc
+__pycache__
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Database
+# Database and Data
 *.db
 *.sqlite3
-data/*.db
+data/*
+!data/.gitkeep
 
 # IDE specific files
 .idea/
@@ -51,4 +57,11 @@ config.py
 .env.local
 .env.development.local
 .env.test.local
-.env.production.local 
+.env.production.local
+
+# Personal Planning Files
+road-map.txt
+feature.txt
+features.txt
+todo.txt
+notes.txt 

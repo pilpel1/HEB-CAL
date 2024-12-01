@@ -42,8 +42,11 @@ body {
     border-radius: 0.5rem;
     border: 1px solid var(--border-color);
     min-height: 100px;
+    height: auto;
     background-color: white;
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
 .calendar-day.empty {
@@ -230,5 +233,26 @@ body {
 
 .event-green {
     background-color: rgba(0, 128, 0, 0.4);
+}
+
+/* הוספת סגנונות חדשים */
+.day-content {
+    margin-top: 2.5rem;  /* מרווח עבור התאריכים בראש התא */
+    flex-grow: 1;
+}
+
+.event-item {
+    padding: 0.25rem 0.5rem;
+    margin: 0.25rem 0;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-time {
+    font-weight: 500;
+    margin-left: 0.25rem;
 }
  
