@@ -15,25 +15,27 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">לוח שנה</a>
+            <a class="navbar-brand" href="/">לוח שנה</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">לוח שנה</a>
+                        <a class="nav-link" href="/">לוח שנה</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('add_event') }}">הוסף אירוע</a>
+                        <a class="nav-link" href="/add_event">הוסף אירוע</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('events_list') }}">רשימת אירועים</a>
+                        <a class="nav-link" href="/events_list">רשימת אירועים</a>
                     </li>
                 </ul>
             </div>
         </div>
     </nav>
+
+    <div id="success-message" class="alert alert-success" role="alert" style="display: none;"></div>
 
     <div class="container mt-4">
         {% block content %}{% endblock %}

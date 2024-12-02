@@ -1,4 +1,3 @@
-// מונקציות עזר
 function formatDate(date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -6,7 +5,6 @@ function formatDate(date) {
     return `${year}-${month}-${day}`;
 }
 
-// פונקציה להמרת מספר ליום בעברית
 function get_hebrew_day(day) {
     const days = {
         1: 'א', 2: 'ב', 3: 'ג', 4: 'ד', 5: 'ה', 6: 'ו', 7: 'ז', 8: 'ח', 9: 'ט', 10: 'י',
@@ -16,14 +14,12 @@ function get_hebrew_day(day) {
     return days[day] || '';
 }
 
-// פונקציה לקבלת שם חודש מקוצר
 function getShortMonthName(month) {
     const shortMonths = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 
                         'יולי', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
     return shortMonths[month];
 }
 
-// פונקציות לוח שנה
 let currentDate = new Date();
 
 async function updateCalendar() {
@@ -63,22 +59,31 @@ async function updateCalendar() {
                     cell.classList.add('current-day');
                 }
 
+                // הוספת data-date לתא
+                const cellDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day.gregorian_day);
+                cell.setAttribute('data-date', formatDate(cellDate));
+
                 const isFirstOfMonth = day.gregorian_day === 1;
                 const gregorianDate = isFirstOfMonth ? 
                     `${day.gregorian_day} ${getShortMonthName(currentDate.getMonth())}` : 
                     day.gregorian_day;
                 
                 cell.innerHTML = `
-                    <div class="date-container">
+                    <div class="dates-container">
                         <span class="gregorian-date">${gregorianDate}</span>
                         <span class="hebrew-date">${day.is_hebrew_month_start ? 
                             `${get_hebrew_day(day.hebrew_day)} ${day.hebrew_month}` : 
                             get_hebrew_day(day.hebrew_day)}</span>
-                    </div>`;
+                    </div>
+                    <div class="jewish-events-container"></div>
+                    <div class="day-content"></div>`;
             }
             
             currentRow.appendChild(cell);
         }
+
+        // הוספת טעינת אירועים לאחר עדכון הלוח
+        await loadAndDisplayEvents();
     } catch (error) {
         console.error('Error rendering calendar:', error);
     }
@@ -106,6 +111,23 @@ async function loadEvents() {
     }
 }
 
+// פונקציה להצגת הודעות
+function showMessage(message) {
+    const successMessage = document.getElementById('success-message');
+    if (successMessage) {
+        successMessage.textContent = message;
+        successMessage.style.display = 'block';
+        successMessage.style.opacity = '1';
+        
+        setTimeout(() => {
+            successMessage.style.opacity = '0';
+            setTimeout(() => {
+                successMessage.style.display = 'none';
+            }, 300);
+        }, 1500);
+    }
+}
+
 async function createEvent(eventData) {
     try {
         const response = await fetch('/api/events', {
@@ -115,11 +137,23 @@ async function createEvent(eventData) {
             },
             body: JSON.stringify(eventData),
         });
+        
         const result = await response.json();
-        if (result.success) {
-            window.location.href = '/events_list';
+        
+        if (response.ok) {
+            const form = document.getElementById('eventForm');
+            if (form) {
+                form.reset();
+            }
+            
+            showMessage('האירוע נוסף בהצלחה');
+            
+            if (document.getElementById('calendar-body')) {
+                await loadAndDisplayEvents();
+            }
         } else {
-            alert('שגיאה בהוספת האירוע');
+            const errorMessage = result.error || 'שגיאה בהוספת האירוע';
+            alert(errorMessage);
         }
     } catch (error) {
         console.error('Error creating event:', error);
@@ -136,8 +170,12 @@ async function updateEvent(eventId, eventData) {
             },
             body: JSON.stringify(eventData),
         });
+        
         const result = await response.json();
-        if (!result.success) {
+        if (result.success) {
+            showMessage('האירוע עודכן בהצלחה');
+            await updateEventsList();
+        } else {
             alert('שגיאה בעדכון האירוע');
         }
     } catch (error) {
@@ -155,8 +193,10 @@ async function deleteEvent(eventId) {
         const response = await fetch(`/api/events/${eventId}`, {
             method: 'DELETE',
         });
+        
         const result = await response.json();
         if (result.success) {
+            showMessage('האירוע נמחק בהצלחה');
             await updateEventsList();
         } else {
             alert('שגיאה במחיקת האירוע');
@@ -337,7 +377,14 @@ async function saveEvent(e, eventId) {
         
         const result = await response.json();
         if (result.success) {
-            await updateEventsList();  // רענון הטבלה
+            showMessage('האירוע עודכן בהצלחה');
+            await updateEventsList();
+            
+            // הסתרת טופס העריכה
+            const formRow = document.getElementById(`edit-form-${eventId}`);
+            if (formRow) {
+                formRow.style.display = 'none';
+            }
         } else {
             alert('שגיאה בעדכון האירוע');
         }
@@ -352,12 +399,14 @@ async function saveEvent(e, eventId) {
 // אתחול הדף
 document.addEventListener('DOMContentLoaded', async () => {
     // עדכון לוח השנה אם אנחנו בדף הראשי
-    if (document.getElementById('calendar-body')) {
-        updateCalendar();
+    const calendarBody = document.getElementById('calendar-body');
+    if (calendarBody) {
+        await updateCalendar();
     }
     
     // עדכון רשימת האירועים אם אנחנו בדף הרשימה
-    if (document.getElementById('eventsTable')) {
+    const eventsTable = document.getElementById('eventsTable');
+    if (eventsTable) {
         await updateEventsList();
     }
 });
@@ -376,5 +425,76 @@ function getColorRGBA(color) {
         'green': '0, 128, 0, 0.4'
     };
     return colorMap[color] || '0, 0, 0, 0';
+}
+
+// פונקציה לבדיקה אם תאריך נמצא בטווח
+function isDateInRange(dateStr, startStr, endStr) {
+    const date = new Date(dateStr);
+    const start = new Date(startStr);
+    const end = endStr ? new Date(endStr) : start;
+    
+    // איפוס השעה בכל התאריכים להשוואה נכונה
+    date.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    
+    return date >= start && date <= end;
+}
+
+// פונקציה לטעינת והצגת אירועים בלוח
+async function loadAndDisplayEvents() {
+    try {
+        // טעינת כל האירועים
+        const events = await loadEvents();
+        
+        // עבור על כל התאים בלוח
+        const cells = document.querySelectorAll('#calendar-body td[data-date]');
+        for (const cell of cells) {
+            const date = cell.getAttribute('data-date');
+            
+            // טעינת אירועים יהודיים לתאריך
+            const response = await fetch(`/api/jewish-events/${date}`);
+            if (!response.ok) {
+                console.error(`Error loading Jewish events for ${date}:`, await response.text());
+                continue;
+            }
+            const jewishEvents = await response.json();
+            
+            // הצגת אירועים יהודיים
+            const jewishContainer = cell.querySelector('.jewish-events-container');
+            if (jewishEvents && jewishEvents.length > 0) {
+                // מיון האירועים לפי סדר: פרשה, חג, צום
+                const sortedEvents = jewishEvents.sort((a, b) => {
+                    const order = { parasha: 1, holiday: 2, fast: 3 };
+                    return order[a.type] - order[b.type];
+                });
+                
+                jewishContainer.innerHTML = sortedEvents
+                    .map(event => `<div class="${event.type}" style="color: ${event.color}">${event.name}</div>`)
+                    .join('');
+            } else {
+                jewishContainer.innerHTML = '';
+            }
+            
+            // סינון וקיבוץ האירועים הרגילים לתאריך זה
+            const dayEvents = events.filter(event => isDateInRange(date, event.gregorian_date, event.end_date));
+
+            // הצגת האירועים הרגילים
+            const contentContainer = cell.querySelector('.day-content');
+            if (dayEvents.length > 0) {
+                contentContainer.innerHTML = dayEvents
+                    .map(event => {
+                        const timeStr = event.time ? `${event.time} - ` : '';
+                        const style = event.color ? `background-color: rgba(${getColorRGBA(event.color)})` : '';
+                        return `<div class="event-item" style="${style}">${timeStr}${event.title}</div>`;
+                    })
+                    .join('');
+            } else {
+                contentContainer.innerHTML = '';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading events:', error);
+    }
 }
   

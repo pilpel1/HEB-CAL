@@ -1,10 +1,15 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from datetime import datetime
 from convertdate import hebrew
 import logging
 from hebrew_numbers import int_to_gematria
 import calendar
+from app.services.jewish_calendar import JewishCalendarService
 
+
+# הגדרת לוגים
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 api = Blueprint('api', __name__)
 
@@ -122,3 +127,25 @@ def get_calendar(year, month):
         'hebrew_months': sorted_hebrew_months,
         'hebrew_year': hebrew_year_str
     })
+
+@api.route('/jewish-events/<date>')
+def get_jewish_events(date):
+    logger.debug(f"Starting get_jewish_events for date: {date}")
+    try:
+        # המרת התאריך מהמחרוזת לאובייקט תאריך
+        try:
+            date_obj = datetime.strptime(date, '%Y-%m-%d').date()
+            logger.debug(f"Successfully parsed date: {date} to {date_obj}")
+        except ValueError as e:
+            logger.error(f"Error parsing date {date}: {str(e)}")
+            return jsonify({'error': f'Invalid date format: {date}. Use YYYY-MM-DD'}), 400
+        
+        # קבלת האירועים היהודיים מהשירות
+        logger.debug(f"Calling JewishCalendarService.get_all_jewish_events with {date_obj}")
+        events = JewishCalendarService.get_all_jewish_events(date_obj)
+        logger.debug(f"Found events for {date}: {events}")
+        
+        return jsonify(events)
+    except Exception as e:
+        logger.error(f"Unexpected error in get_jewish_events: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500

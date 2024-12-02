@@ -2,45 +2,6 @@
 
 {% block title %}לוח שנה{% endblock %}
 
-{% block extra_css %}
-<style>
-    .date-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        min-height: 60px;
-    }
-    
-    .gregorian-date {
-        position: absolute;
-        top: 5px;
-        left: 5px;
-        font-size: 0.8em;
-        color: #666;
-    }
-    
-    .hebrew-date {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        font-size: 0.8em;
-        direction: rtl;
-    }
-    
-    td {
-        position: relative;
-        width: 14.28%;
-        padding: 10px;
-        border: 1px solid #ddd;
-        background-color: white;
-    }
-
-    .current-day {
-        background-color: #e8f5e9 !important;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <h1 class="mb-4">לוח שנה</h1>
 
@@ -52,9 +13,38 @@
             <button class="btn btn-outline-primary" onclick="previousMonth()">חודש קודם</button>
             <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
             <button class="btn btn-outline-primary" onclick="nextMonth()">חודש הבא</button>
+            <div class="dropdown d-inline-block">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                    דלג לתאריך...
+                </button>
+                <div class="dropdown-menu p-3" aria-labelledby="jumpToDateBtn">
+                    <div class="mb-2">
+                        <select class="form-select" id="monthSelect">
+                            <option value="0">ינואר</option>
+                            <option value="1">פברואר</option>
+                            <option value="2">מרץ</option>
+                            <option value="3">אפריל</option>
+                            <option value="4">מאי</option>
+                            <option value="5">יוני</option>
+                            <option value="6">יולי</option>
+                            <option value="7">אוגוסט</option>
+                            <option value="8">ספטמבר</option>
+                            <option value="9">אוקטובר</option>
+                            <option value="10">נובמבר</option>
+                            <option value="11">דצמבר</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <select class="form-select" id="yearSelect">
+                            <!-- יתמלא דינמית ע"י JavaScript -->
+                        </select>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="jumpToDate()">אישור</button>
+                </div>
+            </div>
         </div>
     </div>
-    <table class="table table-bordered">
+    <table class="table table-bordered calendar-table">
         <thead>
             <tr>
                 <th>ראשון</th>
@@ -67,20 +57,51 @@
             </tr>
         </thead>
         <tbody id="calendar-body">
-            <!-- דוגמה לתא בלוח השנה -->
-            <tr>
-                <td>
-                    <div class="date-container">
-                        <span class="gregorian-date">1</span>
-                        <span class="hebrew-date">א' תשרי</span>
-                        <div class="day-content">
-                            <!-- האירועים יוכנסו כאן דרך JavaScript -->
-                        </div>
-                    </div>
-                </td>
-                <!-- ... -->
-            </tr>
+            <!-- הנתונים יוכנסו כאן דרך JavaScript -->
         </tbody>
     </table>
 </div>
+
+<script>
+// פונקציה שתרוץ בטעינת העמוד
+document.addEventListener('DOMContentLoaded', function() {
+    // מילוי שנים בדרופדאון
+    const yearSelect = document.getElementById('yearSelect');
+    const currentYear = new Date().getFullYear();
+    
+    // הוספת שנים מ-1900 עד 20 שנה קדימה
+    for (let year = 1900; year <= currentYear + 20; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        if (year === currentYear) {
+            option.selected = true;
+        }
+        yearSelect.appendChild(option);
+    }
+    
+    // בחירת החודש הנוכחי בדרופדאון
+    const currentMonth = new Date().getMonth();
+    document.getElementById('monthSelect').value = currentMonth;
+});
+
+// פונקציה לקפיצה לתאריך שנבחר
+function jumpToDate() {
+    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
+    const selectedYear = parseInt(document.getElementById('yearSelect').value);
+    
+    // עדכון התאריך הנוכחי בלוח השנה
+    currentDate = new Date(selectedYear, selectedMonth, 1);
+    
+    // עדכון הלוח
+    updateCalendar();
+    
+    // סגירת הדרופדאון
+    const dropdownMenu = document.querySelector('.dropdown-menu');
+    const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('jumpToDateBtn'));
+    if (dropdown) {
+        dropdown.hide();
+    }
+}
+</script>
 {% endblock %} 
