@@ -349,13 +349,20 @@ async function updateEventsList() {
 }
 
 async function editEvent(eventId) {
+    const formRow = document.getElementById(`edit-form-${eventId}`);
+    
+    // אם הטופס כבר מוצג, נסגור אותו
+    if (formRow.style.display === 'table-row') {
+        formRow.style.display = 'none';
+        return;
+    }
+    
     // הסתרת כל הטפסים הפתוחים
     document.querySelectorAll('.edit-form-row').forEach(row => {
         row.style.display = 'none';
     });
     
     // הצגת הטופס הנבחר
-    const formRow = document.getElementById(`edit-form-${eventId}`);
     formRow.style.display = 'table-row';
 }
 
