@@ -287,45 +287,55 @@ async function updateEventsList() {
             <td colspan="6">
                 <div class="edit-event-form p-3">
                     <form onsubmit="return saveEvent(event, ${event.id})">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="title-${event.id}" class="form-label">כותרת</label>
-                                <input type="text" class="form-control" id="title-${event.id}" value="${event.title}" required>
+                        <div class="mb-3">
+                            <label for="title-${event.id}" class="form-label">כותרת</label>
+                            <input type="text" class="form-control" id="title-${event.id}" value="${event.title}" required>
+                        </div>
+                        <div class="row align-items-end">
+                            <div class="col mb-3">
+                                <div class="input-wrapper">
+                                    <label for="gregorian_date-${event.id}" class="form-label">תאריך לועזי</label>
+                                    <input type="date" class="form-control" id="gregorian_date-${event.id}" 
+                                        value="${event.gregorian_date}" onchange="updateHebrewDate(${event.id})" required>
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="gregorian_date-${event.id}" class="form-label">תאריך לועזי</label>
-                                <input type="date" class="form-control" id="gregorian_date-${event.id}" 
-                                    value="${event.gregorian_date}" onchange="updateHebrewDate(${event.id})" required>
+                            <div class="col mb-3">
+                                <div class="input-wrapper">
+                                    <label for="hebrew_date-${event.id}" class="form-label">תאריך עברי</label>
+                                    <input type="text" class="form-control" id="hebrew_date-${event.id}" 
+                                        value="${event.hebrew_date}" readonly>
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="hebrew_date-${event.id}" class="form-label">תאריך עברי</label>
-                                <input type="text" class="form-control" id="hebrew_date-${event.id}" 
-                                    value="${event.hebrew_date}" readonly>
+                            <div class="col mb-3">
+                                <div class="input-wrapper">
+                                    <label for="time-${event.id}" class="form-label">שעה</label>
+                                    <input type="time" class="form-control" id="time-${event.id}" 
+                                        value="${event.time || ''}">
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="time-${event.id}" class="form-label">שעה</label>
-                                <input type="time" class="form-control" id="time-${event.id}" 
-                                    value="${event.time || ''}">
+                            <div class="col mb-3">
+                                <div class="input-wrapper">
+                                    <label for="end_date-${event.id}" class="form-label">תאריך סיום</label>
+                                    <input type="date" class="form-control" id="end_date-${event.id}" 
+                                        value="${event.end_date || ''}">
+                                </div>
                             </div>
-                            <div class="col-12 mb-3">
-                                <label for="description-${event.id}" class="form-label">תיאור</label>
-                                <textarea class="form-control" id="description-${event.id}">${event.description || ''}</textarea>
+                            <div class="col mb-3">
+                                <div class="input-wrapper">
+                                    <label for="color-${event.id}" class="form-label">צבע האירוע</label>
+                                    <select class="form-control" id="color-${event.id}">
+                                        <option value="">ללא צבע</option>
+                                        <option value="cyan" ${event.color === 'cyan' ? 'selected' : ''}>ציאן</option>
+                                        <option value="yellow" ${event.color === 'yellow' ? 'selected' : ''}>צהוב</option>
+                                        <option value="orange" ${event.color === 'orange' ? 'selected' : ''}>כתום</option>
+                                        <option value="green" ${event.color === 'green' ? 'selected' : ''}>ירוק</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="end_date-${event.id}" class="form-label">תאריך סיום</label>
-                                <input type="date" class="form-control" id="end_date-${event.id}" 
-                                    value="${event.end_date || ''}">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="color-${event.id}" class="form-label">צבע</label>
-                                <select class="form-control" id="color-${event.id}">
-                                    <option value="">ללא צבע</option>
-                                    <option value="cyan" ${event.color === 'cyan' ? 'selected' : ''}>ציאן</option>
-                                    <option value="yellow" ${event.color === 'yellow' ? 'selected' : ''}>צהוב</option>
-                                    <option value="orange" ${event.color === 'orange' ? 'selected' : ''}>כתום</option>
-                                    <option value="green" ${event.color === 'green' ? 'selected' : ''}>ירוק</option>
-                                </select>
-                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description-${event.id}" class="form-label">תיאור</label>
+                            <textarea class="form-control" id="description-${event.id}">${event.description || ''}</textarea>
                         </div>
                         <div class="text-end">
                             <button type="button" class="btn btn-secondary" onclick="cancelEdit(${event.id})">ביטול</button>
