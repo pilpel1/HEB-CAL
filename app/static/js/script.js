@@ -196,6 +196,18 @@ async function deleteEvent(eventId) {
         
         const result = await response.json();
         if (result.success) {
+            // ניקוי שדה החיפוש ותגיות החיפוש
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            
+            // ניקוי תגיות החיפוש
+            const filterChips = document.querySelector('.filter-chips');
+            if (filterChips) {
+                filterChips.innerHTML = '';
+            }
+            
             showMessage('האירוע נמחק בהצלחה');
             await updateEventsList();
         } else {

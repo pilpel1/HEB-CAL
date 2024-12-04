@@ -84,9 +84,15 @@
 
 /* עיצוב אזור התגיות */
 .active-filters {
-    margin: 10px 0;
+    display: none;
+    padding: 0;
+    margin: 0;
+}
+
+.active-filters.show {
+    display: block;
+    margin-top: 0.75rem;
     padding: 0 15px;
-    display: none; /* יוצג רק כשיש פילטרים פעילים */
 }
 
 .filter-chips {
@@ -138,6 +144,15 @@
 
 .edit-search i {
     margin-left: 4px;
+}
+
+/* הוספת סגנון חדש */
+.active-filters:empty {
+    display: none;
+}
+
+.filter-chips:empty {
+    display: none;
 }
 </style>
 
@@ -208,10 +223,10 @@
                 </div>
             </div>
         </div>
-    </div>
-    <div class="active-filters">
-        <div class="filter-chips">
-            <!-- תגיות יתווספו כאן דינמית -->
+        <div class="active-filters">
+            <div class="filter-chips">
+                <!-- תגיות יתווספו כאן דינמית -->
+            </div>
         </div>
     </div>
     <div class="card-body">
@@ -266,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
         clearTimeout(debounceTimeout);
         
         if (!e.target.value || e.target.value.length === 0) {
-            console.log('=== השדה ריק - טוען את כל האירועים ===');
+            console.log('=== השדה רי�� - טוען את כל האירועים ===');
             await loadAllEvents();
             return;
         }
@@ -375,7 +390,7 @@ function searchEvents(query) {
         });
 }
 
-function convertToRGBA(color, alpha = COLOR_OPACITY) {  // שימוש בקבוע כברירת מחדל
+function convertToRGBA(color, alpha = COLOR_OPACITY) {  // שימוש בקוע כברירת מחדל
     try {
         // אם זה שם צבע באנגלית, נמיר אותו ל-RGB
         if (!/^#/.test(color)) {
@@ -572,7 +587,7 @@ function updateTable(events) {
                         await loadAllEvents();
                         console.log('טעינת האירועים הושלמה');
                         
-                        // הסתרת טופס העריכה
+                        // הסתרת טופס הריכה
                         const formRow = document.getElementById(`edit-form-${eventId}`);
                         formRow.style.display = 'none';
                         
@@ -630,9 +645,11 @@ function deleteEvent(eventId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                loadEvents();  // טעינה מחדש של הטבה במקום רענון הדף
+                const activeFilters = document.querySelector('.active-filters');
+                activeFilters.style.display = 'none';
+                loadEvents();  // טעינה מחדש של הטבלה במקום רענון הדף
             } else {
-                alert('גיאה במחיקת האירוע');
+                alert('שגיאה במחיקת האירוע');
             }
         })
         .catch(error => {
@@ -646,13 +663,15 @@ function deleteEvent(eventId) {
 function clearSearchAndLoadAll() {
     console.log('=== מנסה לנקות את שדה החיפוש ===');
     const searchInput = document.getElementById('searchInput');
+    const activeFilters = document.querySelector('.active-filters');
     console.log('ערך שדה החיפוש לפני ניקוי:', searchInput.value);
     searchInput.value = '';
+    activeFilters.style.display = 'none';
     console.log('ערך שדה החיפוש אחרי ניקוי:', searchInput.value);
     loadEvents();
 }
 
-// פונקציה חדשה לטעינת כל האירועים
+// פונקצי חדשה לטעינת כל האירועים
 async function loadAllEvents() {
     console.log('=== מתחיל טעינת כל האירועים (loadAllEvents) ===');
     try {
@@ -724,84 +743,81 @@ function updateFilterChips(searchParams) {
     };
     
     // יצירת צ'יפים לפי הפרמטרים
-    if (searchParams.title) {
+    if (searchParams.title || searchParams.description || searchParams.startDate || 
+        searchParams.endDate || (searchParams.timeFilter && searchParams.timeFilter !== 'all') || 
+        searchParams.color) {
+        
         hasActiveFilters = true;
-        chipsHtml += `
-            <div class="filter-chip" data-filter="title">
-                שם: ${searchParams.title}
-                <span class="remove-filter" onclick="removeFilter('title')">
-                    <i class="bi bi-x"></i>
-                </span>
-            </div>`;
-    }
-    
-    if (searchParams.description) {
-        hasActiveFilters = true;
-        chipsHtml += `
-            <div class="filter-chip" data-filter="description">
-                תיאור: ${searchParams.description}
-                <span class="remove-filter" onclick="removeFilter('description')">
-                    <i class="bi bi-x"></i>
-                </span>
-            </div>`;
-    }
-    
-    if (searchParams.startDate || searchParams.endDate) {
-        hasActiveFilters = true;
-        let dateText = '';
-        if (searchParams.startDate && searchParams.endDate) {
-            dateText = `${searchParams.startDate} - ${searchParams.endDate}`;
-        } else if (searchParams.startDate) {
-            dateText = `מ-${searchParams.startDate}`;
-        } else {
-            dateText = `עד-${searchParams.endDate}`;
+        
+        if (searchParams.title) {
+            chipsHtml += `
+                <div class="filter-chip" data-filter="title">
+                    שם: ${searchParams.title}
+                    <span class="remove-filter" onclick="removeFilter('title')">
+                        <i class="bi bi-x"></i>
+                    </span>
+                </div>`;
         }
-        chipsHtml += `
-            <div class="filter-chip" data-filter="date">
-                תאריך: ${dateText}
-                <span class="remove-filter" onclick="removeFilter('date')">
-                    <i class="bi bi-x"></i>
-                </span>
-            </div>`;
-    }
-    
-    if (searchParams.timeFilter && searchParams.timeFilter !== 'all') {
-        hasActiveFilters = true;
-        const timeFilterText = searchParams.timeFilter === 'past' ? 'אירועים שעברו' : 'אירועים עתידיים';
-        chipsHtml += `
-            <div class="filter-chip" data-filter="timeFilter">
-                ${timeFilterText}
-                <span class="remove-filter" onclick="removeFilter('timeFilter')">
-                    <i class="bi bi-x"></i>
-                </span>
-            </div>`;
-    }
-    
-    if (searchParams.color) {
-        hasActiveFilters = true;
-        const colorText = colorTranslations[searchParams.color] || searchParams.color;
-        chipsHtml += `
-            <div class="filter-chip" data-filter="color">
-                צבע: ${colorText}
-                <span class="remove-filter" onclick="removeFilter('color')">
-                    <i class="bi bi-x"></i>
-                </span>
-            </div>`;
-    }
-    
-    // הוספת כפתור עריכה אם יש פילטרים פעילים
-    if (hasActiveFilters) {
+        
+        if (searchParams.description) {
+            chipsHtml += `
+                <div class="filter-chip" data-filter="description">
+                    תיאור: ${searchParams.description}
+                    <span class="remove-filter" onclick="removeFilter('description')">
+                        <i class="bi bi-x"></i>
+                    </span>
+                </div>`;
+        }
+        
+        if (searchParams.startDate || searchParams.endDate) {
+            let dateText = '';
+            if (searchParams.startDate && searchParams.endDate) {
+                dateText = `${searchParams.startDate} - ${searchParams.endDate}`;
+            } else if (searchParams.startDate) {
+                dateText = `מ-${searchParams.startDate}`;
+            } else {
+                dateText = `עד-${searchParams.endDate}`;
+            }
+            chipsHtml += `
+                <div class="filter-chip" data-filter="date">
+                    תאריך: ${dateText}
+                    <span class="remove-filter" onclick="removeFilter('date')">
+                        <i class="bi bi-x"></i>
+                    </span>
+                </div>`;
+        }
+        
+        if (searchParams.timeFilter && searchParams.timeFilter !== 'all') {
+            const timeFilterText = searchParams.timeFilter === 'past' ? 'אירועים שעברו' : 'אירועים עתידיים';
+            chipsHtml += `
+                <div class="filter-chip" data-filter="timeFilter">
+                    ${timeFilterText}
+                    <span class="remove-filter" onclick="removeFilter('timeFilter')">
+                        <i class="bi bi-x"></i>
+                    </span>
+                </div>`;
+        }
+        
+        if (searchParams.color) {
+            const colorText = colorTranslations[searchParams.color] || searchParams.color;
+            chipsHtml += `
+                <div class="filter-chip" data-filter="color">
+                    צבע: ${colorText}
+                    <span class="remove-filter" onclick="removeFilter('color')">
+                        <i class="bi bi-x"></i>
+                    </span>
+                </div>`;
+        }
+        
         chipsHtml += `
             <span class="edit-search" onclick="editAdvancedSearch(event)">
                 <i class="bi bi-pencil"></i>
                 ערוך חיפוש
             </span>`;
-        activeFilters.style.display = 'block';
-    } else {
-        activeFilters.style.display = 'none';
     }
     
     filterChips.innerHTML = chipsHtml;
+    activeFilters.style.display = hasActiveFilters ? 'block' : 'none';
 }
 
 // פונקציה להסרת פילטר בודד
