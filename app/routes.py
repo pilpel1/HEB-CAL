@@ -158,7 +158,7 @@ def search_events():
 @app.route('/api/events/advanced-search')
 def advanced_search_events():
     try:
-        # קבלת פרמט��י החיפוש מה-query string
+        # קבלת פרמטי החיפוש מה-query string
         search_params = request.args.get('advanced_search', '')
         if not search_params:
             return jsonify([])
@@ -184,22 +184,22 @@ def advanced_search_events():
         
         # חיפוש לפי תאריך התחלה
         if search_params.get('startDate'):
-            query += ' AND gregorian_date >= ?'
-            params.append(search_params['startDate'])
+            query += ' AND (gregorian_date >= ? OR (end_date IS NOT NULL AND end_date >= ?))'
+            params.extend([search_params['startDate'], search_params['startDate']])
         
         # חיפוש לפי תאריך סיום
         if search_params.get('endDate'):
-            query += ' AND gregorian_date <= ?'
-            params.append(search_params['endDate'])
+            query += ' AND (gregorian_date <= ? OR (end_date IS NOT NULL AND gregorian_date <= ?))'
+            params.extend([search_params['endDate'], search_params['endDate']])
         
         # סינון לפי זמן (עבר/עתיד)
         today = datetime.now().strftime('%Y-%m-%d')
         if search_params.get('timeFilter') == 'past':
-            query += ' AND gregorian_date < ?'
-            params.append(today)
+            query += ' AND (gregorian_date < ? AND (end_date IS NULL OR end_date < ?))'
+            params.extend([today, today])
         elif search_params.get('timeFilter') == 'future':
-            query += ' AND gregorian_date >= ?'
-            params.append(today)
+            query += ' AND (gregorian_date >= ? OR (end_date IS NOT NULL AND end_date >= ?))'
+            params.extend([today, today])
         
         # חיפוש לפי צבע
         if search_params.get('color'):
