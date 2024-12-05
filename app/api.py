@@ -3,6 +3,7 @@ from datetime import datetime
 from app.services.jewish_calendar import JewishCalendarService
 from app.services.calendar_service import CalendarService
 
+
 api = Blueprint('api', __name__)
 
 @api.route('/calendar/<int:year>/<int:month>')
