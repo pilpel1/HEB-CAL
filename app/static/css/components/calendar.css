@@ -1,0 +1,398 @@
+/* START calendar.css */
+/* לוח שנה */
+.calendar-container {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+    text-align: center;
+}
+
+.calendar-day {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-color);
+    min-height: 100px;
+    height: auto;
+    background-color: white;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.calendar-day.empty {
+    border: none;
+    background-color: transparent;
+}
+
+.calendar-day.today {
+    background-color: #eff6ff;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.calendar-day-header {
+    font-weight: 600;
+    padding: 0.5rem;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 0.5rem;
+}
+
+.gregorian-date {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+
+.hebrew-date {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+
+.holiday, .parasha {
+    font-size: 0.75rem;
+    color: var(--primary-color);
+    background-color: #eff6ff;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    margin-top: 0.25rem;
+}
+
+/* סגנון מיוחד לשבתות */
+.calendar-day:nth-child(7n + 7) {
+    background-color: #f8fafc;
+}
+
+/* טיצוב לכפתור החדש */
+.today-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    margin: 0 10px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.today-btn:hover {
+    background-color: #45a049;
+}
+
+/* הוספת מיכל לכפתורים */
+.calendar-nav-buttons {
+    display: flex;
+    gap: 0.5rem;  /* רווח קבוע בין הכפתורים */
+    margin-right: auto;  /* דחיפת הכפתורים לצד שמאל */
+}
+
+.event-cyan {
+    background-color: rgba(0, 255, 255, 0.4);
+}
+
+.event-yellow {
+    background-color: rgba(255, 255, 0, 0.4);
+}
+
+.event-orange {
+    background-color: rgba(255, 165, 0, 0.4);
+}
+
+.event-green {
+    background-color: rgba(0, 128, 0, 0.4);
+}
+
+/* הוספת סגנונות חדשים */
+.day-content {
+    width: 100%;
+    margin-top: 20px;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.event-item {
+    padding: 2px 4px;
+    margin: 1px 0;
+    border-radius: 3px;
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: right;
+}
+
+.event-time {
+    font-weight: 500;
+    margin-left: 0.25rem;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+thead tr, tbody tr {
+    display: table-row;
+}
+
+thead th {
+    padding: 10px;
+    text-align: center;
+    background-color: #f8fafc;
+    border: 1px solid #ddd;
+}
+
+td {
+    position: relative;
+    padding: 22px 8px 8px;
+    border: 1px solid #ddd;
+    background-color: white;
+    vertical-align: top;
+    height: 75px;
+}
+
+.gregorian-date {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-size: 0.85em;
+    color: #666;
+    line-height: 1;
+    direction: ltr;
+}
+
+.hebrew-date {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 0.85em;
+    color: #666;
+    direction: rtl;
+    line-height: 1;
+}
+
+.date-container {
+    position: relative;
+    width: 100%;
+    min-height: 60px;
+    margin-top: 15px;  /* מרווח מהתאריכים */
+}
+
+.day-content {
+    width: 100%;
+    margin-top: 4px;
+    min-height: 45px;
+}
+
+.event-item {
+    padding: 0.2rem 0.4rem;
+    margin: 0.2rem 0;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+    white-space: normal;
+    word-wrap: break-word;
+    width: 100%;
+}
+
+.current-day {
+    background-color: #e8f5e9 !important;
+}
+
+.gregorian-date, .hebrew-date {
+    position: absolute;
+    font-size: 0.8em;
+    line-height: 1;
+    top: -20px;  /* מיקום מעל מיכל האירועים */
+}
+
+.gregorian-date {
+    left: 0;
+    color: #666;
+}
+
+.hebrew-date {
+    right: 0;
+    direction: rtl;
+}
+
+/* הודעת הצלחה */
+#success-message {
+    opacity: 0;
+    transition: all 0.3s ease-in-out;
+    max-width: 90%;
+    width: 400px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: fixed !important;
+    top: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 9999 !important;
+    padding: 15px !important;
+    border-radius: 4px !important;
+    font-size: 16px !important;
+    pointer-events: none;
+    background-color: #d4edda !important;
+    border-color: #c3e6cb !important;
+    color: #155724 !important;
+}
+
+#success-message.show {
+    opacity: 1;
+}
+
+/* עיצוב אירועים */
+.event-item {
+    padding: 2px 4px;
+    margin: 1px 0;
+    border-radius: 3px;
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: right;
+}
+
+/* עיצוב פרשת שבוע וחגים */
+.holiday, .parasha {
+    font-size: 0.85em;
+    padding: 2px 4px;
+    margin: 1px 0;
+    border-radius: 3px;
+    text-align: right;
+    width: 100%;
+    background-color: #f8f9fa;
+    color: #1a73e8;
+}
+
+/* אזור התאריכים */
+.dates-container {
+    position: relative;
+    height: 25px;
+    padding: 2px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 2px;
+}
+
+.gregorian-date {
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    font-size: 0.85em;
+    color: #666;
+    direction: ltr;
+}
+
+.hebrew-date {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    font-size: 0.85em;
+    color: #666;
+    direction: rtl;
+}
+
+/* אזור החגים ופרשות */
+.jewish-events-container {
+    margin-top: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+}
+
+.holiday, .parasha, .fast {
+    font-size: 0.75rem;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    margin: 1px 0;
+    text-align: center;
+    width: 100%;
+}
+
+.holiday {
+    background-color: rgba(231, 76, 60, 0.2);
+    color: #c0392b;
+}
+
+.fast {
+    background-color: rgba(255, 165, 0, 0.2);
+    color: #d35400;
+}
+
+.parasha {
+    background-color: rgba(74, 144, 226, 0.2);
+    color: #2980b9;
+}
+
+/* אזור האירועים */
+.day-content {
+    flex: 1;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+}
+
+.event-item {
+    padding: 2px 4px;
+    margin: 1px 0;
+    border-radius: 3px;
+    font-size: 0.85em;
+    white-space: normal;
+    word-wrap: break-word;
+    width: 100%;
+    text-align: right;
+    min-height: 20px;
+}
+
+/* טבלת לוח שנה */
+.calendar-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.calendar-table th {
+    width: 14.28%;  /* 100% / 7 ימים */
+    padding: 10px;
+    text-align: center;
+    background-color: #f8fafc;
+    border: 1px solid #ddd;
+}
+
+.calendar-table td {
+    position: relative;
+    width: 14.28%;  /* 100% / 7 ימים */
+    height: 120px;
+    border: 1px solid #ddd;
+    background-color: white;
+    padding: 0;
+    vertical-align: top;
+}
+/* END calendar.css */

@@ -1,0 +1,17 @@
+/* START variables.css */
+/* משתני צבעים */
+:root {
+    --primary-color: #2563eb;
+    --secondary-color: #3b82f6;
+    --background-color: #f8fafc;
+    --text-color: #1e293b;
+    --border-color: #e2e8f0;
+}
+
+/* כללי */
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: 'Heebo', sans-serif;
+}
+/* END variables.css */
