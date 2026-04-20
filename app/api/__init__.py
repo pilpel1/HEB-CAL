@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from datetime import datetime
 from convertdate import hebrew
 import logging
@@ -60,7 +60,7 @@ def get_hebrew_date(date_str):
         logging.error(f"Error converting date {date_str}: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
-from app.api import events
+from . import events
 
 @api.route('/calendar/<int:year>/<int:month>')
 def get_calendar(year, month):

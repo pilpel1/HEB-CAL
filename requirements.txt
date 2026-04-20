@@ -1,6 +1,7 @@
 flask
 convertdate
 python-hebrew-numbers
-hebcal
+pyluach
+python-dotenv
 
 

@@ -234,6 +234,18 @@
 
 <div class="card">
     <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="exportEventsBtn">יצוא JSON</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="importEventsBtn">יבוא JSON</button>
+                <input type="file" id="importEventsFile" accept=".json,application/json" hidden>
+                <select id="importMode" class="form-select form-select-sm" style="width: auto;">
+                    <option value="merge" selected>יבוא במיזוג</option>
+                    <option value="replace">יבוא במקום הקיים</option>
+                </select>
+            </div>
+            <small class="text-muted">היצוא והיבוא עובדים מעל SQLite, לא במקום SQLite.</small>
+        </div>
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">אירועים</h5>
             <div class="search-container">
@@ -351,11 +363,24 @@ const COLOR_OPACITY = 0.8;  // קבוע גלובלי לרמת השקיפות
 document.addEventListener('DOMContentLoaded', function() {
     loadEvents();
     
+    const exportEventsBtn = document.getElementById('exportEventsBtn');
+    const importEventsBtn = document.getElementById('importEventsBtn');
+    const importEventsFile = document.getElementById('importEventsFile');
+    const importMode = document.getElementById('importMode');
     const searchInput = document.getElementById('searchInput');
     const advancedSearchBtn = document.getElementById('advancedSearchBtn');
     const advancedSearchPanel = document.getElementById('advancedSearchPanel');
     const advancedSearchForm = document.getElementById('advancedSearchForm');
     const resetAdvancedSearch = document.getElementById('resetAdvancedSearch');
+
+    exportEventsBtn.addEventListener('click', exportEvents);
+    importEventsBtn.addEventListener('click', () => importEventsFile.click());
+    importEventsFile.addEventListener('change', async function() {
+        if (this.files && this.files[0]) {
+            await importEventsFromFile(this.files[0], importMode.value);
+            this.value = '';
+        }
+    });
     
     // מאזין לכפתור החיפוש המתקדם
     advancedSearchBtn.addEventListener('click', function(e) {
@@ -461,6 +486,58 @@ async function loadEvents() {
         console.error('!!! שגיאה בטעינת האירועים !!!', error);
         tbody.innerHTML = '<tr><td colspan="6" class="text-center">שגיאה בטעינת האירועים</td></tr>';
         throw error;  // זורק את השגיאה הלאה
+    }
+}
+
+async function exportEvents() {
+    try {
+        const response = await fetch('/api/events/export');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'heb-cal-events.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        showMessage('קובץ ה-JSON יוצא בהצלחה');
+    } catch (error) {
+        console.error('שגיאה ביצוא האירועים:', error);
+        alert('שגיאה ביצוא האירועים');
+    }
+}
+
+async function importEventsFromFile(file, mode) {
+    const operationText = mode === 'replace' ? 'להחליף את כל הנתונים הקיימים' : 'למזג את הנתונים לתוך הקיימים';
+    if (!confirm(`האם לבצע יבוא ול${operationText}?`)) {
+        return;
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('mode', mode);
+
+        const response = await fetch('/api/events/import', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'שגיאה ביבוא האירועים');
+        }
+
+        await loadAllEvents();
+        showMessage(`היבוא הושלם: ${result.imported_events} אירועים ו-${result.imported_colors} צבעים`);
+    } catch (error) {
+        console.error('שגיאה ביבוא האירועים:', error);
+        alert(error.message || 'שגיאה ביבוא האירועים');
     }
 }
 
