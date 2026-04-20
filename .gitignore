@@ -24,8 +24,15 @@ wheels/
 
 # Virtual Environment
 venv/
+.venv/
 ENV/
+env.bak/
+venv.bak/
+
+# Environment files
 .env
+.env.*
+!.env.example
 
 # Flask
 instance/
@@ -38,7 +45,9 @@ htmlcov/
 
 # Database and Data
 *.db
+*.db-*
 *.sqlite3
+*.sqlite3-*
 data/*
 !data/.gitkeep
 
@@ -63,6 +72,10 @@ config.py
 # Personal Planning Files
 road-map.txt
 feature.txt
+Feature.txt
 features.txt
 todo.txt
 notes.txt 
+
+# Local UI backup files
+app/static/css/style_before_split.css

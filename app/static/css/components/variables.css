@@ -1,0 +1,15 @@
+/* משתני צבעים - מגדיר את הצבעים הבסיסיים לכל האפליקציה */
+:root {
+    --primary-color: #2563eb;
+    --secondary-color: #3b82f6;
+    --background-color: #f8fafc;
+    --text-color: #1e293b;
+    --border-color: #e2e8f0;
+}
+
+/* סגנונות בסיסיים לכל העמוד - צבע רקע, צבע טקסט ופונט */
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: 'Heebo', sans-serif;
+}

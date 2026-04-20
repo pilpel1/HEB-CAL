@@ -70,10 +70,10 @@ async function updateCalendar() {
                 
                 cell.innerHTML = `
                     <div class="dates-container">
-                        <span class="gregorian-date">${gregorianDate}</span>
                         <span class="hebrew-date">${day.is_hebrew_month_start ? 
                             `${get_hebrew_day(day.hebrew_day)} ${day.hebrew_month}` : 
                             get_hebrew_day(day.hebrew_day)}</span>
+                        <span class="gregorian-date">${gregorianDate}</span>
                     </div>
                     <div class="jewish-events-container"></div>
                     <div class="day-content"></div>`;

@@ -1,0 +1,284 @@
+/* מיכל ראשי של לוח השנה - מגדיר את המסגרת החיצונית והצללה */
+.calendar-container {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+}
+
+/* כותרת החודש הנוכחי */
+#current-month {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+/* כותרת לוח השנה - מסדר את הכפתורים והחודש הנוכחי */
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+/* רשת הימים - יוצר רשת של 7 עמודות */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+    text-align: center;
+}
+
+/* תא יום בסיסי - עיצוב הקופסה של כל יום */
+.calendar-day {
+    padding: 0;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-color);
+    background-color: white;
+    position: relative;
+    min-height: 120px;
+    height: auto;
+}
+
+/* תא יום ריק - מ��ר את הגבול והרקע */
+.calendar-day.empty {
+    border: none;
+    background-color: transparent;
+}
+
+/* היום הנוכחי - מדגיש את התא עם רקע וגבול מיוחדים */
+.calendar-day.today {
+    background-color: #e8f5e9;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px #4CAF50;
+}
+
+/* כותרת היום - הכותרת בראש כל תא */
+.calendar-day-header {
+    font-weight: 600;
+    padding: 0.5rem;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 0.5rem;
+}
+
+/* אזור התאריכים */
+.dates-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 25px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eee;
+}
+
+.gregorian-date {
+    float: left;
+    padding: 4px;
+    font-size: 0.85em;
+    color: #666;
+}
+
+.hebrew-date {
+    float: right;
+    padding: 4px;
+    font-size: 0.85em;
+    color: #666;
+}
+
+/* אזור התוכן */
+.cell-content {
+    position: absolute;
+    top: 25px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* אזור החגים ופרשות */
+.jewish-events-container {
+    padding: 0 5px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.jewish-events-container:empty {
+    display: none;
+}
+
+.holiday, .parasha, .fast {
+    font-size: 0.75rem;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    margin: 1px 0;
+    text-align: center;
+}
+
+.holiday {
+    background-color: rgba(231, 76, 60, 0.2);
+    color: #c0392b;
+}
+
+.fast {
+    background-color: rgba(255, 165, 0, 0.2);
+    color: #d35400;
+}
+
+.parasha {
+    background-color: rgba(74, 144, 226, 0.2);
+    color: #2980b9;
+}
+
+/* אזור האירועים */
+.day-content {
+    padding: 2px 5px;
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.day-content:empty {
+    display: none;
+}
+
+.event-item {
+    margin: 1px 0;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    word-wrap: break-word;
+    position: relative;
+}
+
+/* שעת האירוע */
+.event-time {
+    font-weight: 500;
+    margin-left: 0.25rem;
+}
+
+/* טבלת לוח שנה */
+.calendar-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.calendar-table th {
+    width: 14.28%;
+    padding: 10px;
+    text-align: center;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    height: auto;
+    min-height: auto;
+}
+
+.calendar-table td {
+    position: relative;
+    width: 14.28%;
+    vertical-align: top;
+    border: 1px solid var(--border-color);
+    padding: 0;
+    min-height: 120px;
+    height: 100%;
+}
+
+/* הוספת שורה חדשה להגדרת גובה אחיד לשורות */
+.calendar-table tr:not(:first-child) {
+    height: 120px;
+    min-height: 120px;
+}
+
+/* כפתור חזרה להיום - עיצוב יחודי בירוק */
+.today-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    margin: 0 10px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.today-btn:hover {
+    background-color: #45a049;
+}
+
+/* מיכל כפתורי ניווט - מסדר את כפתורי הניווט */
+.calendar-nav-buttons {
+    display: flex;
+    gap: 0.5rem;  /* רווח קבוע בין הכפתורים */
+    margin-right: auto;  /* דחיפת הכפתורים צד שמאל */
+}
+
+/* צבעי רקע לאירועים לפי קטגוריה */
+.event-cyan {
+    background-color: rgba(0, 255, 255, 0.4);
+}
+
+.event-yellow {
+    background-color: rgba(255, 255, 0, 0.4);
+}
+
+.event-orange {
+    background-color: rgba(255, 165, 0, 0.4);
+}
+
+.event-green {
+    background-color: rgba(0, 128, 0, 0.4);
+}
+
+.current-day {
+    background-color: #e8f5e9;
+}
+
+/* סגנונות לאירועים יהודיים */
+.parasha, .holiday, .fast {
+    text-align: center;
+}
+
+.parasha {
+    text-align: center;
+    color: var(--parasha-color);
+    font-weight: bold;
+}
+
+.holiday {
+    text-align: center;
+    color: var(--holiday-color);
+    font-weight: bold;
+}
+
+.fast {
+    text-align: center;
+    color: var(--fast-color);
+    font-weight: bold;
+}
+
+/* בדיקה אם יש הגדרות נוספות שמשפיעות על הגובה */
+.calendar {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;     /* חשוב בשביל שהגובה יעבוד כמו שצריך */
+}
+
+.calendar tr {
+    height: 120px;
+}
+
+.calendar-table td.current-day {
+    background-color: #e8f5e9 !important;  /* ירוק בהיר אוד */
+}
+
+.calendar-table td.current-day .dates-container {
+    background-color: #c8e6c9;  /* ירוק בהיר יותר למיכל התאריכים */
+    border-bottom: 1px solid #a4eaa8b6;  /* גבול ירוק */
+}

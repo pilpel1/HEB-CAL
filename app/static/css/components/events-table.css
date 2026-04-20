@@ -1,0 +1,132 @@
+/* טבלת אירועים */
+.events-table {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    margin-top: 2rem;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.table th {
+    text-align: center;
+    padding: 0.5rem;
+    vertical-align: middle;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.table td {
+    text-align: center;
+    padding: 0.5rem;
+    vertical-align: middle;
+    border: 1px solid #dee2e6;
+    height: auto;
+}
+
+/* כפתורי פעולות */
+.btn-group {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: center;
+}
+
+.btn-group .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1;
+}
+
+.btn-group .btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* תאים עם צבע רקע */
+td span[style*="background-color"] {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+/* הוספה לסטיילים הקיימים */
+.edit-form-row {
+    background-color: #f8fafc;
+}
+
+.edit-form-row td {
+    padding: 0 !important;
+}
+
+.edit-event-form {
+    background-color: #f8fafc;
+    border-top: 2px solid var(--border-color);
+    box-shadow: inset 0 3px 6px -3px rgba(0,0,0,0.1);
+    padding: 1rem;
+    transition: all 0.3s ease;
+}
+
+.edit-event-form .form-control {
+    background-color: white;
+}
+
+.edit-event-form .btn {
+    margin-left: 0.5rem;
+}
+
+/* טבלת אירועים - רוחב עמודות */
+.events-list-table th:nth-child(1), /* כותרת */
+.events-list-table td:nth-child(1) {
+    width: 33%;
+}
+
+.events-list-table th:nth-child(2), /* תאריך לועזי */
+.events-list-table td:nth-child(2) {
+    width: 12%;
+}
+
+.events-list-table th:nth-child(3), /* תאריך עברי */
+.events-list-table td:nth-child(3) {
+    width: 12%;
+}
+
+.events-list-table th:nth-child(4), /* שעה */
+.events-list-table td:nth-child(4) {
+    width: 8%;
+}
+
+.events-list-table th:nth-child(5), /* תיאור */
+.events-list-table td:nth-child(5) {
+    width: 30%;
+}
+
+.events-list-table th:nth-child(6), /* פעולות */
+.events-list-table td:nth-child(6) {
+    width: 5%;
+}
+/* עיצוב כללי לטבלת האירועים */
+.events-list-table {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.events-list-table th {
+    text-align: center;
+    padding: 0.5rem;
+    vertical-align: middle;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.events-list-table td {
+    text-align: center;
+    padding: 0.5rem;
+    vertical-align: middle;
+    border: 1px solid #dee2e6;
+    height: auto;
+}
+
