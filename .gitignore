@@ -57,6 +57,8 @@ data/*
 *.swp
 *.swo
 .DS_Store
+.cursor/
+
 
 # Logs
 *.log
@@ -75,6 +77,7 @@ feature.txt
 Feature.txt
 features.txt
 todo.txt
+TODO.local.md
 notes.txt 
 
 # Local UI backup files
