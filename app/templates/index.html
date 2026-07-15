@@ -62,6 +62,65 @@
     </table>
 </div>
 
+<!-- מודל הוספה/עריכה מהירה מהלוח -->
+<div class="modal fade" id="quickEventModal" tabindex="-1" aria-labelledby="quickEventModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickEventModalLabel">אירוע חדש</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="סגור"></button>
+            </div>
+            <form id="quickEventForm">
+                <input type="hidden" id="quick_event_id" value="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="quick_title" class="form-label">כותרת</label>
+                        <input type="text" class="form-control" id="quick_title" required autofocus>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="quick_gregorian_date" class="form-label">תאריך לועזי</label>
+                            <input type="date" class="form-control" id="quick_gregorian_date" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="quick_hebrew_date" class="form-label">תאריך עברי</label>
+                            <input type="text" class="form-control" id="quick_hebrew_date" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="quick_time" class="form-label">שעה</label>
+                            <input type="time" class="form-control" id="quick_time">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="quick_end_date" class="form-label">תאריך סיום</label>
+                            <input type="date" class="form-control" id="quick_end_date">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quick_color" class="form-label">צבע</label>
+                        <select class="form-select" id="quick_color">
+                            <option value="">ללא צבע</option>
+                            <option value="cyan">ציאן</option>
+                            <option value="yellow">צהוב</option>
+                            <option value="orange">כתום</option>
+                            <option value="green">ירוק</option>
+                        </select>
+                    </div>
+                    <div class="mb-0">
+                        <label for="quick_description" class="form-label">תיאור</label>
+                        <textarea class="form-control" id="quick_description" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ביטול</button>
+                    <button type="submit" class="btn btn-primary" id="quick_submit_btn">הוסף אירוע</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 // פונקציה שתרוץ בטעינת העמוד
 document.addEventListener('DOMContentLoaded', function() {

@@ -194,6 +194,14 @@
     overflow: visible;
 }
 
+.calendar-table td[data-date] {
+    cursor: pointer;
+}
+
+.calendar-table td[data-date] .event-item {
+    cursor: pointer;
+}
+
 /* גובה שורה נקבע לפי התא הגבוה ביותר; מינימום דרך .day-cell */
 .calendar-table tbody tr {
     height: auto;

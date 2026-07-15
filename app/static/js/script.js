@@ -149,20 +149,179 @@ async function createEvent(eventData) {
             if (form) {
                 form.reset();
             }
+
+            const quickForm = document.getElementById('quickEventForm');
+            if (quickForm) {
+                quickForm.reset();
+            }
             
             showMessage('האירוע נוסף בהצלחה');
             
             if (document.getElementById('calendar-body')) {
                 await loadAndDisplayEvents();
             }
-        } else {
-            const errorMessage = result.error || 'שגיאה בהוספת האירוע';
-            alert(errorMessage);
+
+            return true;
         }
+
+        const errorMessage = result.error || 'שגיאה בהוספת האירוע';
+        alert(errorMessage);
+        return false;
     } catch (error) {
         console.error('Error creating event:', error);
         alert('שגיאה בהוספת האירוע');
+        return false;
     }
+}
+
+async function fillHebrewDateFromGregorian(gregorianValue, hebrewInputId) {
+    if (!gregorianValue) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/hebrew-date/${gregorianValue}`);
+        const data = await response.json();
+        const hebrewInput = document.getElementById(hebrewInputId);
+        if (hebrewInput) {
+            hebrewInput.value = data.hebrew_date;
+        }
+    } catch (error) {
+        console.error('Error converting date:', error);
+    }
+}
+
+function setQuickEventModalMode(isEdit) {
+    const title = document.getElementById('quickEventModalLabel');
+    const submitBtn = document.getElementById('quick_submit_btn');
+    if (title) {
+        title.textContent = isEdit ? 'עריכת אירוע' : 'אירוע חדש';
+    }
+    if (submitBtn) {
+        submitBtn.textContent = isEdit ? 'שמור שינויים' : 'הוסף אירוע';
+    }
+}
+
+function fillQuickEventForm(eventData = {}) {
+    document.getElementById('quick_event_id').value = eventData.id || '';
+    document.getElementById('quick_title').value = eventData.title || '';
+    document.getElementById('quick_gregorian_date').value = eventData.gregorian_date || '';
+    document.getElementById('quick_hebrew_date').value = eventData.hebrew_date || '';
+    document.getElementById('quick_time').value = eventData.time || '';
+    document.getElementById('quick_end_date').value = eventData.end_date || '';
+    document.getElementById('quick_color').value = eventData.color || '';
+    document.getElementById('quick_description').value = eventData.description || '';
+}
+
+function getQuickEventFormData() {
+    return {
+        title: document.getElementById('quick_title').value,
+        gregorian_date: document.getElementById('quick_gregorian_date').value,
+        hebrew_date: document.getElementById('quick_hebrew_date').value,
+        time: document.getElementById('quick_time').value || null,
+        description: document.getElementById('quick_description').value || '',
+        end_date: document.getElementById('quick_end_date').value || null,
+        color: document.getElementById('quick_color').value || null,
+    };
+}
+
+async function openQuickEventModal(dateStr) {
+    const modalElement = document.getElementById('quickEventModal');
+    if (!modalElement) {
+        return;
+    }
+
+    const form = document.getElementById('quickEventForm');
+    if (form) {
+        form.reset();
+    }
+
+    setQuickEventModalMode(false);
+    fillQuickEventForm({ gregorian_date: dateStr });
+    await fillHebrewDateFromGregorian(dateStr, 'quick_hebrew_date');
+
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+async function openEditEventModal(eventId) {
+    const modalElement = document.getElementById('quickEventModal');
+    if (!modalElement) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/events/${eventId}`);
+        if (!response.ok) {
+            alert('לא ניתן לטעון את האירוע');
+            return;
+        }
+
+        const event = await response.json();
+        setQuickEventModalMode(true);
+        fillQuickEventForm(event);
+        bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    } catch (error) {
+        console.error('Error loading event for edit:', error);
+        alert('שגיאה בטעינת האירוע');
+    }
+}
+
+function initQuickEventModal() {
+    const calendarBody = document.getElementById('calendar-body');
+    const modalElement = document.getElementById('quickEventModal');
+    const quickForm = document.getElementById('quickEventForm');
+    if (!calendarBody || !modalElement || !quickForm) {
+        return;
+    }
+
+    // אחרי סיום הפתיחה של Bootstrap — פוקוס יציב על הכותרת
+    modalElement.addEventListener('shown.bs.modal', () => {
+        requestAnimationFrame(() => {
+            const titleInput = document.getElementById('quick_title');
+            if (titleInput) {
+                titleInput.focus({ preventScroll: true });
+            }
+        });
+    });
+
+    modalElement.addEventListener('hidden.bs.modal', () => {
+        setQuickEventModalMode(false);
+        fillQuickEventForm();
+    });
+
+    calendarBody.addEventListener('dblclick', (event) => {
+        const eventItem = event.target.closest('.event-item[data-event-id]');
+        if (eventItem) {
+            event.stopPropagation();
+            openEditEventModal(eventItem.getAttribute('data-event-id'));
+            return;
+        }
+
+        const cell = event.target.closest('td[data-date]');
+        if (!cell) {
+            return;
+        }
+
+        openQuickEventModal(cell.getAttribute('data-date'));
+    });
+
+    document.getElementById('quick_gregorian_date').addEventListener('change', function() {
+        fillHebrewDateFromGregorian(this.value, 'quick_hebrew_date');
+    });
+
+    quickForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const eventData = getQuickEventFormData();
+        const eventId = document.getElementById('quick_event_id').value;
+        const saved = eventId
+            ? await updateEvent(eventId, eventData)
+            : await createEvent(eventData);
+
+        if (saved) {
+            bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        }
+    });
 }
 
 async function updateEvent(eventId, eventData) {
@@ -178,13 +337,21 @@ async function updateEvent(eventId, eventData) {
         const result = await response.json();
         if (result.success) {
             showMessage('האירוע עודכן בהצלחה');
+
+            if (document.getElementById('calendar-body')) {
+                await loadAndDisplayEvents();
+            }
+
             await updateEventsList();
-        } else {
-            alert('שגיאה בעדכון האירוע');
+            return true;
         }
+
+        alert(result.error || 'שגיאה בעדכון האירוע');
+        return false;
     } catch (error) {
         console.error('Error updating event:', error);
         alert('שגיאה בעדכון האירוע');
+        return false;
     }
 }
 
@@ -434,6 +601,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // עדכון לוח השנה אם אנחנו בדף הראשי
     const calendarBody = document.getElementById('calendar-body');
     if (calendarBody) {
+        initQuickEventModal();
         await updateCalendar();
     }
     
@@ -519,7 +687,7 @@ async function loadAndDisplayEvents() {
                     .map(event => {
                         const timeStr = event.time ? `${event.time} - ` : '';
                         const style = event.color ? `background-color: rgba(${getColorRGBA(event.color)})` : '';
-                        return `<div class="event-item" style="${style}">${timeStr}${event.title}</div>`;
+                        return `<div class="event-item" data-event-id="${event.id}" style="${style}">${timeStr}${event.title}</div>`;
                     })
                     .join('');
             } else {
