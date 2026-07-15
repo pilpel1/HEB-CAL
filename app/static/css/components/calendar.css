@@ -67,6 +67,7 @@
 .day-cell {
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
     min-height: 120px;
     height: 100%;
 }
@@ -187,11 +188,15 @@
 .calendar-table td {
     position: relative;
     width: 14.28%;
-    vertical-align: top;
     border: 1px solid var(--border-color);
     padding: 0;
     height: auto;
     overflow: visible;
+}
+
+/* גובר על Bootstrap (.table > * > * → middle) כדי שהתאריכים יישארו למעלה */
+.table.calendar-table > :not(caption) > * > * {
+    vertical-align: top;
 }
 
 .calendar-table td[data-date] {
