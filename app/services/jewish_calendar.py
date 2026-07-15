@@ -28,82 +28,15 @@ HOLIDAY_TRANSLATIONS = {
     '9 of Av': {'name': 'תשעה באב', 'type': 'fast_day'}
 }
 
-# מילון המרה לפרשות השבוע
-PARASHA_TRANSLATIONS = {
-    'Beraishis': 'בראשית',
-    'Noach': 'נח',
-    "Lech L'cha": 'לך לך',
-    'Vayera': 'וירא',
-    'Chayei Sarah': 'חיי שרה',
-    'Toldos': 'תולדות',
-    'Vayetzei': 'ויצא',
-    'Vayishlach': 'וישלח',
-    'Vayeshev': 'וישב',
-    'Miketz': 'מקץ',
-    'Vayigash': 'ויגש',
-    'Vayechi': 'ויחי',
-    'Shemos': 'שמות',
-    "Va'era": 'וארא',
-    'Bo': 'בא',
-    'Beshalach': 'בשלח',
-    'Yisro': 'יתרו',
-    'Mishpatim': 'משפטים',
-    'Teruma': 'תרומה',
-    'Tetzave': 'תצוה',
-    'Ki Sisa': 'כי תשא',
-    'Vayakhel': 'ויקהל',
-    'Pekudei': 'פקודי',
-    'Vayikra': 'ויקרא',
-    'Tzav': 'צו',
-    'Shemini': 'שמיני',
-    'Tazria': 'תזריע',
-    'Metzora': 'מצורע',
-    'Acharei Mos': 'אחרי מות',
-    'Kedoshim': 'קדושים',
-    'Emor': 'אמור',
-    'Behar': 'בהר',
-    'Bechukosai': 'בחוקותי',
-    'Bamidbar': 'במדבר',
-    'Naso': 'נשא',
-    "Beha'aloscha": 'בהעלותך',
-    'Shelach': 'שלח',
-    'Korach': 'קרח',
-    'Chukas': 'חקת',
-    'Balak': 'בלק',
-    'Pinchas': 'פנחס',
-    'Matos': 'מטות',
-    "Ma'sei": 'מסעי',
-    'Devarim': 'דברים',
-    "Va'eschanan": 'ואתחנן',
-    'Eikev': 'עקב',
-    "R'ey": 'ראה',
-    'Shoftim': 'שופטים',
-    'Ki Setzei': 'כי תצא',
-    'Ki Savo': 'כי תבוא',
-    'Netzavim': 'נצבים',
-    'Vayelech': 'וילך',
-    'Haazinu': 'האזינו',
-    "V'zos Habrocha": 'וזאת הברכה'
-}
-
-def translate_parasha(parsha):
+def get_parasha_hebrew(greg_date, israel=True):
     """
-    מתרגם את שם הפרשה לעברית. אם אין תרגום, מחזיר את השם המקורי.
-    במקרה של פרשה כפולה, מתרגם כל חלק בנפרד ומחבר עם מקף.
+    מחזיר את שם הפרשה בעברית מ-pyluach.
+    פרשות מחוברות מגיעות כ-"מטות, מסעי" ומוצגות כ-"מטות-מסעי".
     """
-    if ',' in parsha:
-        # מטפל בפרשות מחוברות (למשל "Tazria, Metzora")
-        parts = [part.strip() for part in parsha.split(',')]
-        translated_parts = [PARASHA_TRANSLATIONS.get(part, part) for part in parts]
-        return '-'.join(translated_parts)
-    elif '-' in parsha:
-        # מטפל בפרשות מחוברות עם מקף (למשל "Tazria-Metzora")
-        parts = [part.strip() for part in parsha.split('-')]
-        translated_parts = [PARASHA_TRANSLATIONS.get(part, part) for part in parts]
-        return '-'.join(translated_parts)
-    else:
-        # פרשה רגילה
-        return PARASHA_TRANSLATIONS.get(parsha, parsha)
+    parasha = parshios.getparsha_string(greg_date, israel=israel, hebrew=True)
+    if not parasha:
+        return None
+    return parasha.replace(', ', '-')
 
 class JewishCalendarService:
     @staticmethod
@@ -117,11 +50,10 @@ class JewishCalendarService:
             # בדיקה אם זה שבת
             if date_obj.weekday() == 5:  # 5 = שבת
                 logger.debug("Date is Shabbat, getting parasha")
-                # קבלת פרשת השבוע
-                parasha = parshios.getparsha_string(greg_date)
-                logger.debug(f"Got parasha: {parasha}")
-                if parasha:
-                    parasha_heb = translate_parasha(parasha)
+                # קבלת פרשת השבוע (עברית ישירות מ-pyluach)
+                parasha_heb = get_parasha_hebrew(greg_date)
+                logger.debug(f"Got parasha: {parasha_heb}")
+                if parasha_heb:
                     return {
                         'name': str(parasha_heb),
                         'type': 'parasha',
@@ -163,11 +95,10 @@ class JewishCalendarService:
                     'color': colors[holiday_info['type']]
                 })
             
-            # קבלת ירשת השבוע (רק בשבת)
+            # קבלת פרשת השבוע (רק בשבת)
             if date_obj.weekday() == 5:  # 5 = שבת
-                parsha = parshios.getparsha_string(greg_date)
-                if parsha:
-                    parsha_heb = translate_parasha(parsha)
+                parsha_heb = get_parasha_hebrew(greg_date)
+                if parsha_heb:
                     events.append({
                         'name': f"פרשת {parsha_heb}",
                         'type': 'parasha',
