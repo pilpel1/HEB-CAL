@@ -191,15 +191,194 @@ async function fillHebrewDateFromGregorian(gregorianValue, hebrewInputId) {
     }
 }
 
+function formatShortGregorian(dateStr) {
+    if (!dateStr) {
+        return '';
+    }
+
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) {
+        return dateStr;
+    }
+
+    return `${Number(parts[2])}/${Number(parts[1])}`;
+}
+
+function formatShortHebrew(hebrewDate) {
+    if (!hebrewDate) {
+        return '';
+    }
+
+    // "ח אב 5786" -> "ח אב"
+    return hebrewDate.replace(/\s+\d{3,4}$/, '').trim();
+}
+
+function setQuickColor(colorValue) {
+    const colorInput = document.getElementById('quick_color');
+    if (colorInput) {
+        colorInput.value = colorValue || '';
+    }
+
+    document.querySelectorAll('#quickEventModal .quick-color-swatch').forEach((swatch) => {
+        const isSelected = (swatch.dataset.color || '') === (colorValue || '');
+        swatch.classList.toggle('is-selected', isSelected);
+        swatch.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    });
+}
+
 function setQuickEventModalMode(isEdit) {
     const title = document.getElementById('quickEventModalLabel');
     const submitBtn = document.getElementById('quick_submit_btn');
+    const modeLabel = isEdit ? 'עריכת אירוע' : 'אירוע חדש';
+    const hebrewShort = formatShortHebrew(document.getElementById('quick_hebrew_date')?.value || '');
+    const gregorianShort = formatShortGregorian(document.getElementById('quick_gregorian_date')?.value || '');
+    const datePart = [hebrewShort, gregorianShort].filter(Boolean).join(' ');
+
     if (title) {
-        title.textContent = isEdit ? 'עריכת אירוע' : 'אירוע חדש';
+        title.textContent = datePart ? `${modeLabel}, ${datePart}` : modeLabel;
     }
     if (submitBtn) {
         submitBtn.textContent = isEdit ? 'שמור שינויים' : 'הוסף אירוע';
     }
+}
+
+function populateQuickHourOptions() {
+    const hourSelect = document.getElementById('quick_hour');
+    if (!hourSelect || hourSelect.dataset.filled === '1') {
+        return;
+    }
+
+    for (let hour = 0; hour < 24; hour++) {
+        const value = String(hour).padStart(2, '0');
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        hourSelect.appendChild(option);
+    }
+    hourSelect.dataset.filled = '1';
+}
+
+function clearExtraQuickMinuteOptions() {
+    const minuteSelect = document.getElementById('quick_minute');
+    if (!minuteSelect) {
+        return;
+    }
+
+    minuteSelect.querySelectorAll('option[data-extra="1"]').forEach((option) => option.remove());
+}
+
+function setQuickTime(timeValue) {
+    const hourSelect = document.getElementById('quick_hour');
+    const minuteSelect = document.getElementById('quick_minute');
+    if (!hourSelect || !minuteSelect) {
+        return;
+    }
+
+    clearExtraQuickMinuteOptions();
+
+    if (!timeValue) {
+        hourSelect.value = '';
+        minuteSelect.value = '';
+        return;
+    }
+
+    const [hour = '', minute = ''] = timeValue.split(':');
+    hourSelect.value = hour;
+
+    const normalizedMinute = String(minute).padStart(2, '0');
+    const allowedMinutes = ['00', '15', '30', '45'];
+    if (!allowedMinutes.includes(normalizedMinute)) {
+        // שומר שעה קיימת שאינה בקפיצות של 15 בלי לאבד אותה
+        const extraOption = document.createElement('option');
+        extraOption.value = normalizedMinute;
+        extraOption.textContent = normalizedMinute;
+        extraOption.dataset.extra = '1';
+        minuteSelect.appendChild(extraOption);
+    }
+    minuteSelect.value = normalizedMinute;
+}
+
+function getQuickTimeValue() {
+    const hourSelect = document.getElementById('quick_hour');
+    const minuteSelect = document.getElementById('quick_minute');
+    const hour = hourSelect?.value || '';
+    let minute = minuteSelect?.value || '';
+
+    if (!hour) {
+        return null;
+    }
+
+    // שעה בלי דקות → 00
+    if (!minute) {
+        minute = '00';
+        if (minuteSelect) {
+            minuteSelect.value = '00';
+        }
+    }
+
+    return `${hour}:${minute}`;
+}
+
+function extractTimeFromTitle(titleValue) {
+    const text = (titleValue || '')
+        .replace(/[\u200e\u200f\u202a-\u202e]/g, '')
+        .trim();
+
+    if (!text) {
+        return null;
+    }
+
+    // תומך ב־0600, 11:00; גם אם ב־RTL הספרות בסוף הלוגי
+    // כולל את כל הטוקן ב-match[0] כדי להסיר אותו מהכותרת
+    const patterns = [
+        /^(\d{2}):(\d{2})(?!\d)\s*/,
+        /^(\d{2})(\d{2})(?!\d)\s*/,
+        /\s+(\d{2}):(\d{2})$/,
+        /\s+(\d{2})(\d{2})$/,
+        /\s+(\d{2}):(\d{2})(?=\s|$)/,
+        /\s+(\d{2})(\d{2})(?=\s|$)/,
+    ];
+
+    for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (!match) {
+            continue;
+        }
+
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        if (hours > 23 || minutes > 59) {
+            continue;
+        }
+
+        const cleanedTitle = text.replace(match[0], ' ').replace(/\s+/g, ' ').trim();
+        return {
+            time: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+            cleanedTitle,
+        };
+    }
+
+    return null;
+}
+
+function applyTimeFromTitlePrefix(titleValue) {
+    const extracted = extractTimeFromTitle(titleValue);
+    if (!extracted) {
+        return false;
+    }
+
+    setQuickTime(extracted.time);
+
+    const titleInput = document.getElementById('quick_title');
+    if (titleInput && titleInput.value !== extracted.cleanedTitle) {
+        titleInput.value = extracted.cleanedTitle;
+        if (document.activeElement === titleInput) {
+            const cursor = titleInput.value.length;
+            titleInput.setSelectionRange(cursor, cursor);
+        }
+    }
+
+    return true;
 }
 
 function fillQuickEventForm(eventData = {}) {
@@ -207,10 +386,10 @@ function fillQuickEventForm(eventData = {}) {
     document.getElementById('quick_title').value = eventData.title || '';
     document.getElementById('quick_gregorian_date').value = eventData.gregorian_date || '';
     document.getElementById('quick_hebrew_date').value = eventData.hebrew_date || '';
-    document.getElementById('quick_time').value = eventData.time || '';
+    setQuickTime(eventData.time || '');
     document.getElementById('quick_end_date').value = eventData.end_date || '';
-    document.getElementById('quick_color').value = eventData.color || '';
     document.getElementById('quick_description').value = eventData.description || '';
+    setQuickColor(eventData.color || '');
 }
 
 function getQuickEventFormData() {
@@ -218,7 +397,7 @@ function getQuickEventFormData() {
         title: document.getElementById('quick_title').value,
         gregorian_date: document.getElementById('quick_gregorian_date').value,
         hebrew_date: document.getElementById('quick_hebrew_date').value,
-        time: document.getElementById('quick_time').value || null,
+        time: getQuickTimeValue(),
         description: document.getElementById('quick_description').value || '',
         end_date: document.getElementById('quick_end_date').value || null,
         color: document.getElementById('quick_color').value || null,
@@ -236,9 +415,9 @@ async function openQuickEventModal(dateStr) {
         form.reset();
     }
 
-    setQuickEventModalMode(false);
     fillQuickEventForm({ gregorian_date: dateStr });
     await fillHebrewDateFromGregorian(dateStr, 'quick_hebrew_date');
+    setQuickEventModalMode(false);
 
     bootstrap.Modal.getOrCreateInstance(modalElement).show();
 }
@@ -257,8 +436,8 @@ async function openEditEventModal(eventId) {
         }
 
         const event = await response.json();
-        setQuickEventModalMode(true);
         fillQuickEventForm(event);
+        setQuickEventModalMode(true);
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (error) {
         console.error('Error loading event for edit:', error);
@@ -274,6 +453,8 @@ function initQuickEventModal() {
         return;
     }
 
+    populateQuickHourOptions();
+
     // אחרי סיום הפתיחה של Bootstrap — פוקוס יציב על הכותרת
     modalElement.addEventListener('shown.bs.modal', () => {
         requestAnimationFrame(() => {
@@ -285,8 +466,8 @@ function initQuickEventModal() {
     });
 
     modalElement.addEventListener('hidden.bs.modal', () => {
-        setQuickEventModalMode(false);
         fillQuickEventForm();
+        setQuickEventModalMode(false);
     });
 
     calendarBody.addEventListener('dblclick', (event) => {
@@ -305,12 +486,45 @@ function initQuickEventModal() {
         openQuickEventModal(cell.getAttribute('data-date'));
     });
 
-    document.getElementById('quick_gregorian_date').addEventListener('change', function() {
-        fillHebrewDateFromGregorian(this.value, 'quick_hebrew_date');
+    modalElement.querySelectorAll('.quick-color-swatch').forEach((swatch) => {
+        swatch.addEventListener('click', () => {
+            setQuickColor(swatch.dataset.color || '');
+        });
     });
+
+    const hourSelect = document.getElementById('quick_hour');
+    const minuteSelect = document.getElementById('quick_minute');
+    if (hourSelect && minuteSelect) {
+        hourSelect.addEventListener('change', () => {
+            if (hourSelect.value && !minuteSelect.value) {
+                minuteSelect.value = '00';
+            }
+            if (!hourSelect.value) {
+                minuteSelect.value = '';
+                clearExtraQuickMinuteOptions();
+            }
+        });
+    }
+
+    const titleInput = document.getElementById('quick_title');
+    if (titleInput) {
+        const syncTimeFromTitle = () => applyTimeFromTitlePrefix(titleInput.value);
+        titleInput.addEventListener('input', syncTimeFromTitle);
+        titleInput.addEventListener('keyup', syncTimeFromTitle);
+        titleInput.addEventListener('blur', syncTimeFromTitle);
+    }
 
     quickForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        // ניסיון אחרון לחלץ שעה מהכותרת לפני שמירה
+        applyTimeFromTitlePrefix(document.getElementById('quick_title').value);
+
+        // אם נשארו דקות בלי שעה — מתעלמים מהדקות
+        if (!document.getElementById('quick_hour').value) {
+            document.getElementById('quick_minute').value = '';
+            clearExtraQuickMinuteOptions();
+        }
 
         const eventData = getQuickEventFormData();
         const eventId = document.getElementById('quick_event_id').value;

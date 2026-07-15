@@ -61,3 +61,81 @@
 #success-message.show {
     opacity: 1;
 }
+
+/* כותרת במודל: אם מתחילים בספרות הן נשארות בתחילת המחרוזת */
+#quick_title {
+    unicode-bidi: plaintext;
+}
+
+/* בחירת שעה במודל מהיר — LTR כדי שיוצג HH:MM משמאל לימין */
+.quick-time-fields {
+    display: flex;
+    direction: ltr;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.quick-time-fields .form-select {
+    flex: 1;
+}
+
+.quick-time-separator {
+    font-weight: 600;
+    color: #666;
+}
+
+/* בחירת צבע במודל מהיר */
+.quick-color-picker {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.quick-color-swatch {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quick-color-swatch:hover {
+    transform: scale(1.08);
+}
+
+.quick-color-swatch.is-selected {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary-color, #0d6efd);
+}
+
+.quick-color-swatch.is-none {
+    background: #fff;
+    position: relative;
+}
+
+.quick-color-swatch.is-none::after {
+    content: '';
+    position: absolute;
+    inset: 45% 15%;
+    height: 2px;
+    background: #c0392b;
+    transform: rotate(-45deg);
+}
+
+.quick-color-swatch.color-cyan {
+    background-color: rgb(0, 255, 255);
+}
+
+.quick-color-swatch.color-yellow {
+    background-color: rgb(255, 255, 0);
+}
+
+.quick-color-swatch.color-orange {
+    background-color: rgb(255, 165, 0);
+}
+
+.quick-color-swatch.color-green {
+    background-color: rgb(0, 128, 0);
+}
