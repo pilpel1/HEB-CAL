@@ -20,6 +20,51 @@ function getShortMonthName(month) {
     return shortMonths[month];
 }
 
+const END_DATE_BEFORE_START_MSG = 'תאריך הסיום חייב להיות זהה או מאוחר מתאריך ההתחלה';
+
+function isEndDateBeforeStart(startDate, endDate) {
+    if (!startDate || !endDate) {
+        return false;
+    }
+    // YYYY-MM-DD ניתן להשוות כמחרוזת
+    return endDate < startDate;
+}
+
+function syncEndDateMin(startDate, endInput) {
+    if (!endInput) {
+        return;
+    }
+    if (startDate) {
+        // min של input[type=date] מאפיר וחוסם בחירה של תאריכים מוקדמים יותר בלוח של הדפדפן
+        endInput.setAttribute('min', startDate);
+        if (endInput.value && endInput.value < startDate) {
+            endInput.value = '';
+        }
+        endInput.setCustomValidity(
+            endInput.value && endInput.value < startDate ? END_DATE_BEFORE_START_MSG : ''
+        );
+    } else {
+        endInput.removeAttribute('min');
+        endInput.setCustomValidity('');
+    }
+}
+
+function assertEndDateNotBeforeStart(startDate, endDate, endInput = null) {
+    if (!isEndDateBeforeStart(startDate, endDate)) {
+        if (endInput) {
+            endInput.setCustomValidity('');
+        }
+        return true;
+    }
+    if (endInput) {
+        endInput.setCustomValidity(END_DATE_BEFORE_START_MSG);
+        endInput.reportValidity();
+        return false;
+    }
+    alert(END_DATE_BEFORE_START_MSG);
+    return false;
+}
+
 let currentDate = new Date();
 
 async function updateCalendar() {
@@ -77,6 +122,7 @@ async function updateCalendar() {
                             <span class="gregorian-date">${gregorianDate}</span>
                         </div>
                         <div class="cell-content">
+                            <div class="multi-day-rail"></div>
                             <div class="jewish-events-container"></div>
                             <div class="day-content"></div>
                         </div>
@@ -390,6 +436,10 @@ function fillQuickEventForm(eventData = {}) {
     document.getElementById('quick_end_date').value = eventData.end_date || '';
     document.getElementById('quick_description').value = eventData.description || '';
     setQuickColor(eventData.color || '');
+    syncEndDateMin(
+        eventData.gregorian_date || '',
+        document.getElementById('quick_end_date')
+    );
 }
 
 function getQuickEventFormData() {
@@ -416,6 +466,8 @@ async function openQuickEventModal(dateStr) {
     }
 
     fillQuickEventForm({ gregorian_date: dateStr });
+    // אחרי reset — מוודאים שוב שה-min על תאריך הסיום ננעל לתאריך ההתחלה
+    syncEndDateMin(dateStr, document.getElementById('quick_end_date'));
     await fillHebrewDateFromGregorian(dateStr, 'quick_hebrew_date');
     setQuickEventModalMode(false);
 
@@ -514,6 +566,15 @@ function initQuickEventModal() {
         titleInput.addEventListener('blur', syncTimeFromTitle);
     }
 
+    const quickEndDate = document.getElementById('quick_end_date');
+    if (quickEndDate) {
+        // אם בכל זאת הוקלד תאריך לא תקין ידנית — מנקים מיד
+        quickEndDate.addEventListener('change', () => {
+            const startDate = document.getElementById('quick_gregorian_date').value;
+            syncEndDateMin(startDate, quickEndDate);
+        });
+    }
+
     quickForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -527,6 +588,12 @@ function initQuickEventModal() {
         }
 
         const eventData = getQuickEventFormData();
+        const endInput = document.getElementById('quick_end_date');
+        syncEndDateMin(eventData.gregorian_date, endInput);
+        if (!assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date, endInput)) {
+            return;
+        }
+
         const eventId = document.getElementById('quick_event_id').value;
         const saved = eventId
             ? await updateEvent(eventId, eventData)
@@ -606,8 +673,11 @@ async function deleteEvent(eventId) {
 
 // המרת תאריך לועזי לעברי בטופס הוספת אירוע
 const gregorianDateInput = document.getElementById('gregorian_date');
+const endDateInput = document.getElementById('end_date');
 if (gregorianDateInput) {
+    syncEndDateMin(gregorianDateInput.value, endDateInput);
     gregorianDateInput.addEventListener('change', async function() {
+        syncEndDateMin(this.value, endDateInput);
         try {
             const response = await fetch(`/api/hebrew-date/${this.value}`);
             const data = await response.json();
@@ -633,6 +703,10 @@ if (eventForm) {
             end_date: document.getElementById('end_date').value || null,
             color: document.getElementById('color').value || null,
         };
+
+        if (!assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date)) {
+            return;
+        }
 
         await createEvent(eventData);
     });
@@ -702,7 +776,7 @@ async function updateEventsList() {
                                 <div class="input-wrapper">
                                     <label for="end_date-${event.id}" class="form-label">תאריך סיום</label>
                                     <input type="date" class="form-control" id="end_date-${event.id}" 
-                                        value="${event.end_date || ''}">
+                                        value="${event.end_date || ''}" min="${event.gregorian_date}">
                                 </div>
                             </div>
                             <div class="col mb-3">
@@ -758,6 +832,7 @@ function cancelEdit(eventId) {
 
 async function updateHebrewDate(eventId) {
     const gregorianDate = document.getElementById(`gregorian_date-${eventId}`).value;
+    syncEndDateMin(gregorianDate, document.getElementById(`end_date-${eventId}`));
     try {
         const response = await fetch(`/api/hebrew-date/${gregorianDate}`);
         const data = await response.json();
@@ -779,6 +854,12 @@ async function saveEvent(e, eventId) {
         end_date: document.getElementById(`end_date-${eventId}`).value || null,
         color: document.getElementById(`color-${eventId}`).value || null
     };
+
+    const endInput = document.getElementById(`end_date-${eventId}`);
+    syncEndDateMin(eventData.gregorian_date, endInput);
+    if (!assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date, endInput)) {
+        return false;
+    }
 
     try {
         const response = await fetch(`/api/events/${eventId}`, {
@@ -856,56 +937,201 @@ function isDateInRange(dateStr, startStr, endStr) {
     return date >= start && date <= end;
 }
 
+function isMultiDayEvent(event) {
+    return Boolean(event.end_date && event.end_date > event.gregorian_date);
+}
+
+function addDaysToDateStr(dateStr, days) {
+    const date = new Date(`${dateStr}T00:00:00`);
+    date.setDate(date.getDate() + days);
+    return formatDate(date);
+}
+
+function getEventDurationDays(event) {
+    const start = new Date(`${event.gregorian_date}T00:00:00`);
+    const end = new Date(`${event.end_date || event.gregorian_date}T00:00:00`);
+    return Math.round((end - start) / 86400000) + 1;
+}
+
+function getMultiDaySegmentRole(dateStr, event, weekDates) {
+    const prev = addDaysToDateStr(dateStr, -1);
+    const next = addDaysToDateStr(dateStr, 1);
+    const continuesFromPrev = weekDates.includes(prev)
+        && isDateInRange(prev, event.gregorian_date, event.end_date);
+    const continuesToNext = weekDates.includes(next)
+        && isDateInRange(next, event.gregorian_date, event.end_date);
+
+    if (!continuesFromPrev && continuesToNext) {
+        return 'start';
+    }
+    if (continuesFromPrev && continuesToNext) {
+        return 'middle';
+    }
+    if (continuesFromPrev && !continuesToNext) {
+        return 'end';
+    }
+    return 'single';
+}
+
+function assignMultiDayLanes(multiDayEvents, weekDates) {
+    const relevant = multiDayEvents
+        .filter((event) => weekDates.some((date) => (
+            isDateInRange(date, event.gregorian_date, event.end_date)
+        )))
+        .sort((a, b) => {
+            if (a.gregorian_date !== b.gregorian_date) {
+                return a.gregorian_date < b.gregorian_date ? -1 : 1;
+            }
+            return getEventDurationDays(b) - getEventDurationDays(a);
+        });
+
+    const laneEnds = [];
+    const eventLanes = new Map();
+
+    for (const event of relevant) {
+        const daysInWeek = weekDates.filter((date) => (
+            isDateInRange(date, event.gregorian_date, event.end_date)
+        ));
+        if (daysInWeek.length === 0) {
+            continue;
+        }
+
+        const startInWeek = daysInWeek[0];
+        const endInWeek = daysInWeek[daysInWeek.length - 1];
+        let lane = 0;
+        while (lane < laneEnds.length && laneEnds[lane] >= startInWeek) {
+            lane += 1;
+        }
+
+        if (lane === laneEnds.length) {
+            laneEnds.push(endInWeek);
+        } else {
+            laneEnds[lane] = endInWeek;
+        }
+        eventLanes.set(event.id, lane);
+    }
+
+    return { eventLanes, laneCount: laneEnds.length };
+}
+
+function buildEventItemHtml(event, extraClasses = []) {
+    const timeStr = event.time ? `${event.time} - ` : '';
+    const classes = ['event-item', ...extraClasses];
+    if (!event.color) {
+        classes.push('event-uncolored');
+    }
+
+    const style = event.color
+        ? `background-color: rgba(${getColorRGBA(event.color)})`
+        : '';
+
+    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" style="${style}">${timeStr}${event.title}</div>`;
+}
+
+function renderMultiDayRail(cell, date, multiDayEvents, eventLanes, weekDates) {
+    const rail = cell.querySelector('.multi-day-rail');
+    if (!rail) {
+        return;
+    }
+
+    const laneHtml = new Map();
+
+    for (const event of multiDayEvents) {
+        if (!isDateInRange(date, event.gregorian_date, event.end_date)) {
+            continue;
+        }
+
+        const lane = eventLanes.get(event.id);
+        if (lane === undefined) {
+            continue;
+        }
+
+        const role = getMultiDaySegmentRole(date, event, weekDates);
+        laneHtml.set(lane, buildEventItemHtml(event, [
+            'event-multi',
+            `event-multi-${role}`,
+        ]));
+    }
+
+    if (laneHtml.size === 0) {
+        rail.innerHTML = '';
+        return;
+    }
+
+    const maxLaneToday = Math.max(...laneHtml.keys());
+    const lanes = [];
+    for (let lane = 0; lane <= maxLaneToday; lane += 1) {
+        lanes.push(
+            laneHtml.get(lane)
+            || '<div class="event-lane-spacer" aria-hidden="true"></div>'
+        );
+    }
+
+    rail.innerHTML = lanes.join('');
+}
+
 // פונקציה לטעינת והצגת אירועים בלוח
 async function loadAndDisplayEvents() {
     try {
-        // טעינת כל האירועים
         const events = await loadEvents();
-        
-        // עבור על כל התאים בלוח
-        const cells = document.querySelectorAll('#calendar-body td[data-date]');
-        for (const cell of cells) {
-            const date = cell.getAttribute('data-date');
-            
-            // טעינת אירועים יהודיים לתאריך
-            const response = await fetch(`/api/jewish-events/${date}`);
-            if (!response.ok) {
-                console.error(`Error loading Jewish events for ${date}:`, await response.text());
+        const multiDayEvents = events.filter(isMultiDayEvent);
+        const singleDayEvents = events.filter((event) => !isMultiDayEvent(event));
+
+        const rows = document.querySelectorAll('#calendar-body tr');
+        for (const row of rows) {
+            const cells = [...row.querySelectorAll('td[data-date]')];
+            if (cells.length === 0) {
                 continue;
             }
-            const jewishEvents = await response.json();
-            
-            // הצגת אירועים יהודיים
-            const jewishContainer = cell.querySelector('.jewish-events-container');
-            if (jewishEvents && jewishEvents.length > 0) {
-                // מיון האירועים לפי סדר: פרשה, חג, צום
-                const sortedEvents = jewishEvents.sort((a, b) => {
-                    const order = { parasha: 1, holiday: 2, fast: 3 };
-                    return order[a.type] - order[b.type];
-                });
-                
-                jewishContainer.innerHTML = sortedEvents
-                    .map(event => `<div class="${event.type}" style="color: ${event.color}">${event.name}</div>`)
-                    .join('');
-            } else {
-                jewishContainer.innerHTML = '';
-            }
-            
-            // סינון וקיבוץ האירועים הרגילים לתאריך זה
-            const dayEvents = events.filter(event => isDateInRange(date, event.gregorian_date, event.end_date));
 
-            // הצגת האירועים הרגילים
-            const contentContainer = cell.querySelector('.day-content');
-            if (dayEvents.length > 0) {
-                contentContainer.innerHTML = dayEvents
-                    .map(event => {
-                        const timeStr = event.time ? `${event.time} - ` : '';
-                        const style = event.color ? `background-color: rgba(${getColorRGBA(event.color)})` : '';
-                        return `<div class="event-item" data-event-id="${event.id}" style="${style}">${timeStr}${event.title}</div>`;
-                    })
-                    .join('');
-            } else {
-                contentContainer.innerHTML = '';
+            const weekDates = cells.map((cell) => cell.getAttribute('data-date'));
+            const { eventLanes } = assignMultiDayLanes(multiDayEvents, weekDates);
+
+            for (const cell of cells) {
+                const date = cell.getAttribute('data-date');
+
+                // טעינת אירועים יהודיים לתאריך
+                const response = await fetch(`/api/jewish-events/${date}`);
+                if (!response.ok) {
+                    console.error(`Error loading Jewish events for ${date}:`, await response.text());
+                    continue;
+                }
+                const jewishEvents = await response.json();
+
+                const jewishContainer = cell.querySelector('.jewish-events-container');
+                if (jewishEvents && jewishEvents.length > 0) {
+                    const sortedEvents = jewishEvents.sort((a, b) => {
+                        const order = { parasha: 1, holiday: 2, fast: 3 };
+                        return order[a.type] - order[b.type];
+                    });
+
+                    jewishContainer.innerHTML = sortedEvents
+                        .map((event) => `<div class="${event.type}" style="color: ${event.color}">${event.name}</div>`)
+                        .join('');
+                } else {
+                    jewishContainer.innerHTML = '';
+                }
+
+                renderMultiDayRail(
+                    cell,
+                    date,
+                    multiDayEvents,
+                    eventLanes,
+                    weekDates
+                );
+
+                const dayEvents = singleDayEvents.filter((event) => (
+                    isDateInRange(date, event.gregorian_date, event.end_date)
+                ));
+
+                const contentContainer = cell.querySelector('.day-content');
+                if (dayEvents.length > 0) {
+                    contentContainer.innerHTML = dayEvents
+                        .map((event) => buildEventItemHtml(event))
+                        .join('');
+                } else {
+                    contentContainer.innerHTML = '';
+                }
             }
         }
     } catch (error) {

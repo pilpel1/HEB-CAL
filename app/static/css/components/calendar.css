@@ -140,9 +140,21 @@
     color: #2980b9;
 }
 
-/* אזור האירועים */
+/* רצועת אירועים מרובי-ימים — תמיד מתחת לתאריך, מעל חגים */
+.multi-day-rail {
+    padding: 1px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.multi-day-rail:empty {
+    display: none;
+}
+
+/* אזור האירועים (חד-יומיים) — מעט צרים יותר ממרובי-ימים */
 .day-content {
-    padding: 2px 5px;
+    padding: 2px 8px;
     text-align: right;
     display: flex;
     flex-direction: column;
@@ -160,6 +172,75 @@
     font-size: 0.85em;
     word-wrap: break-word;
     position: relative;
+    box-sizing: border-box;
+    min-height: 1.45em;
+    line-height: 1.25;
+}
+
+/* אירועים בלי צבע — מסגרת עדינה, בלי מילוי */
+.event-item.event-uncolored {
+    border: 1px solid #9aa0a6;
+    background-color: transparent;
+}
+
+.event-lane-spacer {
+    margin: 1px 0;
+    padding: 2px 4px;
+    min-height: 1.45em;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/*
+ * אירוע מרובה-ימים בסגנון "סנייק":
+ * קצה חיצוני = חצי-גלולה מלאה, צדדים בין תאים = ישרים.
+ */
+.event-item.event-multi {
+    z-index: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 0;
+    margin-inline: 0;
+    padding-inline: 5px;
+}
+
+/* התחלה: כל הצד החיצוני עגול, הצד שממשיך ישר */
+.event-item.event-multi-start {
+    border-start-start-radius: 999px;
+    border-end-start-radius: 999px;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+}
+
+/* אמצע: ישר משני הצדדים */
+.event-item.event-multi-middle {
+    border-radius: 0;
+}
+
+/* סיום: הצד שממשיך ישר, כל הצד החיצוני עגול */
+.event-item.event-multi-end {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    border-start-end-radius: 999px;
+    border-end-end-radius: 999px;
+}
+
+/* חסר-צבע מתמשך: בלי קו אנכי בצד שממשיך לתא הסמוך */
+.event-item.event-multi.event-uncolored.event-multi-start {
+    border-inline-end-width: 0;
+}
+
+.event-item.event-multi.event-uncolored.event-multi-middle {
+    border-inline-width: 0;
+}
+
+.event-item.event-multi.event-uncolored.event-multi-end {
+    border-inline-start-width: 0;
+}
+
+.event-item.event-multi-single {
+    border-radius: 3px;
 }
 
 /* שעת האירוע */

@@ -32,6 +32,27 @@ def _validate_event_payload(data):
             jsonify({"error": f"Missing required fields: {missing_fields}", "success": False}),
             400,
         )
+
+    end_date = data.get("end_date") or None
+    gregorian_date = data.get("gregorian_date")
+    if end_date:
+        try:
+            start = datetime.strptime(gregorian_date, "%Y-%m-%d").date()
+            end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return (
+                jsonify({"error": "Invalid date format. Expected YYYY-MM-DD", "success": False}),
+                400,
+            )
+        if end < start:
+            return (
+                jsonify({
+                    "error": "תאריך הסיום חייב להיות זהה או מאוחר מתאריך ההתחלה",
+                    "success": False,
+                }),
+                400,
+            )
+
     return None
 
 

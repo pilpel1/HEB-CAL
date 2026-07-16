@@ -678,7 +678,7 @@ function updateTable(events) {
                                     <div class="col mb-3">
                                         <div class="input-wrapper">
                                             <label for="end_date-${event.id}" class="form-label">תאריך סיום</label>
-                                            <input type="date" class="form-control" id="end_date-${event.id}" value="${event.end_date || ''}">
+                                            <input type="date" class="form-control" id="end_date-${event.id}" value="${event.end_date || ''}" min="${event.gregorian_date}">
                                         </div>
                                     </div>
                                     <div class="col mb-3">
@@ -736,6 +736,11 @@ function updateTable(events) {
             };
             console.log('נתוני האירוע לשליחה:', eventData);
 
+            if (typeof assertEndDateNotBeforeStart === 'function'
+                && !assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date)) {
+                return;
+            }
+
             try {
                 console.log('שולח בקשת עדכון לשרת...');
                 const response = await fetch(`/api/events/${eventId}`, {
@@ -775,7 +780,7 @@ function updateTable(events) {
                     }
                 } else {
                     console.error('שגיאה בעדכון:', result);
-                    alert('שגיאה בעדכון האירוע');
+                    alert(result.error || 'שגיאה בעדכון האירוע');
                 }
             } catch (error) {
                 console.error('Error updating event:', error);
@@ -805,6 +810,15 @@ function cancelEdit(eventId) {
 
 async function updateHebrewDate(eventId) {
     const gregorianDate = document.getElementById(`gregorian_date-${eventId}`).value;
+    const endDateInput = document.getElementById(`end_date-${eventId}`);
+    if (typeof syncEndDateMin === 'function') {
+        syncEndDateMin(gregorianDate, endDateInput);
+    } else if (endDateInput && gregorianDate) {
+        endDateInput.min = gregorianDate;
+        if (endDateInput.value && endDateInput.value < gregorianDate) {
+            endDateInput.value = '';
+        }
+    }
     try {
         const response = await fetch(`/api/hebrew-date/${gregorianDate}`);
         const data = await response.json();
