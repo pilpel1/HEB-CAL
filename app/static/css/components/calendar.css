@@ -373,3 +373,55 @@
     background-color: #c8e6c9;  /* ירוק בהיר יותר למיכל התאריכים */
     border-bottom: 1px solid #a4eaa8b6;  /* גבול ירוק */
 }
+
+/* תפריט הקשר בלחיצה ימנית על הלוח */
+.calendar-context-menu {
+    position: fixed;
+    z-index: 1080;
+    min-width: 180px;
+    padding: 0.35rem 0;
+    margin: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    display: none;
+}
+
+.calendar-context-menu.is-open {
+    display: block;
+}
+
+.calendar-context-menu button {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0.45rem 1rem;
+    text-align: right;
+    font: inherit;
+    color: #212529;
+    cursor: pointer;
+}
+
+.calendar-context-menu button:hover,
+.calendar-context-menu button:focus {
+    background: #f1f3f5;
+    outline: none;
+}
+
+.calendar-context-menu button.is-danger {
+    color: #c92a2a;
+}
+
+.calendar-context-menu button.is-danger:hover,
+.calendar-context-menu button.is-danger:focus {
+    background: #fff5f5;
+}
+
+.calendar-context-menu .context-menu-separator {
+    height: 1px;
+    margin: 0.35rem 0;
+    background: rgba(0, 0, 0, 0.1);
+}
