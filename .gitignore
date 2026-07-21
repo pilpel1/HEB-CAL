@@ -78,7 +78,8 @@ Feature.txt
 features.txt
 todo.txt
 TODO.local.md
-notes.txt 
+*.local.md
+notes.txt
 
 # Local UI backup files
 app/static/css/style_before_split.css
