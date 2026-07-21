@@ -233,105 +233,115 @@
 </style>
 
 <div class="card events-manage-card">
-    <div class="card-header">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
-            <div>
-                <a href="/" class="text-decoration-none d-inline-block mb-2">&rarr; חזרה ללוח</a>
-                <h1 class="h4 mb-0">ניהול אירועים</h1>
-                <p class="text-muted small mb-0 mt-1">חיפוש, עריכה, מחיקה ויבוא/יצוא של כל האירועים</p>
-            </div>
-            <button type="button" class="btn btn-primary" id="addEventFromListBtn">הוסף אירוע</button>
-        </div>
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="exportEventsBtn">יצוא JSON</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="importEventsBtn">יבוא JSON</button>
-                <input type="file" id="importEventsFile" accept=".json,application/json" hidden>
-                <select id="importMode" class="form-select form-select-sm" style="width: auto;">
-                    <option value="merge" selected>יבוא במיזוג</option>
-                    <option value="replace">יבוא במקום הקיים</option>
-                </select>
-            </div>
-            <small class="text-muted">היצוא והיבוא עובדים מעל SQLite, לא במקום SQLite.</small>
-        </div>
-        <div class="d-flex justify-content-end align-items-center">
-            <div class="search-container">
-                <div class="search-input-group">
-                    <input type="text" id="searchInput" class="form-control" placeholder="חיפוש אירועים..." />
-                    <button class="btn" type="button" id="advancedSearchBtn" title="חיפוש מתקדם">
-                        <i class="bi bi-gear-fill"></i>
-                    </button>
+    <div class="card-header py-2">
+        <div class="events-list-toolbar d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h1 class="h5 mb-0 text-nowrap">רשימת אירועים</h1>
+            <div class="d-flex align-items-center gap-2 flex-wrap flex-grow-1 justify-content-end">
+                <div class="search-container events-toolbar-search">
+                    <div class="search-input-group">
+                        <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="חיפוש אירועים..." />
+                        <button class="btn btn-sm" type="button" id="advancedSearchBtn" title="חיפוש מתקדם">
+                            <i class="bi bi-funnel-fill"></i>
+                        </button>
+                    </div>
+                    <div id="advancedSearchPanel" class="card mt-2" style="display: none;">
+                        <div class="card-body p-3">
+                            <form id="advancedSearchForm">
+                                <!-- שורה ראשונה: חיפוש בשם ותיאור -->
+                                <div class="row mb-2">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">חיפוש בשם האירוע</label>
+                                            <input type="text" class="form-control" id="titleSearch" placeholder="הזן שם אירוע...">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="form-label">חיפוש בתיאור</label>
+                                            <input type="text" class="form-control" id="descriptionSearch" placeholder="הזן טקסט לחיפוש בתיאור...">
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- שורה שנייה: תאריכים וצבע -->
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">מתאריך</label>
+                                            <input type="date" class="form-control" id="startDate">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">עד תאריך</label>
+                                            <input type="date" class="form-control" id="endDate">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label">צבע האירוע</label>
+                                            <select class="form-control" id="colorSearch">
+                                                <option value="">כל הצבעים</option>
+                                                <option value="null">ללא צבע</option>
+                                                <option value="cyan">ציאן</option>
+                                                <option value="yellow">צהוב</option>
+                                                <option value="orange">כתום</option>
+                                                <option value="green">ירוק</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- שורה שלישית: סינון לפי זמן -->
+                                <div class="time-filter-group mb-2">
+                                    <label class="form-label">סינון לפי זמן:</label>
+                                    <div class="radio-group">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="timeFilter" id="allEvents" value="all" checked>
+                                            <label class="form-check-label" for="allEvents">הכל</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="timeFilter" id="pastEvents" value="past">
+                                            <label class="form-check-label" for="pastEvents">עבר</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="timeFilter" id="futureEvents" value="future">
+                                            <label class="form-check-label" for="futureEvents">עתיד</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- כפתורים -->
+                                <div class="d-flex justify-content-between">
+                                    <button type="button" class="btn btn-secondary" id="resetAdvancedSearch">איפוס</button>
+                                    <button type="submit" class="btn btn-primary">חפש</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-                <div id="advancedSearchPanel" class="card mt-2" style="display: none;">
-                    <div class="card-body p-3">
-                        <form id="advancedSearchForm">
-                            <!-- שורה ראשונה: חיפוש בשם ותיאור -->
-                            <div class="row mb-2">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label class="form-label">חיפוש בשם האירוע</label>
-                                        <input type="text" class="form-control" id="titleSearch" placeholder="הזן שם אירוע...">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label class="form-label">חיפוש בתיאור</label>
-                                        <input type="text" class="form-control" id="descriptionSearch" placeholder="הזן טקסט לחיפוש בתיאור...">
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- שורה שנייה: תאריכים וצבע -->
-                            <div class="row mb-2">
-                                <div class="col-md-4">
-                                    <div class="form-group">
-                                        <label class="form-label">מתאריך</label>
-                                        <input type="date" class="form-control" id="startDate">
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="form-group">
-                                        <label class="form-label">עד תאריך</label>
-                                        <input type="date" class="form-control" id="endDate">
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-group">
-                                        <label class="form-label">צבע האירוע</label>
-                                        <select class="form-control" id="colorSearch">
-                                            <option value="">כל הצבעים</option>
-                                            <option value="null">ללא צבע</option>
-                                            <option value="cyan">ציאן</option>
-                                            <option value="yellow">צהוב</option>
-                                            <option value="orange">כתום</option>
-                                            <option value="green">ירוק</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- שורה שלישית: סינון לפי זמן -->
-                            <div class="time-filter-group mb-2">
-                                <label class="form-label">סינון לפי זמן:</label>
-                                <div class="radio-group">
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="radio" name="timeFilter" id="allEvents" value="all" checked>
-                                        <label class="form-check-label" for="allEvents">הכל</label>
-                                    </div>
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="radio" name="timeFilter" id="pastEvents" value="past">
-                                        <label class="form-check-label" for="pastEvents">עבר</label>
-                                    </div>
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="radio" name="timeFilter" id="futureEvents" value="future">
-                                        <label class="form-check-label" for="futureEvents">עתיד</label>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- כפתורים -->
-                            <div class="d-flex justify-content-between">
-                                <button type="button" class="btn btn-secondary" id="resetAdvancedSearch">איפוס</button>
-                                <button type="submit" class="btn btn-primary">חפש</button>
-                            </div>
-                        </form>
+                <button type="button" class="btn btn-primary btn-sm" id="addEventFromListBtn">הוסף אירוע</button>
+                <a href="/" class="btn btn-outline-secondary btn-sm calendar-events-list-btn">חזרה ללוח</a>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" id="eventsToolsBtn"
+                            data-bs-toggle="dropdown" aria-expanded="false" title="כלים וגיבוי">
+                        <i class="bi bi-tools" aria-hidden="true"></i>
+                        <span class="visually-hidden">כלים</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-start p-3 events-tools-menu" aria-labelledby="eventsToolsBtn">
+                        <div class="fw-semibold mb-2">גיבוי ושחזור</div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mb-2" id="exportEventsBtn">
+                            ייצוא רשימה
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mb-2" id="importEventsBtn">
+                            ייבוא רשימה
+                        </button>
+                        <input type="file" id="importEventsFile" accept=".json,application/json" hidden>
+                        <label for="importMode" class="form-label small mb-1">מצב ייבוא</label>
+                        <select id="importMode" class="form-select form-select-sm">
+                            <option value="merge" selected>ייבוא במיזוג (בלי כפילויות)</option>
+                            <option value="replace">ייבוא במקום הקיים</option>
+                        </select>
+                        <small class="text-muted d-block mt-2">
+                            מיזוג מזהה אירוע לפי מזהה, או לפי כותרת+תאריך+שעה, או לפי תאריך+שעה אם יש התאמה יחידה.
+                        </small>
                     </div>
                 </div>
             </div>
@@ -360,6 +370,34 @@
                 </tbody>
             </table>
         </div>
+        <div class="events-pagination d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <label for="pageSizeSelect" class="mb-0 small text-muted">הצג</label>
+                <select id="pageSizeSelect" class="form-select form-select-sm" style="width: auto;">
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="30">30</option>
+                    <option value="50">50</option>
+                </select>
+                <span class="small text-muted">בעמוד</span>
+                <label for="sortOrderSelect" class="mb-0 small text-muted ms-2">סדר</label>
+                <select id="sortOrderSelect" class="form-select form-select-sm" style="width: auto;">
+                    <option value="desc" selected>מהחדש לישן</option>
+                    <option value="asc">מהישן לחדש</option>
+                </select>
+            </div>
+            <div id="paginationInfo" class="small text-muted"></div>
+            <div class="d-flex align-items-center gap-2 flex-wrap" aria-label="ניווט עמודים">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="prevPageBtn">הקודם</button>
+                <div id="paginationPages" class="events-page-numbers d-flex align-items-center gap-1 flex-wrap"></div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="nextPageBtn">הבא</button>
+                <div class="events-page-jump d-none align-items-center gap-1" id="pageJumpWrap">
+                    <label for="pageJumpInput" class="mb-0 small text-muted">לעמוד</label>
+                    <input type="number" id="pageJumpInput" class="form-control form-control-sm" min="1" style="width: 4.2rem;">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="pageJumpBtn">סע</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -368,10 +406,173 @@
 <script>
 let debounceTimeout;
 const COLOR_OPACITY = 0.8;  // קבוע גלובלי לרמת השקיפות
+const LIST_PREFS_KEY = 'hebCal.eventsListPrefs';
+const CATEGORY_META = {
+    past: { label: 'אירועים שעברו', rowClass: 'event-row-past', badgeClass: 'event-status-past', badgeText: 'עבר', separatorClass: 'events-time-separator-past' },
+    today: { label: 'היום', rowClass: 'event-row-today', badgeClass: 'event-status-today', badgeText: 'היום', separatorClass: 'events-time-separator-today' },
+    future: { label: 'מעכשיו והלאה', rowClass: 'event-row-upcoming', badgeClass: 'event-status-upcoming', badgeText: 'עתיד', separatorClass: '' },
+};
+
+let currentEventsDataset = [];
+let currentPage = 1;
+let pageSize = 20;
+let sortOrder = 'desc';
+
+function getTodayDateStr() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// קטגוריה לפי תאריך לועזי בלבד — בלי קשר לשעה
+function getEventTimeCategory(event) {
+    const date = event.gregorian_date || '';
+    const today = getTodayDateStr();
+    if (!date) {
+        return 'future';
+    }
+    if (date < today) {
+        return 'past';
+    }
+    if (date > today) {
+        return 'future';
+    }
+    return 'today';
+}
+
+function loadListPrefs() {
+    try {
+        const raw = localStorage.getItem(LIST_PREFS_KEY);
+        if (!raw) {
+            return;
+        }
+        const prefs = JSON.parse(raw);
+        if ([10, 20, 30, 50].includes(Number(prefs.pageSize))) {
+            pageSize = Number(prefs.pageSize);
+        }
+        if (prefs.sortOrder === 'asc' || prefs.sortOrder === 'desc') {
+            sortOrder = prefs.sortOrder;
+        }
+        if (Number(prefs.page) >= 1) {
+            currentPage = Number(prefs.page);
+        }
+    } catch (error) {
+        console.warn('לא ניתן לטעון העדפות רשימה:', error);
+    }
+}
+
+function saveListPrefs() {
+    try {
+        localStorage.setItem(LIST_PREFS_KEY, JSON.stringify({
+            pageSize,
+            page: currentPage,
+            sortOrder,
+        }));
+    } catch (error) {
+        console.warn('לא ניתן לשמור העדפות רשימה:', error);
+    }
+}
+
+function applyPrefsToControls() {
+    const pageSizeSelect = document.getElementById('pageSizeSelect');
+    const sortOrderSelect = document.getElementById('sortOrderSelect');
+    if (pageSizeSelect) {
+        pageSizeSelect.value = String(pageSize);
+    }
+    if (sortOrderSelect) {
+        sortOrderSelect.value = sortOrder;
+    }
+}
+
+function sortEventsChronologically(events) {
+    const sorted = [...events].sort((a, b) => {
+        const dateA = a.gregorian_date || '';
+        const dateB = b.gregorian_date || '';
+        if (dateA !== dateB) {
+            return dateA < dateB ? -1 : 1;
+        }
+        const timeA = a.time || '';
+        const timeB = b.time || '';
+        if (timeA !== timeB) {
+            return timeA < timeB ? -1 : 1;
+        }
+        return (a.id || 0) - (b.id || 0);
+    });
+    return sortOrder === 'desc' ? sorted.reverse() : sorted;
+}
 
 document.addEventListener('DOMContentLoaded', function() {
+    loadListPrefs();
+    applyPrefsToControls();
+
     // loadAllEvents ולא loadEvents — ב-script.js יש פונקציה באותו שם שדורסת
-    loadAllEvents();
+    loadAllEvents({ restorePage: true });
+
+    const pageSizeSelect = document.getElementById('pageSizeSelect');
+    const sortOrderSelect = document.getElementById('sortOrderSelect');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', () => {
+            pageSize = Number(pageSizeSelect.value) || 20;
+            currentPage = 1;
+            saveListPrefs();
+            renderEventsPage();
+        });
+    }
+    if (sortOrderSelect) {
+        sortOrderSelect.addEventListener('change', () => {
+            sortOrder = sortOrderSelect.value === 'desc' ? 'desc' : 'asc';
+            currentPage = 1;
+            saveListPrefs();
+            currentEventsDataset = sortEventsChronologically(currentEventsDataset);
+            renderEventsPage();
+        });
+    }
+    if (prevPageBtn) {
+        prevPageBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage -= 1;
+                saveListPrefs();
+                renderEventsPage();
+            }
+        });
+    }
+    if (nextPageBtn) {
+        nextPageBtn.addEventListener('click', () => {
+            const totalPages = Math.max(1, Math.ceil(currentEventsDataset.length / pageSize));
+            if (currentPage < totalPages) {
+                currentPage += 1;
+                saveListPrefs();
+                renderEventsPage();
+            }
+        });
+    }
+
+    const pageJumpBtn = document.getElementById('pageJumpBtn');
+    const pageJumpInput = document.getElementById('pageJumpInput');
+    if (pageJumpBtn && pageJumpInput) {
+        const jumpToTypedPage = () => {
+            const totalPages = Math.max(1, Math.ceil(currentEventsDataset.length / pageSize) || 1);
+            const requested = Number(pageJumpInput.value);
+            if (!Number.isFinite(requested)) {
+                return;
+            }
+            currentPage = Math.min(totalPages, Math.max(1, Math.trunc(requested)));
+            saveListPrefs();
+            renderEventsPage();
+        };
+        pageJumpBtn.addEventListener('click', jumpToTypedPage);
+        pageJumpInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                jumpToTypedPage();
+            }
+        });
+    }
 
     const addEventFromListBtn = document.getElementById('addEventFromListBtn');
     if (addEventFromListBtn) {
@@ -386,12 +587,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const importEventsBtn = document.getElementById('importEventsBtn');
     const importEventsFile = document.getElementById('importEventsFile');
     const importMode = document.getElementById('importMode');
+    const toolsMenu = document.querySelector('.events-tools-menu');
     const searchInput = document.getElementById('searchInput');
     const advancedSearchBtn = document.getElementById('advancedSearchBtn');
     const advancedSearchPanel = document.getElementById('advancedSearchPanel');
     const advancedSearchForm = document.getElementById('advancedSearchForm');
     const resetAdvancedSearch = document.getElementById('resetAdvancedSearch');
 
+    if (toolsMenu) {
+        // לא לסגור את תפריט הכלים בלחיצה בפנים (select/קובץ)
+        toolsMenu.addEventListener('click', (e) => e.stopPropagation());
+    }
     exportEventsBtn.addEventListener('click', exportEvents);
     importEventsBtn.addEventListener('click', () => importEventsFile.click());
     importEventsFile.addEventListener('change', async function() {
@@ -420,7 +626,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!e.target.value || e.target.value.length === 0) {
             console.log('=== השדה רי - טוען את כל האירועים ===');
-            await loadAllEvents();
+            await loadAllEvents({ restorePage: true });
             return;
         }
         
@@ -448,7 +654,7 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInput.value = '';
         
         console.log('טופס אופס, ווען את כל האירועים מחדש...');
-        await loadAllEvents();
+        await loadAllEvents({ restorePage: true });
         console.log('טעינת האירועים הושלמה');
         
         // סגירת פאנל החיפוש המתקדם
@@ -498,16 +704,16 @@ async function exportEvents() {
         link.click();
         link.remove();
         window.URL.revokeObjectURL(url);
-        showMessage('קובץ ה-JSON יוצא בהצלחה');
+        showMessage('קובץ הגיבוי ירד בהצלחה (heb-cal-events.json)');
     } catch (error) {
         console.error('שגיאה ביצוא האירועים:', error);
-        alert('שגיאה ביצוא האירועים');
+        alert('שגיאה בייצוא האירועים');
     }
 }
 
 async function importEventsFromFile(file, mode) {
     const operationText = mode === 'replace' ? 'להחליף את כל הנתונים הקיימים' : 'למזג את הנתונים לתוך הקיימים';
-    if (!confirm(`האם לבצע יבוא ול${operationText}?`)) {
+    if (!confirm(`האם לבצע ייבוא ול${operationText}?`)) {
         return;
     }
 
@@ -523,14 +729,24 @@ async function importEventsFromFile(file, mode) {
 
         const result = await response.json();
         if (!response.ok || !result.success) {
-            throw new Error(result.error || 'שגיאה ביבוא האירועים');
+            throw new Error(result.error || 'שגיאה בייבוא האירועים');
         }
 
         await loadAllEvents();
-        showMessage(`היבוא הושלם: ${result.imported_events} אירועים ו-${result.imported_colors} צבעים`);
+        const inserted = result.inserted_events || 0;
+        const updated = result.updated_events || 0;
+        const colors = result.imported_colors || 0;
+        const modeLabel = mode === 'replace' ? 'החלפה מלאה' : 'מיזוג';
+        alert(
+            `הייבוא הושלם (${modeLabel})\n\n` +
+            `אירועים חדשים שנוספו: ${inserted}\n` +
+            `אירועים קיימים שעודכנו: ${updated}\n` +
+            `צבעים חדשים שנוספו: ${colors}\n\n` +
+            `לחץ אישור כדי להמשיך.`
+        );
     } catch (error) {
         console.error('שגיאה ביבוא האירועים:', error);
-        alert(error.message || 'שגיאה ביבוא האירועים');
+        alert(error.message || 'שגיאה בייבוא האירועים');
     }
 }
 
@@ -546,7 +762,7 @@ function searchEvents(query) {
         })
         .then(events => {
             console.log('נמצאו', events.length, 'תוצאות');
-            updateTable(events);
+            updateTable(events, { resetPage: true });
         })
         .catch(error => {
             console.error('שגיאה בחיפוש:', error);
@@ -599,53 +815,205 @@ function convertToRGBA(color, alpha = COLOR_OPACITY) {  // שימוש בקוע �
     }
 }
 
-function updateTable(events) {
-    const tbody = document.getElementById('eventsTable');
-    let newContent = '';
-    
-    if (events.length === 0) {
-        newContent = '<tr><td colspan="6" class="text-center">לא נמצאו תוצאות</td></tr>';
-    } else {
-        events.forEach(event => {
-            console.log('מעבד אירוע:', event.title, 'צבע:', event.color);
-            const color = event.color ? convertToRGBA(event.color) : '';
-            console.log('צבע אחרי המרה:', color);
-            
-            newContent += `
-                <tr id="row-${event.id}">
-                    <td>
-                        ${event.color ? 
-                            `<span style="background-color: ${color}; padding: 4px 8px; border-radius: 4px;">
-                                ${event.title}
-                            </span>` : 
-                            event.title
-                        }
-                    </td>
-                    <td>${event.gregorian_date}</td>
-                    <td>${event.hebrew_date}</td>
-                    <td>${event.time || ''}</td>
-                    <td>${event.description || ''}</td>
-                    <td>
-                        <div class="btn-group" role="group">
-                            <button class="btn btn-outline-primary btn-sm" onclick="editEvent(${event.id})" title="ערוך אירוע">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil" viewBox="0 0 16 16">
-                                    <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
-                                </svg>
-                            </button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="deleteEvent(${event.id})" title="מחק אירוע">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
-                                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
-                                    <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
+function buildEventRowHtml(event) {
+    const color = event.color ? convertToRGBA(event.color) : '';
+    const category = getEventTimeCategory(event);
+    const meta = CATEGORY_META[category];
+
+    return `
+        <tr id="row-${event.id}" class="${meta.rowClass}">
+            <td>
+                <div class="event-title-cell">
+                    <span class="event-status-badge ${meta.badgeClass}">${meta.badgeText}</span>
+                    ${event.color ?
+                        `<span style="background-color: ${color}; padding: 4px 8px; border-radius: 4px;">
+                            ${event.title}
+                        </span>` :
+                        event.title
+                    }
+                </div>
+            </td>
+            <td>${event.gregorian_date}</td>
+            <td>${event.hebrew_date}</td>
+            <td>${event.time || ''}</td>
+            <td>${event.description || ''}</td>
+            <td>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline-primary btn-sm" onclick="editEvent(${event.id})" title="ערוך אירוע">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil" viewBox="0 0 16 16">
+                            <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+                        </svg>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteEvent(${event.id})" title="מחק אירוע">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
+                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+                        </svg>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+function buildCategorySeparatorHtml(category) {
+    const meta = CATEGORY_META[category];
+    return `
+        <tr class="events-time-separator ${meta.separatorClass}" aria-hidden="true">
+            <td colspan="6">
+                <div class="events-time-separator-label">${meta.label}</div>
+            </td>
+        </tr>
+    `;
+}
+
+function getPaginationItems(current, total) {
+    if (total <= 1) {
+        return total === 1 ? [1] : [];
     }
-    
+    if (total <= 7) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+    }
+
+    const items = [1];
+    const left = Math.max(2, current - 1);
+    const right = Math.min(total - 1, current + 1);
+
+    if (left > 2) {
+        items.push('ellipsis-left');
+    } else if (left === 2) {
+        // אין צורך ב־ellipsis
+    }
+
+    for (let page = left; page <= right; page += 1) {
+        items.push(page);
+    }
+
+    if (right < total - 1) {
+        items.push('ellipsis-right');
+    } else if (right === total - 1) {
+        // אין צורך ב־ellipsis
+    }
+
+    items.push(total);
+    return items;
+}
+
+function goToPage(page) {
+    const totalPages = Math.max(1, Math.ceil(currentEventsDataset.length / pageSize) || 1);
+    const nextPage = Math.min(totalPages, Math.max(1, Number(page) || 1));
+    if (nextPage === currentPage) {
+        return;
+    }
+    currentPage = nextPage;
+    saveListPrefs();
+    renderEventsPage();
+}
+
+function updatePaginationControls() {
+    const total = currentEventsDataset.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+    if (currentPage > totalPages) {
+        currentPage = totalPages;
+    }
+    if (currentPage < 1) {
+        currentPage = 1;
+    }
+
+    const start = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const end = Math.min(currentPage * pageSize, total);
+    const info = document.getElementById('paginationInfo');
+    if (info) {
+        info.textContent = total === 0
+            ? 'אין אירועים להצגה'
+            : `מציג ${start}-${end} מתוך ${total} · עמוד ${currentPage} מתוך ${totalPages}`;
+    }
+
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    if (prevPageBtn) {
+        prevPageBtn.disabled = currentPage <= 1 || total === 0;
+    }
+    if (nextPageBtn) {
+        nextPageBtn.disabled = currentPage >= totalPages || total === 0;
+    }
+
+    const pagesWrap = document.getElementById('paginationPages');
+    if (pagesWrap) {
+        if (total === 0 || totalPages <= 1) {
+            pagesWrap.innerHTML = '';
+        } else {
+            pagesWrap.innerHTML = getPaginationItems(currentPage, totalPages).map((item) => {
+                if (String(item).startsWith('ellipsis')) {
+                    return '<span class="events-page-ellipsis px-1">…</span>';
+                }
+                const active = item === currentPage ? ' active' : '';
+                return `<button type="button" class="btn btn-sm btn-outline-secondary events-page-btn${active}" data-page="${item}">${item}</button>`;
+            }).join('');
+
+            pagesWrap.querySelectorAll('button[data-page]').forEach((btn) => {
+                btn.addEventListener('click', () => goToPage(btn.getAttribute('data-page')));
+            });
+        }
+    }
+
+    const pageJumpWrap = document.getElementById('pageJumpWrap');
+    const pageJumpInput = document.getElementById('pageJumpInput');
+    if (pageJumpWrap) {
+        // קפיצה ידנית רק כשיש הרבה עמודים — אחרת המספרים מספיקים
+        pageJumpWrap.classList.toggle('d-none', totalPages < 8);
+        pageJumpWrap.classList.toggle('d-flex', totalPages >= 8);
+    }
+    if (pageJumpInput) {
+        pageJumpInput.max = String(totalPages);
+        pageJumpInput.value = String(currentPage);
+    }
+}
+
+function renderEventsPage() {
+    const tbody = document.getElementById('eventsTable');
+    if (!tbody) {
+        return;
+    }
+
+    updatePaginationControls();
+    saveListPrefs();
+
+    if (currentEventsDataset.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">לא נמצאו תוצאות</td></tr>';
+        return;
+    }
+
+    const startIndex = (currentPage - 1) * pageSize;
+    const pageEvents = currentEventsDataset.slice(startIndex, startIndex + pageSize);
+    let newContent = '';
+    let previousCategory = startIndex > 0
+        ? getEventTimeCategory(currentEventsDataset[startIndex - 1])
+        : null;
+
+    pageEvents.forEach((event) => {
+        const category = getEventTimeCategory(event);
+        if (previousCategory !== category) {
+            newContent += buildCategorySeparatorHtml(category);
+        }
+
+        newContent += buildEventRowHtml(event);
+        previousCategory = category;
+    });
+
     tbody.innerHTML = newContent;
+}
+
+function updateTable(events, options = {}) {
+    const { resetPage = true, restorePage = false } = options;
+    const savedPage = currentPage;
+    currentEventsDataset = sortEventsChronologically(events || []);
+    if (resetPage && !restorePage) {
+        currentPage = 1;
+    } else if (restorePage) {
+        currentPage = savedPage;
+    }
+    renderEventsPage();
 }
 
 function editEvent(eventId) {
@@ -731,14 +1099,14 @@ function clearSearchAndLoadAll() {
 }
 
 // פונקצי חדשה לטעינת כל האירועים
-async function loadAllEvents() {
+async function loadAllEvents(options = {}) {
     console.log('=== מתחיל טעינת כל האירועים (loadAllEvents) ===');
     try {
         const response = await fetch('/api/events');
         console.log('קוד תשובה מהשרת:', response.status);
         const events = await response.json();
         console.log('התקבלו', events.length, 'אירועים');
-        updateTable(events);
+        updateTable(events, options);
         
         // ניקוי התגיות כשחוזרים לרשימה המלאה
         const activeFilters = document.querySelector('.active-filters');
@@ -771,7 +1139,7 @@ async function performAdvancedSearch() {
         }
         
         const events = await response.json();
-        updateTable(events);
+        updateTable(events, { resetPage: true });
         updateFilterChips(searchParams);  // עדכון התגיות
         
         // סגירת פאנל החיפוש המתקדם

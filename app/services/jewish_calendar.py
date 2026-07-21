@@ -128,14 +128,30 @@ class JewishCalendarService:
     def get_hebrew_date(date_obj):
         logger.debug(f"Getting Hebrew date for {date_obj}")
         try:
+            from app.services.hebrew_format import format_hebrew_date
+
             # המרה לתאריך עברי
             heb_date = dates.GregorianDate(date_obj.year, date_obj.month, date_obj.day).to_heb()
-            result = f"{heb_date.day} {JewishCalendarService.get_hebrew_month_name(heb_date.month)} {heb_date.year}"
+            day_label = JewishCalendarService.get_hebrew_day_letter(heb_date.day)
+            result = format_hebrew_date(
+                day_label,
+                JewishCalendarService.get_hebrew_month_name(heb_date.month),
+                heb_date.year,
+            )
             logger.debug(f"Hebrew date: {result}")
             return result
         except Exception as e:
             logger.error(f"Error in get_hebrew_date for {date_obj}: {str(e)}", exc_info=True)
             return ""
+
+    @staticmethod
+    def get_hebrew_day_letter(day):
+        days = {
+            1: 'א', 2: 'ב', 3: 'ג', 4: 'ד', 5: 'ה', 6: 'ו', 7: 'ז', 8: 'ח', 9: 'ט', 10: 'י',
+            11: 'יא', 12: 'יב', 13: 'יג', 14: 'יד', 15: 'טו', 16: 'טז', 17: 'יז', 18: 'יח', 19: 'יט', 20: 'כ',
+            21: 'כא', 22: 'כב', 23: 'כג', 24: 'כד', 25: 'כה', 26: 'כו', 27: 'כז', 28: 'כח', 29: 'כט', 30: 'ל'
+        }
+        return days.get(day, str(day))
     
     @staticmethod
     def get_hebrew_month_name(month):

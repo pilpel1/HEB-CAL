@@ -2,9 +2,9 @@ from flask import Blueprint, jsonify
 from datetime import datetime
 from convertdate import hebrew
 import logging
-from hebrew_numbers import int_to_gematria
 import calendar
 from app.services.jewish_calendar import JewishCalendarService
+from app.services.hebrew_format import format_hebrew_date, format_hebrew_year
 
 
 # הגדרת לוגים
@@ -52,9 +52,13 @@ def get_hebrew_date(date_str):
             gregorian_date.day
         )
         
-        # החזר את התאריך העברי כמחרוזת
+        # החזר את התאריך העברי כמחרוזת (שנה באותיות)
         return jsonify({
-            'hebrew_date': f"{get_hebrew_day(heb_day)} {get_hebrew_month_name(heb_month)} {heb_year}"
+            'hebrew_date': format_hebrew_date(
+                get_hebrew_day(heb_day),
+                get_hebrew_month_name(heb_month),
+                heb_year,
+            )
         })
     except Exception as e:
         logging.error(f"Error converting date {date_str}: {str(e)}")
@@ -109,10 +113,7 @@ def get_calendar(year, month):
     # קבלת השנה העברית מהיום הראשון של החודש
     first_day_hebrew = hebrew.from_gregorian(year, month, 1)
     hebrew_year = first_day_hebrew[0]
-    
-    # המרת השנה העברית למחרוזת (לדוגמה: תשפ"ה)
-    hebrew_year_str = int_to_gematria(hebrew_year % 5000, gershayim=True)
-    hebrew_year_str = 'ה' + "'" + hebrew_year_str  # הוספת ה' בהתחלה
+    hebrew_year_str = format_hebrew_year(hebrew_year, with_heh_prefix=True)
     
     # מיון החודשים העבריים לפי הסדר הנכון
     hebrew_months_order = {

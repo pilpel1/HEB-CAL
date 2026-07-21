@@ -262,8 +262,11 @@ function formatShortHebrew(hebrewDate) {
         return '';
     }
 
-    // "ח אב 5786" -> "ח אב"
-    return hebrewDate.replace(/\s+\d{3,4}$/, '').trim();
+    // "ח אב 5786" / "ח אב תשפ\"ו" / "ח אב ה'תשפ\"ו" -> "ח אב"
+    return hebrewDate
+        .replace(/\s+\d{3,4}$/, '')
+        .replace(/\s+ה?'?[\u05d0-\u05ea]+"?[\u05d0-\u05ea]*$/, '')
+        .trim();
 }
 
 function setQuickColor(colorValue) {
@@ -837,6 +840,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         await updateCalendar();
     }
 
+    const addEventFromCalendarBtn = document.getElementById('addEventFromCalendarBtn');
+    if (addEventFromCalendarBtn) {
+        addEventFromCalendarBtn.addEventListener('click', () => {
+            openQuickEventModal(formatDate(new Date()));
+        });
+    }
+
     // בדף ניהול האירועים הטעינה נעשית בסקריפט של הדף עצמו
     if (document.getElementById('eventsTable') && typeof loadAllEvents !== 'function') {
         await updateEventsList();
@@ -907,16 +917,14 @@ function getColorRGBA(color) {
 
 // פונקציה לבדיקה אם תאריך נמצא בטווח
 function isDateInRange(dateStr, startStr, endStr) {
-    const date = new Date(dateStr);
-    const start = new Date(startStr);
-    const end = endStr ? new Date(endStr) : start;
-    
-    // איפוס השעה בכל התאריכים להשוואה נכונה
-    date.setHours(0, 0, 0, 0);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    
-    return date >= start && date <= end;
+    if (!dateStr || !startStr) {
+        return false;
+    }
+
+    // YYYY-MM-DD — השוואת מחרוזות בטוחה יותר מ-Date (בלי באגי timezone)
+    // end_date לא תקין (לפני ההתחלה) מתייחסים אליו כאילו אין סיום
+    const effectiveEnd = (endStr && endStr >= startStr) ? endStr : startStr;
+    return dateStr >= startStr && dateStr <= effectiveEnd;
 }
 
 function isMultiDayEvent(event) {
