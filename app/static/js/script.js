@@ -191,22 +191,13 @@ async function createEvent(eventData) {
         const result = await response.json();
         
         if (response.ok) {
-            const form = document.getElementById('eventForm');
-            if (form) {
-                form.reset();
-            }
-
             const quickForm = document.getElementById('quickEventForm');
             if (quickForm) {
                 quickForm.reset();
             }
             
             showMessage('האירוע נוסף בהצלחה');
-            
-            if (document.getElementById('calendar-body')) {
-                await loadAndDisplayEvents();
-            }
-
+            await refreshEventsViews();
             return true;
         }
 
@@ -217,6 +208,22 @@ async function createEvent(eventData) {
         console.error('Error creating event:', error);
         alert('שגיאה בהוספת האירוע');
         return false;
+    }
+}
+
+async function refreshEventsViews() {
+    if (document.getElementById('calendar-body')) {
+        await loadAndDisplayEvents();
+    }
+
+    // בדף ניהול האירועים יש רנדור משלו — לא לדרוס אותו עם updateEventsList
+    if (typeof loadAllEvents === 'function') {
+        await loadAllEvents();
+        return;
+    }
+
+    if (document.getElementById('eventsTable')) {
+        await updateEventsList();
     }
 }
 
@@ -638,10 +645,9 @@ function initCalendarContextMenu(calendarBody) {
 }
 
 function initQuickEventModal() {
-    const calendarBody = document.getElementById('calendar-body');
     const modalElement = document.getElementById('quickEventModal');
     const quickForm = document.getElementById('quickEventForm');
-    if (!calendarBody || !modalElement || !quickForm) {
+    if (!modalElement || !quickForm) {
         return;
     }
 
@@ -662,23 +668,26 @@ function initQuickEventModal() {
         setQuickEventModalMode(false);
     });
 
-    calendarBody.addEventListener('dblclick', (event) => {
-        const eventItem = event.target.closest('.event-item[data-event-id]');
-        if (eventItem) {
-            event.stopPropagation();
-            openEditEventModal(eventItem.getAttribute('data-event-id'));
-            return;
-        }
+    const calendarBody = document.getElementById('calendar-body');
+    if (calendarBody) {
+        calendarBody.addEventListener('dblclick', (event) => {
+            const eventItem = event.target.closest('.event-item[data-event-id]');
+            if (eventItem) {
+                event.stopPropagation();
+                openEditEventModal(eventItem.getAttribute('data-event-id'));
+                return;
+            }
 
-        const cell = event.target.closest('td[data-date]');
-        if (!cell) {
-            return;
-        }
+            const cell = event.target.closest('td[data-date]');
+            if (!cell) {
+                return;
+            }
 
-        openQuickEventModal(cell.getAttribute('data-date'));
-    });
+            openQuickEventModal(cell.getAttribute('data-date'));
+        });
 
-    initCalendarContextMenu(calendarBody);
+        initCalendarContextMenu(calendarBody);
+    }
 
     modalElement.querySelectorAll('.quick-color-swatch').forEach((swatch) => {
         swatch.addEventListener('click', () => {
@@ -706,6 +715,17 @@ function initQuickEventModal() {
         titleInput.addEventListener('input', syncTimeFromTitle);
         titleInput.addEventListener('keyup', syncTimeFromTitle);
         titleInput.addEventListener('blur', syncTimeFromTitle);
+    }
+
+    const quickGregorianDate = document.getElementById('quick_gregorian_date');
+    if (quickGregorianDate) {
+        quickGregorianDate.addEventListener('change', async () => {
+            const startDate = quickGregorianDate.value;
+            syncEndDateMin(startDate, document.getElementById('quick_end_date'));
+            await fillHebrewDateFromGregorian(startDate, 'quick_hebrew_date');
+            const isEdit = Boolean(document.getElementById('quick_event_id').value);
+            setQuickEventModalMode(isEdit);
+        });
     }
 
     const quickEndDate = document.getElementById('quick_end_date');
@@ -760,12 +780,7 @@ async function updateEvent(eventId, eventData) {
         const result = await response.json();
         if (result.success) {
             showMessage('האירוע עודכן בהצלחה');
-
-            if (document.getElementById('calendar-body')) {
-                await loadAndDisplayEvents();
-            }
-
-            await updateEventsList();
+            await refreshEventsViews();
             return true;
         }
 
@@ -803,10 +818,7 @@ async function deleteEvent(eventId) {
             }
             
             showMessage('האירוע נמחק בהצלחה');
-            if (document.getElementById('calendar-body')) {
-                await loadAndDisplayEvents();
-            }
-            await updateEventsList();
+            await refreshEventsViews();
         } else {
             alert('שגיאה במחיקת האירוע');
         }
@@ -816,51 +828,30 @@ async function deleteEvent(eventId) {
     }
 }
 
-// המרת תאריך לועזי לעברי בטופס הוספת אירוע
-const gregorianDateInput = document.getElementById('gregorian_date');
-const endDateInput = document.getElementById('end_date');
-if (gregorianDateInput) {
-    syncEndDateMin(gregorianDateInput.value, endDateInput);
-    gregorianDateInput.addEventListener('change', async function() {
-        syncEndDateMin(this.value, endDateInput);
-        try {
-            const response = await fetch(`/api/hebrew-date/${this.value}`);
-            const data = await response.json();
-            document.getElementById('hebrew_date').value = data.hebrew_date;
-        } catch (error) {
-            console.error('Error converting date:', error);
-        }
-    });
-}
+// אתחול הדף
+document.addEventListener('DOMContentLoaded', async () => {
+    initQuickEventModal();
 
-// טיפול בטופס הוספת אירוע
-const eventForm = document.getElementById('eventForm');
-if (eventForm) {
-    eventForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const eventData = {
-            title: document.getElementById('title').value,
-            gregorian_date: document.getElementById('gregorian_date').value,
-            hebrew_date: document.getElementById('hebrew_date').value,
-            time: document.getElementById('time').value || null,
-            description: document.getElementById('description').value || '',
-            end_date: document.getElementById('end_date').value || null,
-            color: document.getElementById('color').value || null,
-        };
+    const calendarBody = document.getElementById('calendar-body');
+    if (calendarBody) {
+        await updateCalendar();
+    }
 
-        if (!assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date)) {
-            return;
-        }
+    // בדף ניהול האירועים הטעינה נעשית בסקריפט של הדף עצמו
+    if (document.getElementById('eventsTable') && typeof loadAllEvents !== 'function') {
+        await updateEventsList();
+    }
+});
 
-        await createEvent(eventData);
-    });
-}
-
-// עדכון רשימת האירועים
 async function updateEventsList() {
     const eventsTable = document.getElementById('eventsTable');
     if (!eventsTable) return; // אם אנחנו לא בדף רשימת האירועים
+
+    // בדף ניהול האירועים יש רנדור משלו
+    if (typeof loadAllEvents === 'function') {
+        await loadAllEvents();
+        return;
+    }
 
     const events = await loadEvents();
     
@@ -887,170 +878,16 @@ async function updateEventsList() {
                 </div>
             </td>
         </tr>
-        <tr id="edit-form-${event.id}" class="edit-form-row" style="display: none;">
-            <td colspan="6">
-                <div class="edit-event-form p-3">
-                    <form onsubmit="return saveEvent(event, ${event.id})">
-                        <div class="mb-3">
-                            <label for="title-${event.id}" class="form-label">כותרת</label>
-                            <input type="text" class="form-control" id="title-${event.id}" value="${event.title}" required>
-                        </div>
-                        <div class="row align-items-end">
-                            <div class="col mb-3">
-                                <div class="input-wrapper">
-                                    <label for="gregorian_date-${event.id}" class="form-label">תאריך לועזי</label>
-                                    <input type="date" class="form-control" id="gregorian_date-${event.id}" 
-                                        value="${event.gregorian_date}" onchange="updateHebrewDate(${event.id})" required>
-                                </div>
-                            </div>
-                            <div class="col mb-3">
-                                <div class="input-wrapper">
-                                    <label for="hebrew_date-${event.id}" class="form-label">תאריך עברי</label>
-                                    <input type="text" class="form-control" id="hebrew_date-${event.id}" 
-                                        value="${event.hebrew_date}" readonly>
-                                </div>
-                            </div>
-                            <div class="col mb-3">
-                                <div class="input-wrapper">
-                                    <label for="time-${event.id}" class="form-label">שעה</label>
-                                    <input type="time" class="form-control" id="time-${event.id}" 
-                                        value="${event.time || ''}">
-                                </div>
-                            </div>
-                            <div class="col mb-3">
-                                <div class="input-wrapper">
-                                    <label for="end_date-${event.id}" class="form-label">תאריך סיום</label>
-                                    <input type="date" class="form-control" id="end_date-${event.id}" 
-                                        value="${event.end_date || ''}" min="${event.gregorian_date}">
-                                </div>
-                            </div>
-                            <div class="col mb-3">
-                                <div class="input-wrapper">
-                                    <label for="color-${event.id}" class="form-label">צבע האירוע</label>
-                                    <select class="form-control" id="color-${event.id}">
-                                        <option value="">ללא צבע</option>
-                                        <option value="cyan" ${event.color === 'cyan' ? 'selected' : ''}>ציאן</option>
-                                        <option value="yellow" ${event.color === 'yellow' ? 'selected' : ''}>צהוב</option>
-                                        <option value="orange" ${event.color === 'orange' ? 'selected' : ''}>כתום</option>
-                                        <option value="green" ${event.color === 'green' ? 'selected' : ''}>ירוק</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="description-${event.id}" class="form-label">תיאור</label>
-                            <textarea class="form-control" id="description-${event.id}">${event.description || ''}</textarea>
-                        </div>
-                        <div class="text-end">
-                            <button type="button" class="btn btn-secondary" onclick="cancelEdit(${event.id})">ביטול</button>
-                            <button type="submit" class="btn btn-primary">שמור שינויים</button>
-                        </div>
-                    </form>
-                </div>
-            </td>
-        </tr>
     `).join('');
 }
 
 async function editEvent(eventId) {
-    const formRow = document.getElementById(`edit-form-${eventId}`);
-    
-    // אם הטופס כבר מוצג, נסגור אותו
-    if (formRow.style.display === 'table-row') {
-        formRow.style.display = 'none';
+    if (typeof openEditEventModal === 'function') {
+        await openEditEventModal(eventId);
         return;
     }
-    
-    // הסתרת כל הטפסים הפתוחים
-    document.querySelectorAll('.edit-form-row').forEach(row => {
-        row.style.display = 'none';
-    });
-    
-    // הצגת הטופס הנבחר
-    formRow.style.display = 'table-row';
+    alert('לא ניתן לפתוח את עריכת האירוע');
 }
-
-function cancelEdit(eventId) {
-    const formRow = document.getElementById(`edit-form-${eventId}`);
-    formRow.style.display = 'none';
-}
-
-async function updateHebrewDate(eventId) {
-    const gregorianDate = document.getElementById(`gregorian_date-${eventId}`).value;
-    syncEndDateMin(gregorianDate, document.getElementById(`end_date-${eventId}`));
-    try {
-        const response = await fetch(`/api/hebrew-date/${gregorianDate}`);
-        const data = await response.json();
-        document.getElementById(`hebrew_date-${eventId}`).value = data.hebrew_date;
-    } catch (error) {
-        console.error('Error converting date:', error);
-    }
-}
-
-async function saveEvent(e, eventId) {
-    e.preventDefault();
-    
-    const eventData = {
-        title: document.getElementById(`title-${eventId}`).value,
-        gregorian_date: document.getElementById(`gregorian_date-${eventId}`).value,
-        hebrew_date: document.getElementById(`hebrew_date-${eventId}`).value,
-        time: document.getElementById(`time-${eventId}`).value || null,
-        description: document.getElementById(`description-${eventId}`).value || '',
-        end_date: document.getElementById(`end_date-${eventId}`).value || null,
-        color: document.getElementById(`color-${eventId}`).value || null
-    };
-
-    const endInput = document.getElementById(`end_date-${eventId}`);
-    syncEndDateMin(eventData.gregorian_date, endInput);
-    if (!assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date, endInput)) {
-        return false;
-    }
-
-    try {
-        const response = await fetch(`/api/events/${eventId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(eventData)
-        });
-        
-        const result = await response.json();
-        if (result.success) {
-            showMessage('האירוע עודכן בהצלחה');
-            await updateEventsList();
-            
-            // הסתרת טופס העריכה
-            const formRow = document.getElementById(`edit-form-${eventId}`);
-            if (formRow) {
-                formRow.style.display = 'none';
-            }
-        } else {
-            alert('שגיאה בעדכון האירוע');
-        }
-    } catch (error) {
-        console.error('Error updating event:', error);
-        alert('שגיאה בעדכון האירוע');
-    }
-    
-    return false;
-}
-
-// אתחול הדף
-document.addEventListener('DOMContentLoaded', async () => {
-    // עדכון לוח השנה אם אנחנו בדף הראשי
-    const calendarBody = document.getElementById('calendar-body');
-    if (calendarBody) {
-        initQuickEventModal();
-        await updateCalendar();
-    }
-    
-    // עדכון רשימת האירועים אם אנחנו בדף הרשימה
-    const eventsTable = document.getElementById('eventsTable');
-    if (eventsTable) {
-        await updateEventsList();
-    }
-});
 
 function goToToday() {
     currentDate = new Date();

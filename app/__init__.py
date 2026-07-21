@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, render_template
+from flask import Flask, redirect, render_template, url_for
 
 try:
     from dotenv import load_dotenv
@@ -32,7 +32,8 @@ def index():
 
 @app.route('/add_event')
 def add_event():
-    return render_template('add_event.html')
+    # הדף הישן הוחלף במודל המשותף — סימניות ישנות מגיעות לניהול אירועים
+    return redirect(url_for('events_list'))
 
 @app.route('/events_list')
 def events_list():

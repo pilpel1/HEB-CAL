@@ -232,10 +232,15 @@
     }
 </style>
 
-<div class="card">
+<div class="card events-manage-card">
     <div class="card-header">
-        <div class="mb-2">
-            <a href="/" class="text-decoration-none">&rarr; חזרה ללוח</a>
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+            <div>
+                <a href="/" class="text-decoration-none d-inline-block mb-2">&rarr; חזרה ללוח</a>
+                <h1 class="h4 mb-0">ניהול אירועים</h1>
+                <p class="text-muted small mb-0 mt-1">חיפוש, עריכה, מחיקה ויבוא/יצוא של כל האירועים</p>
+            </div>
+            <button type="button" class="btn btn-primary" id="addEventFromListBtn">הוסף אירוע</button>
         </div>
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -249,8 +254,7 @@
             </div>
             <small class="text-muted">היצוא והיבוא עובדים מעל SQLite, לא במקום SQLite.</small>
         </div>
-        <div class="d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">אירועים</h5>
+        <div class="d-flex justify-content-end align-items-center">
             <div class="search-container">
                 <div class="search-input-group">
                     <input type="text" id="searchInput" class="form-control" placeholder="חיפוש אירועים..." />
@@ -359,12 +363,24 @@
     </div>
 </div>
 
+{% include 'partials/quick_event_modal.html' %}
+
 <script>
 let debounceTimeout;
 const COLOR_OPACITY = 0.8;  // קבוע גלובלי לרמת השקיפות
 
 document.addEventListener('DOMContentLoaded', function() {
-    loadEvents();
+    // loadAllEvents ולא loadEvents — ב-script.js יש פונקציה באותו שם שדורסת
+    loadAllEvents();
+
+    const addEventFromListBtn = document.getElementById('addEventFromListBtn');
+    if (addEventFromListBtn) {
+        addEventFromListBtn.addEventListener('click', () => {
+            if (typeof openQuickEventModal === 'function') {
+                openQuickEventModal(formatDate(new Date()));
+            }
+        });
+    }
     
     const exportEventsBtn = document.getElementById('exportEventsBtn');
     const importEventsBtn = document.getElementById('importEventsBtn');
@@ -465,32 +481,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
-
-async function loadEvents() {
-    console.log('=== מתחיל טעינת כל האירועים ===');
-    const tbody = document.getElementById('eventsTable');
-    const searchInput = document.getElementById('searchInput');
-    console.log('ערך שדה החיפוש בזמן loadEvents:', searchInput.value);
-    
-    try {
-        const response = await fetch('/api/events?t=' + new Date().getTime());
-        console.log('קוד תשובה מהשרת:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const events = await response.json();
-        console.log('התקבלו', events.length, 'אירועים');
-        updateTable(events);
-        
-        return events;  // מחזיר את האירועים למקרה שנצטרך אותם
-    } catch (error) {
-        console.error('!!! שגיאה בטעינת האירועים !!!', error);
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center">שגיאה בטעינת האירועים</td></tr>';
-        throw error;  // זורק את השגיאה הלאה
-    }
-}
 
 async function exportEvents() {
     try {
@@ -651,164 +641,26 @@ function updateTable(events) {
                         </div>
                     </td>
                 </tr>
-                <tr id="edit-form-${event.id}" class="edit-form-row" style="display: none;">
-                    <td colspan="6">
-                        <div class="edit-event-form">
-                            <form class="event-edit-form" data-event-id="${event.id}">
-                                <div class="mb-3">
-                                    <label for="title-${event.id}" class="form-label">כותרת</label>
-                                    <input type="text" class="form-control" id="title-${event.id}" value="${event.title}" required>
-                                </div>
-                                <div class="row align-items-end">
-                                    <div class="col mb-3">
-                                        <div class="input-wrapper">
-                                            <label for="gregorian_date-${event.id}" class="form-label">תאריך לועזי</label>
-                                            <input type="date" class="form-control" id="gregorian_date-${event.id}" value="${event.gregorian_date}" onchange="updateHebrewDate(${event.id})" required>
-                                        </div>
-                                    </div>
-                                    <div class="col mb-3">
-                                        <div class="input-wrapper">
-                                            <label for="hebrew_date-${event.id}" class="form-label">תאריך עברי</label>
-                                            <input type="text" class="form-control" id="hebrew_date-${event.id}" value="${event.hebrew_date}" readonly>
-                                        </div>
-                                    </div>
-                                    <div class="col mb-3">
-                                        <div class="input-wrapper">
-                                            <label for="time-${event.id}" class="form-label">שעה</label>
-                                            <input type="time" class="form-control" id="time-${event.id}" value="${event.time || ''}">
-                                        </div>
-                                    </div>
-                                    <div class="col mb-3">
-                                        <div class="input-wrapper">
-                                            <label for="end_date-${event.id}" class="form-label">תאריך סיום</label>
-                                            <input type="date" class="form-control" id="end_date-${event.id}" value="${event.end_date || ''}" min="${event.gregorian_date}">
-                                        </div>
-                                    </div>
-                                    <div class="col mb-3">
-                                        <div class="input-wrapper">
-                                            <label for="color-${event.id}" class="form-label">צבע האירוע</label>
-                                            <select class="form-control" id="color-${event.id}">
-                                                <option value="">ללא צבע</option>
-                                                <option value="cyan" ${event.color === 'cyan' ? 'selected' : ''}>ציאן</option>
-                                                <option value="yellow" ${event.color === 'yellow' ? 'selected' : ''}>צהוב</option>
-                                                <option value="orange" ${event.color === 'orange' ? 'selected' : ''}>כתום</option>
-                                                <option value="green" ${event.color === 'green' ? 'selected' : ''}>ירוק</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="description-${event.id}" class="form-label">תיאור</label>
-                                    <textarea class="form-control" id="description-${event.id}" rows="3">${event.description || ''}</textarea>
-                                </div>
-                                <div class="text-end">
-                                    <button type="button" class="btn btn-secondary" onclick="cancelEdit(${event.id})">ביטול</button>
-                                    <button type="submit" class="btn btn-primary">שמור שינויים</button>
-                                </div>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
             `;
         });
     }
     
     tbody.innerHTML = newContent;
-
-    // הוספת מאזינים טפסים
-    document.querySelectorAll('.event-edit-form').forEach(form => {
-        console.log('מוסיף מאזין לטופס:', form);
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            console.log('!!! טופס נשלח !!!');
-            const eventId = parseInt(this.dataset.eventId);
-            console.log('מזהה אירוע:', eventId);
-            
-            console.log('=== תחילת שמירת אירוע ===');
-            const searchInput = document.getElementById('searchInput');
-            console.log('ערך נוכחי בשדה החיפוש:', searchInput.value);
-            
-            const eventData = {
-                title: document.getElementById(`title-${eventId}`).value,
-                gregorian_date: document.getElementById(`gregorian_date-${eventId}`).value,
-                hebrew_date: document.getElementById(`hebrew_date-${eventId}`).value,
-                time: document.getElementById(`time-${eventId}`).value || null,
-                description: document.getElementById(`description-${eventId}`).value || '',
-                end_date: document.getElementById(`end_date-${eventId}`).value || null,
-                color: document.getElementById(`color-${eventId}`).value || null
-            };
-            console.log('נתוני האירוע לשליחה:', eventData);
-
-            if (typeof assertEndDateNotBeforeStart === 'function'
-                && !assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date)) {
-                return;
-            }
-
-            try {
-                console.log('שולח בקשת עדכון לשרת...');
-                const response = await fetch(`/api/events/${eventId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(eventData)
-                });
-                
-                console.log('תשובה מהשרת:', response.status);
-                const result = await response.json();
-                console.log('תוצאת העדכון:', result);
-                
-                if (result.success) {
-                    console.log('העדכון הצליח!');
-                    
-                    try {
-                        // ניקוי שדה החיפוש
-                        console.log('מנקה שדה חיפוש...');
-                        searchInput.value = '';
-                        console.log('ערך שדה החיפוש אחרי ניקוי:', searchInput.value);
-                        
-                        // טעינה מחדש של כל האירועים
-                        console.log('טוען את כל האירועים מחדש...');
-                        await loadAllEvents();
-                        console.log('טעינת האירועים הושלמה');
-                        
-                        // הסתרת טופס הריכה
-                        const formRow = document.getElementById(`edit-form-${eventId}`);
-                        formRow.style.display = 'none';
-                        
-                        showMessage('האירוע עודכן בהצלחה');
-                        console.log('=== סיום שמית אירוע בהצלחה ===');
-                    } catch (error) {
-                        console.error('שגיאה בטעינת האירועים:', error);
-                    }
-                } else {
-                    console.error('שגיאה בעדכון:', result);
-                    alert(result.error || 'שגיאה בעדכון האירוע');
-                }
-            } catch (error) {
-                console.error('Error updating event:', error);
-                alert('שגיאה בעדכון האירוע');
-            }
-            
-            return false;
-        });
-    });
 }
 
 function editEvent(eventId) {
-    // הסתרת כל הטפסים הפתוחים
-    document.querySelectorAll('.edit-form-row').forEach(row => {
-        row.style.display = 'none';
-    });
-    
-    // הצגת הטופס הנבחר
-    const formRow = document.getElementById(`edit-form-${eventId}`);
-    formRow.style.display = 'table-row';
+    if (typeof openEditEventModal === 'function') {
+        openEditEventModal(eventId);
+        return;
+    }
+    alert('לא ניתן לפתוח את עריכת האירוע');
 }
 
 function cancelEdit(eventId) {
     const formRow = document.getElementById(`edit-form-${eventId}`);
-    formRow.style.display = 'none';
+    if (formRow) {
+        formRow.style.display = 'none';
+    }
 }
 
 async function updateHebrewDate(eventId) {
@@ -832,25 +684,38 @@ async function updateHebrewDate(eventId) {
 }
 
 function deleteEvent(eventId) {
-    if (confirm('האם אתה בטוח שברצונך למחוק אירוע זה?')) {
-        fetch(`/api/events/${eventId}`, {
-            method: 'DELETE'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const activeFilters = document.querySelector('.active-filters');
-                activeFilters.style.display = 'none';
-                loadEvents();  // טעינה מחדש של הטבלה במקום רענון הדף
-            } else {
-                alert('שגיאה במחיקת האירוע');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('שגיאה במחיקת האירוע');
-        });
+    if (!confirm('האם אתה בטוח שברצונך למחוק אירוע זה?')) {
+        return;
     }
+
+    fetch(`/api/events/${eventId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const activeFilters = document.querySelector('.active-filters');
+            if (activeFilters) {
+                activeFilters.style.display = 'none';
+            }
+            const filterChips = document.querySelector('.filter-chips');
+            if (filterChips) {
+                filterChips.innerHTML = '';
+            }
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            showMessage('האירוע נמחק בהצלחה');
+            loadAllEvents();
+        } else {
+            alert('שגיאה במחיקת האירוע');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('שגיאה במחיקת האירוע');
+    });
 }
 
 // פונקציה לניקוי החיפוש וטעינת כל האירועים
@@ -862,7 +727,7 @@ function clearSearchAndLoadAll() {
     searchInput.value = '';
     activeFilters.style.display = 'none';
     console.log('ערך שדה החיפוש אחרי ניקוי:', searchInput.value);
-    loadEvents();
+    loadAllEvents();
 }
 
 // פונקצי חדשה לטעינת כל האירועים

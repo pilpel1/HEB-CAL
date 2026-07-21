@@ -60,66 +60,7 @@
     </table>
 </div>
 
-<!-- מודל הוספה/עריכה מהירה מהלוח -->
-<div class="modal fade" id="quickEventModal" tabindex="-1" aria-labelledby="quickEventModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="quickEventModalLabel">אירוע חדש</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="סגור"></button>
-            </div>
-            <form id="quickEventForm">
-                <input type="hidden" id="quick_event_id" value="">
-                <input type="hidden" id="quick_gregorian_date" value="" required>
-                <input type="hidden" id="quick_hebrew_date" value="" required>
-                <input type="hidden" id="quick_color" value="">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="quick_title" class="form-label">כותרת</label>
-                        <input type="text" class="form-control" id="quick_title" required autofocus>
-                        <div class="quick-color-picker mt-2" role="radiogroup" aria-label="צבע האירוע">
-                            <button type="button" class="quick-color-swatch is-none is-selected" data-color="" title="ללא צבע" aria-label="ללא צבע"></button>
-                            <button type="button" class="quick-color-swatch color-cyan" data-color="cyan" title="ציאן" aria-label="ציאן"></button>
-                            <button type="button" class="quick-color-swatch color-yellow" data-color="yellow" title="צהוב" aria-label="צהוב"></button>
-                            <button type="button" class="quick-color-swatch color-orange" data-color="orange" title="כתום" aria-label="כתום"></button>
-                            <button type="button" class="quick-color-swatch color-green" data-color="green" title="ירוק" aria-label="ירוק"></button>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label" for="quick_hour">שעה</label>
-                            <div class="quick-time-fields">
-                                <select class="form-select" id="quick_hour" aria-label="שעה">
-                                    <option value="">--</option>
-                                </select>
-                                <span class="quick-time-separator">:</span>
-                                <select class="form-select" id="quick_minute" aria-label="דקות">
-                                    <option value="">--</option>
-                                    <option value="00">00</option>
-                                    <option value="15">15</option>
-                                    <option value="30">30</option>
-                                    <option value="45">45</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="quick_end_date" class="form-label">תאריך סיום</label>
-                            <input type="date" class="form-control" id="quick_end_date">
-                        </div>
-                    </div>
-                    <div class="mb-0">
-                        <label for="quick_description" class="form-label">תיאור</label>
-                        <textarea class="form-control" id="quick_description" rows="2"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ביטול</button>
-                    <button type="submit" class="btn btn-primary" id="quick_submit_btn">הוסף אירוע</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+{% include 'partials/quick_event_modal.html' %}
 
 <script>
 // פונקציה שתרוץ בטעינת העמוד
