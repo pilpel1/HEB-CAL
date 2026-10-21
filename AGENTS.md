@@ -69,7 +69,7 @@ Manual checks:
 | `app/static/js/events/end-date-validation.js` | End date must not precede the start date (shared with the events-list page) |
 | `app/static/js/events/event-actions.js` | Create / update / delete, success toast, refresh both views |
 | `app/static/js/events/quick-event-modal.js` | Quick-event modal: fields, time parsed out of the title, color, submit |
-| `app/static/js/events/context-menu.js` | Right-click menu on the calendar |
+| `app/static/js/events/context-menu.js` | Context menu: right-click, and long-press on touch |
 | `app/templates/events_list.html` (inline `<script>`) | Events-list page: search, advanced search, import/export, pagination. Not a separate file |
 | `app/templates/` | Jinja2: `base.html`, `index.html`, `events_list.html`, partials |
 | `app/static/css/` | Component CSS (calendar, forms, variables) |
@@ -103,6 +103,16 @@ The home page is a continuous stream of week rows scrolled inside `#calendar-str
 - **`events_list.html` has its own inline script, and it runs first** (it sits in the content block, above the script tags). It defines `deleteEvent`, `editEvent`, and `getTodayDateStr`, and the later files overwrite those three — that override is intentional and covered by `scripts/smoke_ui.py`. Its `loadAllEvents` is a different name on purpose: `core/api.js` already has `loadEvents`, and a second `function loadEvents` would silently replace it. `refreshEventsViews()` calls `loadAllEvents` only when it exists.
 - **Any scroll closes the context menu** (`window` scroll listener, capture phase). The infinite calendar corrects `scrollTop` while repainting, so a real Playwright `click()` on a menu item — which scrolls the target into view — makes the menu detach. Dispatch the click, or the menu is gone.
 - **Dead code removed with the split** (no template renders it, and nothing calls it): the legacy single-month view `updateCalendar` / `previousMonth` / `nextMonth` / `loadAndDisplayEvents` (it targeted `#calendar-body`, which no template has), the `updateEventsList` fallback (the only `#eventsTable` page defines `loadAllEvents`), the `currentDate` global, and `app/static/js/events.js`, which no template loaded. The per-day Jewish-events endpoint those functions used (`/api/jewish-events/<date>`) is still served; the infinite calendar uses `/api/jewish-events/month/...` instead.
+
+## Mobile layout — lessons
+
+The calendar is used mostly on a phone (375×812 and 390×844). What broke, and what to keep:
+
+- **Long titles were breaking one letter per line.** A day column is ~45px wide. Bootstrap's `.table > :not(caption) > * > * { padding }` beats `.calendar-table td { padding: 0 }`, so the cell kept ~8px of padding on each side and `.day-content` added more. The text box was ~12px. `overflow-wrap: break-word` then wrapped every letter. The fix is `padding: 0` on `.table.calendar-table > :not(caption) > * > *`, plus `nowrap` / `text-overflow: ellipsis` / `min-width: 0` on `.event-item` (a flex item will not ellipsis without `min-width: 0`). The full string stays in the element (`title`) and in the edit modal. A tap opens that modal; the click is delayed ~280ms so a double-click (and `scripts/smoke_ui.py`) still edits once.
+- **Right-click is not a phone gesture.** Delete, and "add on this day", lived only in the context menu. A long-press (~500ms, cancelled if the finger moves) opens the same menu. Open it on `pointerup`, not from `contextmenu` while the finger is down: on Android `contextmenu` fires first, and showing the menu then makes the release hit the first item (or the following click closes it). The release's click is swallowed in the capture phase so it does not also open the editor. Any scroll still closes the menu.
+- **The quick-event modal is taller than the phone.** `modal-dialog-centered` shoves the title above the viewport. `modal-dialog-scrollable` is not enough on its own: the `<form>` wraps both `.modal-body` and `.modal-footer`, so that form is the flex item that has to shrink (`min-height: 0`, column flex). Otherwise the footer sits past the bottom edge. Swatches and the close button are 24px unless you set a 40px box.
+- **Weekday names do not fit seven equal columns.** `repeat(7, 1fr)` sizes each track by its word, so the header drifts off the table. Use `minmax(0, 1fr)`, and one-letter labels (א׳–ש׳) under 480px.
+- **The events list was scrolling sideways inside `.table-responsive`, and the edit/delete buttons sat off-screen.** Under 576px the table becomes a two-column card (text, then the action buttons). Hiding columns instead leaves the actions at 5% width, which is smaller than a 40px target.
 
 ## Rules for agents and contributors
 

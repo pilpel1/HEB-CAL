@@ -139,3 +139,50 @@
 .quick-color-swatch.color-green {
     background-color: rgb(0, 128, 0);
 }
+
+@media (max-width: 480px) {
+    .quick-color-swatch {
+        width: 40px;
+        height: 40px;
+    }
+
+    .modal .btn-close {
+        width: 40px;
+        height: 40px;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* בלי min-height:0 הגוף לא מתכווץ והפוטר נחתך מתחת למסך */
+    #quickEventModal .modal-dialog {
+        margin: 0.5rem auto;
+        height: calc(100dvh - 1rem);
+        max-height: calc(100dvh - 1rem);
+        min-height: 0;
+    }
+
+    #quickEventModal .modal-content {
+        height: 100%;
+        max-height: 100%;
+        overflow: hidden;
+    }
+
+    /* הטופס עוטף את הגוף ואת הפוטר, אז הוא הפריט שחייב להתכווץ */
+    #quickEventModal .modal-content > form {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #quickEventModal .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    #quickEventModal .modal-footer .btn {
+        min-height: 40px;
+    }
+}

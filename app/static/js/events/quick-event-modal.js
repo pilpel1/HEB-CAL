@@ -281,7 +281,29 @@ function initQuickEventModal() {
 
     const calendarRoot = document.getElementById('calendar-stream');
     if (calendarRoot) {
+        // לחיצה בודדת פותחת עריכה (בטלפון אין דאבל-קליק). ההשהיה מבטלת את עצמה בדאבל-קליק
+        // כדי ש-smoke_ui לא ימשוך את האירוע שלוש פעמים.
+        let tapTimer = null;
+        calendarRoot.addEventListener('click', (event) => {
+            const eventItem = event.target.closest('.event-item[data-event-id]');
+            if (eventItem) {
+                const eventId = eventItem.getAttribute('data-event-id');
+                clearTimeout(tapTimer);
+                tapTimer = setTimeout(() => openEditEventModal(eventId), 280);
+                return;
+            }
+            if (!window.matchMedia('(pointer: coarse)').matches) {
+                return;
+            }
+            const cell = event.target.closest('td[data-date]');
+            if (!cell) {
+                return;
+            }
+            openQuickEventModal(cell.getAttribute('data-date'));
+        });
+
         calendarRoot.addEventListener('dblclick', (event) => {
+            clearTimeout(tapTimer);
             const eventItem = event.target.closest('.event-item[data-event-id]');
             if (eventItem) {
                 event.stopPropagation();

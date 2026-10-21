@@ -72,6 +72,14 @@ function assignMultiDayLanes(multiDayEvents, weekDates) {
     return { eventLanes, laneCount: laneEnds.length };
 }
 
+function escapeHtml(text) {
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 function buildEventItemHtml(event, extraClasses = []) {
     const timeStr = event.time ? `${event.time} - ` : '';
     const classes = ['event-item', ...extraClasses];
@@ -82,8 +90,9 @@ function buildEventItemHtml(event, extraClasses = []) {
     const style = event.color
         ? `background-color: rgba(${getColorRGBA(event.color)})`
         : '';
+    const label = escapeHtml(`${timeStr}${event.title}`);
 
-    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" style="${style}">${timeStr}${event.title}</div>`;
+    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" title="${label}" style="${style}">${label}</div>`;
 }
 
 function renderMultiDayRail(cell, date, multiDayEvents, eventLanes, weekDates) {
@@ -137,7 +146,10 @@ function paintCellEvents(cell, date, jewishByDate, multiDayEvents, singleDayEven
             return (order[a.type] || 9) - (order[b.type] || 9);
         });
         jewishContainer.innerHTML = sortedEvents
-            .map((event) => `<div class="${event.type}" style="color: ${event.color}">${event.name}</div>`)
+            .map((event) => {
+                const name = escapeHtml(event.name);
+                return `<div class="${event.type}" style="color: ${event.color}" title="${name}">${name}</div>`;
+            })
             .join('');
     } else {
         jewishContainer.innerHTML = '';
