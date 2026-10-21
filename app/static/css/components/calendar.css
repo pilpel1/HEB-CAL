@@ -885,9 +885,12 @@
     .day-cell {
         min-height: 0;
         height: 100%;
+        /* לא נמתח מעבר לצפיפות. px אחד יורד בגלל border-collapse. */
+        max-height: calc(var(--week-row-height) - 1px);
+        overflow: hidden;
     }
 
-    /* תא גבוה: הכותרת עד שתי שורות. יום עמוס נשאר שורה אחת ו-"+N" */
+    /* כותרת הצ'יפ עד שתי שורות. "+N" מגיע רק כשהגובה נגמר. */
     .day-content .event-item {
         white-space: normal;
         height: auto;
@@ -903,18 +906,8 @@
         word-break: normal;
     }
 
-    td.is-crowded .day-content .event-item,
     .multi-day-rail .event-item {
         white-space: nowrap;
-    }
-
-    td.is-crowded .day-content .event-title {
-        display: block;
-        -webkit-line-clamp: 1;
-        white-space: nowrap;
-        overflow-wrap: normal;
-        word-break: normal;
-        text-overflow: ellipsis;
     }
 
     .cell-more {

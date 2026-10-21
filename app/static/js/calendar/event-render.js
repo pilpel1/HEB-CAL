@@ -80,8 +80,6 @@ function escapeHtml(text) {
         .replace(/"/g, '&quot;');
 }
 
-const MOBILE_MAX_CHIPS = 2;
-
 function compareEventsByTime(a, b) {
     const ta = a.time || '99:99';
     const tb = b.time || '99:99';
@@ -130,40 +128,121 @@ function jewishEventHtml(event) {
     return `<div class="${safeType}"${color} title="${escapeHtml(name)}">${escapeHtml(name)}</div>`;
 }
 
-/** בטלפון: עד שני צ'יפים (רב-יומי נשאר, כדי שהפס לא יישבר) ואז "+N". */
-function trimCellChips(cell) {
-    cell.querySelectorAll('.cell-more').forEach((el) => el.remove());
-    const chips = [
+function cellChipNodes(cell) {
+    return [
         ...cell.querySelectorAll('.multi-day-rail .event-item'),
         ...cell.querySelectorAll('.jewish-events-container > div'),
         ...cell.querySelectorAll('.day-content .event-item'),
     ];
-    chips.forEach((el) => el.classList.remove('is-chip-hidden'));
+}
 
-    const compact = typeof isCompactCalendar === 'function' && isCompactCalendar();
-    const crowded = compact && chips.length > MOBILE_MAX_CHIPS;
-    cell.classList.toggle('is-crowded', crowded);
-    if (!crowded) {
+function makeMoreBadge(hidden) {
+    const badge = document.createElement('div');
+    badge.className = 'cell-more';
+    badge.textContent = `+${hidden}`;
+    badge.title = 'כל האירועים';
+    badge.setAttribute('role', 'button');
+    return badge;
+}
+
+/** גובה תיבת התוכן של התא לפי הצפיפות. border-collapse אוכל px אחד מה-height של השורה. */
+function cellContentLimit(cell) {
+    const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue('--week-row-height')
+        .trim();
+    const cssH = parseFloat(raw);
+    if (!Number.isFinite(cssH) || cssH <= 0) {
+        return cell.clientHeight;
+    }
+    const borderTop = parseFloat(getComputedStyle(cell).borderTopWidth) || 0;
+    return cssH - borderTop;
+}
+
+/** תחתית התוכן הנראה, ביחס לתיבת התוכן של ה-td. */
+function cellContentBottom(cell) {
+    const box = cell.getBoundingClientRect();
+    const borderTop = parseFloat(getComputedStyle(cell).borderTopWidth) || 0;
+    const origin = box.top + borderTop;
+    let bottom = 0;
+    cell.querySelectorAll('.dates-container, .cell-content > *').forEach((el) => {
+        if (el.offsetHeight === 0) {
+            return;
+        }
+        bottom = Math.max(bottom, el.getBoundingClientRect().bottom - origin);
+    });
+    return bottom;
+}
+
+/**
+ * בטלפון הכותרת עד שתי שורות. "+N" רק על מה שבאמת חורג מגובה התא.
+ * פס רב-יומי נשאר שלם כדי שההמשך בתאים השכנים לא יישבר.
+ */
+function fitCellChips(cell) {
+    cell.querySelectorAll('.cell-more').forEach((el) => el.remove());
+    const chips = cellChipNodes(cell);
+    chips.forEach((el) => el.classList.remove('is-chip-hidden'));
+    cell.classList.remove('is-crowded');
+
+    if (!cell.isConnected) {
+        return;
+    }
+    if (typeof isCompactCalendar !== 'function' || !isCompactCalendar()) {
         return;
     }
 
-    const multiCount = cell.querySelectorAll('.multi-day-rail .event-item').length;
-    const keep = Math.max(MOBILE_MAX_CHIPS, multiCount);
-    let hidden = 0;
-    chips.forEach((el, index) => {
-        if (index >= keep) {
-            el.classList.add('is-chip-hidden');
-            hidden += 1;
-        }
-    });
-    if (hidden > 0) {
-        const badge = document.createElement('div');
-        badge.className = 'cell-more';
-        badge.textContent = `+${hidden}`;
-        badge.title = 'כל האירועים';
-        badge.setAttribute('role', 'button');
-        cell.querySelector('.cell-content')?.appendChild(badge);
+    const limit = cellContentLimit(cell);
+    if (limit <= 0) {
+        return;
     }
+    const content = cell.querySelector('.cell-content');
+    const hideable = chips.filter((el) => !el.closest('.multi-day-rail'));
+    if (!content || hideable.length === 0) {
+        return;
+    }
+
+    const overflows = () => cellContentBottom(cell) > limit + 1;
+    if (!overflows()) {
+        return;
+    }
+
+    let hidden = 0;
+    for (let i = hideable.length - 1; i >= 0; i -= 1) {
+        hideable[i].classList.add('is-chip-hidden');
+        hidden += 1;
+        const badge = makeMoreBadge(hidden);
+        content.appendChild(badge);
+        if (!overflows()) {
+            return;
+        }
+        badge.remove();
+    }
+    if (hidden > 0) {
+        content.appendChild(makeMoreBadge(hidden));
+    }
+}
+
+function fitWeekRowChips(row) {
+    if (!row) {
+        return;
+    }
+    row.querySelectorAll('td[data-date]').forEach((cell) => fitCellChips(cell));
+}
+
+function fitRenderedWeekChips() {
+    const body = typeof infiniteCalendar !== 'undefined' && infiniteCalendar.body;
+    if (!body) {
+        return;
+    }
+    for (const row of body.rows) {
+        fitWeekRowChips(row);
+    }
+    if (infiniteCalendar.stream) {
+        infiniteCalendar.chipFitWidth = infiniteCalendar.stream.clientWidth;
+    }
+}
+
+function trimCellChips(cell) {
+    fitCellChips(cell);
 }
 
 function renderMultiDayRail(cell, date, multiDayEvents, eventLanes, weekDates) {

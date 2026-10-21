@@ -5,10 +5,13 @@
 function appendWeeks(count) {
     const cal = infiniteCalendar;
     const fragment = document.createDocumentFragment();
+    const rows = [];
     let added = 0;
     let next = addDaysToDateStr(cal.lastWeek, 7);
     while (added < count && isWeekReady(next)) {
-        fragment.appendChild(buildWeekRow(next));
+        const row = buildWeekRow(next);
+        rows.push(row);
+        fragment.appendChild(row);
         cal.lastWeek = next;
         next = addDaysToDateStr(next, 7);
         added += 1;
@@ -16,6 +19,9 @@ function appendWeeks(count) {
     if (added) {
         // הוספה מתחת לכל מה שעל המסך — לא מזיזה כלום, אין צורך בעוגן
         cal.body.appendChild(fragment);
+        if (typeof fitWeekRowChips === 'function') {
+            rows.forEach((row) => fitWeekRowChips(row));
+        }
     }
     return added;
 }
@@ -34,6 +40,9 @@ function prependWeeks(count) {
     preserveScrollAnchor(() => {
         cal.body.prepend(...rows);
         cal.firstWeek = rows[0].dataset.weekStart;
+        if (typeof fitWeekRowChips === 'function') {
+            rows.forEach((row) => fitWeekRowChips(row));
+        }
     });
     return rows.length;
 }
@@ -318,6 +327,9 @@ async function renderAround(dateStr, align) {
     cal.body.replaceChildren(fragment);
     cal.firstWeek = first;
     cal.lastWeek = last;
+    if (typeof fitRenderedWeekChips === 'function') {
+        fitRenderedWeekChips();
+    }
 
     const top = scrollTargetFor(dateStr, align);
     cal.stream.scrollTop = Math.max(0, top);
