@@ -54,7 +54,10 @@ Manual checks:
 | `app/__init__.py` | Flask app factory, routes for `/`, `/events_list`, API blueprint registration, `init_db()` on startup |
 | `app/database.py` | SQLite connection, schema creation/migrations inline (not Alembic) |
 | `app/api/__init__.py` | API blueprint wiring |
-| `app/api/events.py` | Event CRUD endpoints |
+| `app/api/events.py` | Event CRUD endpoints. Optional `reminders` on create/update |
+| `app/api/reminders.py` | Reminder people CRUD + `GET /api/reminders/due` (browser poll) |
+| `app/reminders/` | Offset math, due query, Telegram worker. No recurrence yet: `occurrence_start` is the hook |
+| `scripts/reminder_worker.py` | Sends due Telegram reminders and answers `/start` with the chat id. Token: `TELEGRAM_BOT_TOKEN` only |
 | `app/services/jewish_calendar.py` | Jewish calendar / holiday helpers |
 | `app/services/hebrew_format.py` | Hebrew date text normalization/formatting |
 | `app/services/calendar_service.py`, `event_service.py` | Not imported anywhere. Live paths are `app/api/` (calendar + Jewish events) and `app/database.py` (event CRUD) |
@@ -71,7 +74,10 @@ Manual checks:
 | `app/static/js/calendar/infinite-calendar.js` | Infinite-scroll core: maintain/trim, `renderAround`, `scrollToDate`, today button |
 | `app/static/js/events/end-date-validation.js` | End date must not precede the start date (shared with the events-list page) |
 | `app/static/js/events/event-actions.js` | Create / update / delete, success toast, refresh both views |
-| `app/static/js/events/quick-event-modal.js` | Quick-event modal: fields, time parsed out of the title, color, submit |
+| `app/static/js/events/quick-event-modal.js` | Quick-event modal: fields, time parsed out of the title, color, submit. Reminder block is filled from `reminders-form.js` |
+| `app/static/js/events/reminders-form.js` | Reminder checkbox, offset chips, custom amount, recipients |
+| `app/static/js/events/reminder-notify.js` | Notification API poll of `/api/reminders/due` while the tab is open |
+| `app/static/js/events/reminder-people.js` | Settings page (`/settings`) people CRUD |
 | `app/static/js/events/context-menu.js` | Context menu: right-click, and long-press on touch |
 | `app/templates/events_list.html` (inline `<script>`) | Events-list page: search, advanced search, import/export, pagination. Not a separate file |
 | `app/templates/` | Jinja2: `base.html`, `index.html`, `events_list.html`, partials (`quick_event_modal.html`, `theme_toggle.html`) |
@@ -84,7 +90,7 @@ Manual checks:
 ## Known issues / repo reality
 
 1. **Schema lives in `app/database.py`.** Tables are created and evolved at startup (inline SQL). There is no Alembic/Flask-Migrate workflow in this repo.
-2. **Telegram bot is planned, not started.** Optional `BOT_TOKEN` in `.env` is reserved for a future integration; there is no `bot/` package in the tree yet.
+2. **Telegram reminders are a separate worker, not a `bot/` package.** `scripts/reminder_worker.py` reads `TELEGRAM_BOT_TOKEN` only (`BOT_TOKEN` stays unused). `/start` replies with the chat id for the settings page (`/settings`). Browser notifications poll `/api/reminders/due` while a tab is open; background Web Push needs HTTPS/PWA and is not built. `sent_at` is the Telegram stamp. Events with no time fire at `REMINDER_DEFAULT_TIME` (default 09:00, `Asia/Jerusalem`). There is no recurrence model.
 3. **Frontend JS is classic scripts, one shared global scope** (see the lessons below). `base.html` loads `theme.js`, then `script.js`, then the `core/` / `calendar/` / `events/` files. Search, import, and export live in the inline script of `events_list.html`, not in those files.
 4. **`origin/feature/infinite-scroll-calendar` is a stale snapshot, not the current UI.** The infinite calendar is on `main`: it landed as the scroll-stability work, then `script.js` was split into `app/static/js/core/` and `app/static/js/calendar/`. That remote branch is still the older monolithic `script.js`. Do not merge it back and do not treat it as the source of truth.
 

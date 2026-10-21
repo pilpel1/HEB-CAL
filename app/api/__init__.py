@@ -77,6 +77,7 @@ def get_hebrew_date(date_str):
         return jsonify({'error': str(e)}), 400
 
 from . import events
+from . import reminders  # noqa: E402,F401
 
 @api.route('/calendar/<int:year>/<int:month>')
 def get_calendar(year, month):

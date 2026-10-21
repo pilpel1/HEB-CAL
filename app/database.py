@@ -26,6 +26,7 @@ def get_db():
     if 'db' not in g:
         g.db = sqlite3.connect(str(get_database_path()))
         g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
 
 def close_db(e=None):
@@ -78,6 +79,11 @@ def init_db():
         
         db.commit()
 
+    from app.reminders.repository import ensure_reminder_schema
+
+    ensure_reminder_schema(db)
+    db.commit()
+
     _migrate_hebrew_years_to_letters(db)
 
 def _migrate_hebrew_years_to_letters(db):
@@ -129,9 +135,12 @@ def get_all_colors():
 
 
 def export_data():
+    from app.reminders.repository import list_people
+
     return {
         "events": get_all_events(),
         "colors": get_all_colors(),
+        "reminder_people": list_people(),
     }
 
 
@@ -184,6 +193,33 @@ def _resolve_merge_target_id(event, fingerprint, existing_by_id, existing_by_fp,
     return None
 
 
+def _apply_imported_reminders(event_id, raw_reminders):
+    """משחזר תזכורות מייבוא. בלי המפתח לא נוגעים בשורות קיימות."""
+    from app.reminders.repository import people_ids, replace_event_reminders
+    from app.reminders.schedule import OffsetError, parse_reminders_payload
+
+    if not isinstance(raw_reminders, list):
+        raise ValueError("'reminders' must be an array")
+    try:
+        parsed = parse_reminders_payload(raw_reminders, people_ids())
+    except OffsetError as exc:
+        raise ValueError(str(exc)) from exc
+    sent_by_offset = {}
+    for raw in raw_reminders:
+        if not isinstance(raw, dict) or not raw.get("sent_at"):
+            continue
+        if raw.get("offset_minutes") is None:
+            continue
+        try:
+            sent_by_offset[int(raw["offset_minutes"])] = raw["sent_at"]
+        except (TypeError, ValueError):
+            continue
+    for item in parsed:
+        if item["offset_minutes"] in sent_by_offset:
+            item["sent_at"] = sent_by_offset[item["offset_minutes"]]
+    replace_event_reminders(event_id, parsed, commit=False)
+
+
 def import_data(payload, mode="replace"):
     if not isinstance(payload, dict):
         raise ValueError("Import payload must be a JSON object")
@@ -200,10 +236,22 @@ def import_data(payload, mode="replace"):
         db.execute("BEGIN")
 
         if mode == "replace":
+            db.execute("DELETE FROM reminders")
             db.execute("DELETE FROM events")
             db.execute("DELETE FROM event_colors")
+            if "reminder_people" in payload:
+                db.execute("DELETE FROM reminder_people")
         elif mode != "merge":
             raise ValueError("Unsupported import mode")
+
+        if "reminder_people" in payload:
+            from app.reminders.repository import upsert_person_for_import
+
+            people = payload.get("reminder_people")
+            if not isinstance(people, list):
+                raise ValueError("'reminder_people' must be an array")
+            for person in people:
+                upsert_person_for_import(person, replace_ids=(mode == "replace"))
 
         existing_colors = {
             (row["name"] or "").strip(): row
@@ -362,6 +410,10 @@ def import_data(payload, mode="replace"):
                 existing_by_slot.setdefault(slot, []).append(created)
                 inserted_events += 1
 
+            saved_id = target_id if target_id is not None else new_id
+            if "reminders" in event:
+                _apply_imported_reminders(saved_id, event.get("reminders"))
+
         db.commit()
         return {
             "success": True,
@@ -382,15 +434,15 @@ def create_event(title, gregorian_date, hebrew_date, time=None, description="", 
     try:
         end_date = _normalize_end_date(gregorian_date, end_date)
         hebrew_date = normalize_hebrew_date_text(hebrew_date)
-        db.execute('''
+        cursor = db.execute('''
             INSERT INTO events (title, gregorian_date, hebrew_date, time, description, end_date, color)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (title, gregorian_date, hebrew_date, time, description, end_date, color))
         db.commit()
-        return True
+        return cursor.lastrowid
     except sqlite3.Error as e:
         print(f"Error creating event: {e}")
-        return False
+        return None
 
 def get_event(event_id):
     db = get_db()
@@ -400,7 +452,8 @@ def get_event(event_id):
             return None
         data = dict(event)
         data["hebrew_date"] = normalize_hebrew_date_text(data.get("hebrew_date"))
-        return data
+        from app.reminders.repository import attach_reminders
+        return attach_reminders([data])[0]
     except sqlite3.Error as e:
         print(f"Error getting event: {e}")
         return None
@@ -414,7 +467,8 @@ def get_all_events():
             data = dict(event)
             data["hebrew_date"] = normalize_hebrew_date_text(data.get("hebrew_date"))
             result.append(data)
-        return result
+        from app.reminders.repository import attach_reminders
+        return attach_reminders(result)
     except sqlite3.Error as e:
         print(f"Error getting all events: {e}")
         return []
@@ -438,6 +492,7 @@ def update_event(event_id, title, gregorian_date, hebrew_date, time=None, descri
 def delete_event(event_id):
     db = get_db()
     try:
+        db.execute('DELETE FROM reminders WHERE event_id = ?', (event_id,))
         db.execute('DELETE FROM events WHERE id = ?', (event_id,))
         db.commit()
         return True

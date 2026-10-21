@@ -45,8 +45,14 @@ python -m pip install -r requirements.txt
 DATABASE_PATH=data/calendar.db
 SECRET_KEY=change-me-before-production
 FLASK_DEBUG=1
+TELEGRAM_BOT_TOKEN=
+REMINDER_TIMEZONE=Asia/Jerusalem
+REMINDER_DEFAULT_TIME=09:00
+REMINDER_POLL_SECONDS=45
 BOT_TOKEN=
 ```
+
+`TELEGRAM_BOT_TOKEN` הוא הטוקן היחיד שה-worker קורא. `BOT_TOKEN` נשאר שמור ולא בשימוש. לא לשמור טוקן אמיתי בגיט.
 
 ## הרצה
 
@@ -70,9 +76,29 @@ python app/main.py
 .venv\Scripts\activate
 ```
 
+## תזכורות
+
+בטופס האירוע מסמנים «תזכורת», בוחרים מתי (כולל «אחר»), ואת מי להזכיר. אנשים ומזהה הצ׳אט שלהם מנוהלים ב־`/settings` («אנשים לתזכורות»).
+
+אירוע בלי שעה נחשב כ־`REMINDER_DEFAULT_TIME` (ברירת מחדל 09:00) באזור `REMINDER_TIMEZONE` (ברירת מחדל `Asia/Jerusalem`). אין עדיין חזרות: התזכורת חלה על תאריך האירוע. כשיתווסף מודל חזרה, נקודת ההרחבה היא `occurrence_start` ב־`app/reminders/schedule.py`.
+
+### Worker (טלגרם)
+
+```bash
+python scripts/reminder_worker.py
+```
+
+סבב אחד בלי לולאה: `python scripts/reminder_worker.py --once`.
+
+כל 30–60 שניות (ברירת מחדל 45) ה-worker שולח תזכורות שהמועד שלהן עבר ועדיין לא נשלחו, דרך Bot API. אותה לולאה עונה ל־`/start` עם מזהה הצ׳אט — מעתיקים את המספר לעמוד האנשים.
+
+### התראות בדפדפן
+
+כשהאפליקציה פתוחה (אנדרואיד או מחשב) היא שואבת את `GET /api/reminders/due` ומציגה `Notification`. זה לא עובד כשהדפדפן סגור. Web Push ברקע דורש HTTPS ו־PWA ומיועד להתווסף אחר כך על אותו payload (`title`, `body`, `tag`), בלי לשנות את חישוב ה-offset.
+
 ## מצב נוכחי
 
-- בסיס הנתונים הוא SQLite מקומי.
+- בסיס הנתונים הוא SQLite מקומי. טבלאות התזכורות נוצרות בהפעלה אם הן חסרות.
 - ממשק הווב פעיל.
-- ה־Telegram bot עדיין לא גמור.
+- שליחת טלגרם רצה רק כשמפעילים את ה-worker, עם `TELEGRAM_BOT_TOKEN`.
 - קבצי Alembic היסטוריים כרגע לא מייצגים את סכמת ה־DB בפועל.

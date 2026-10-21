@@ -163,6 +163,9 @@ function fillQuickEventForm(eventData = {}) {
     document.getElementById('quick_end_date').value = eventData.end_date || '';
     setEndDateOpen(Boolean(eventData.end_date));
     document.getElementById('quick_description').value = eventData.description || '';
+    if (typeof fillReminderFields === 'function') {
+        fillReminderFields(eventData.reminders || []);
+    }
     setQuickColor(eventData.color || '');
     syncEndDateMin(
         eventData.gregorian_date || '',
@@ -179,6 +182,7 @@ function getQuickEventFormData() {
         description: document.getElementById('quick_description').value || '',
         end_date: document.getElementById('quick_end_date').value || null,
         color: document.getElementById('quick_color').value || null,
+        reminders: typeof readReminderFields === 'function' ? readReminderFields() : [],
     };
 }
 
@@ -233,6 +237,9 @@ function initQuickEventModal() {
     }
 
     populateQuickHourOptions();
+    if (typeof initReminderFields === 'function') {
+        initReminderFields();
+    }
 
     // אחרי סיום הפתיחה של Bootstrap — פוקוס יציב על הכותרת
     modalElement.addEventListener('shown.bs.modal', () => {
@@ -362,6 +369,12 @@ function initQuickEventModal() {
         applyTimeFromTitlePrefix(document.getElementById('quick_title').value);
 
         const eventData = getQuickEventFormData();
+        if (eventData.reminders === null) {
+            return;
+        }
+        if (eventData.reminders.length && typeof maybeRequestReminderPermission === 'function') {
+            maybeRequestReminderPermission();
+        }
         const endInput = document.getElementById('quick_end_date');
         syncEndDateMin(eventData.gregorian_date, endInput);
         if (!assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date, endInput)) {

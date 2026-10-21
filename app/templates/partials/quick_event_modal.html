@@ -46,6 +46,34 @@
                         <label for="quick_description" class="form-label">תיאור</label>
                         <textarea class="form-control" id="quick_description" rows="2"></textarea>
                     </div>
+                    <div class="quick-reminder-wrap">
+                        <label class="quick-reminder-check" for="quick_reminder_enabled">
+                            <input type="checkbox" id="quick_reminder_enabled">
+                            <span>תזכורת</span>
+                        </label>
+                        <div id="quick_reminder_panel" class="quick-reminder-panel" hidden>
+                            <div id="quick_reminder_offsets" class="reminder-offset-grid" role="group" aria-label="מתי להזכיר"></div>
+                            <div class="reminder-custom">
+                                <button type="button" class="quick-reminder-custom-toggle" id="quick_reminder_custom_toggle" aria-expanded="false" aria-controls="quick_reminder_custom_row">אחר</button>
+                                <div id="quick_reminder_custom_row" class="reminder-custom-row" hidden>
+                                    <input type="number" class="form-control" id="quick_reminder_custom_amount" min="1" step="1" inputmode="numeric" dir="ltr" aria-label="כמות">
+                                    <select class="form-select" id="quick_reminder_custom_unit" aria-label="יחידה">
+                                        <option value="minutes">דקות</option>
+                                        <option value="hours">שעות</option>
+                                        <option value="days">ימים</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="quick_reminder_custom_add">הוסף</button>
+                                </div>
+                                <div id="quick_reminder_custom_list" class="reminder-offset-grid"></div>
+                            </div>
+                            <p id="quick_reminder_error" class="reminder-form-error" hidden></p>
+                            <div class="reminder-recipients">
+                                <div class="form-label">למי להזכיר</div>
+                                <div id="quick_reminder_recipients"></div>
+                                <a class="reminder-people-link" href="/settings" target="_blank" rel="noopener">אנשים לתזכורות</a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ביטול</button>
