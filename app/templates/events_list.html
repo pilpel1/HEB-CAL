@@ -830,6 +830,7 @@ function buildEventRowHtml(event) {
     const color = event.color ? convertToRGBA(event.color) : '';
     const category = getEventTimeCategory(event);
     const meta = CATEGORY_META[category];
+    const metaBits = [event.gregorian_date, event.hebrew_date, event.time].filter(Boolean);
 
     return `
         <tr id="row-${event.id}" class="${meta.rowClass}">
@@ -843,6 +844,7 @@ function buildEventRowHtml(event) {
                         event.title
                     }
                 </div>
+                <div class="event-meta-line">${metaBits.join(' · ')}</div>
             </td>
             <td>${event.gregorian_date}</td>
             <td>${event.hebrew_date}</td>

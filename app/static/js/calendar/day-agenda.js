@@ -6,7 +6,7 @@ function isCompactCalendar() {
 
 function densityDivisor() {
     try {
-        return localStorage.getItem('heb-cal-density') === 'compact' ? 8 : 6;
+        return localStorage.getItem('heb-cal-density') === 'compact' ? 9 : 6;
     } catch (error) {
         return 6;
     }
@@ -17,13 +17,33 @@ function updateDensityToggle() {
     if (!button) {
         return;
     }
-    const compact = densityDivisor() === 8;
+    const compact = densityDivisor() === 9;
     button.textContent = compact ? 'רחב' : 'צפוף';
     button.setAttribute('aria-pressed', compact ? 'true' : 'false');
     button.title = compact ? 'שורות גבוהות יותר' : 'יותר שבועות על המסך';
 }
 
-/** בטלפון גובה שורה ≈ אזור הגלילה / 6, כדי ש-5–6 שבועות ימלאו את הרשת. */
+/** הכרטיס ממלא בדיוק את הגובה הנראה (כולל סרגל הכתובת באנדרואיד). */
+function syncCalendarFrame() {
+    const cal = document.querySelector('.calendar-container.infinite-calendar');
+    if (!cal) {
+        return;
+    }
+    if (!isCompactCalendar()) {
+        cal.style.removeProperty('height');
+        return;
+    }
+    const vv = window.visualViewport;
+    const viewportH = Math.round(vv ? vv.height : window.innerHeight);
+    const top = cal.getBoundingClientRect().top - (vv ? vv.offsetTop : 0);
+    const available = Math.max(320, viewportH - Math.max(0, Math.round(top)) - 2);
+    const next = `${available}px`;
+    if (cal.style.height !== next) {
+        cal.style.height = next;
+    }
+}
+
+/** בטלפון גובה שורה ≈ אזור הגלילה / 6 (או / 9 במצב צפוף). */
 function syncWeekRowHeight() {
     const root = document.documentElement;
     const stream = infiniteCalendar.stream;
@@ -31,15 +51,18 @@ function syncWeekRowHeight() {
         if (root.style.getPropertyValue('--week-row-height')) {
             root.style.removeProperty('--week-row-height');
         }
+        root.removeAttribute('data-cal-density');
         return;
     }
     const header = stream.querySelector('.weekday-header');
     const headerH = header ? header.offsetHeight : 0;
     const grid = stream.clientHeight - headerH;
-    if (grid < 120) {
+    if (grid < 80) {
         return;
     }
-    const next = `${Math.max(44, Math.floor(grid / densityDivisor()))}px`;
+    const divisor = densityDivisor();
+    root.dataset.calDensity = divisor === 9 ? 'compact' : 'comfortable';
+    const next = `${Math.max(28, Math.floor(grid / divisor))}px`;
     if (root.style.getPropertyValue('--week-row-height') === next) {
         return;
     }
@@ -52,13 +75,14 @@ function syncWeekRowHeight() {
 }
 
 function toggleCalendarDensity() {
-    const next = densityDivisor() === 8 ? 'comfortable' : 'compact';
+    const next = densityDivisor() === 9 ? 'comfortable' : 'compact';
     try {
         localStorage.setItem('heb-cal-density', next);
     } catch (error) {
         /* מצב פרטי — נשאר עד רענון */
     }
     updateDensityToggle();
+    syncCalendarFrame();
     syncWeekRowHeight();
     if (typeof updateVisibleMonthLabel === 'function') {
         updateVisibleMonthLabel();
@@ -177,9 +201,22 @@ function initDayAgenda() {
     root.dataset.bound = '1';
 
     updateDensityToggle();
-    document.getElementById('density-toggle')?.addEventListener('click', () => {
-        toggleCalendarDensity();
-    });
+    const densityBtn = document.getElementById('density-toggle');
+    if (densityBtn) {
+        densityBtn.addEventListener('click', () => {
+            toggleCalendarDensity();
+        });
+    }
+    const onViewport = () => {
+        syncCalendarFrame();
+        syncWeekRowHeight();
+    };
+    window.addEventListener('resize', onViewport);
+    window.addEventListener('orientationchange', onViewport);
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', onViewport);
+        window.visualViewport.addEventListener('scroll', onViewport);
+    }
 
     document.getElementById('day-agenda-add')?.addEventListener('click', () => {
         const dateStr = infiniteCalendar.agendaDate || getTodayDateStr();

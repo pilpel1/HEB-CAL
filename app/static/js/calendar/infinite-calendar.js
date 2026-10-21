@@ -175,6 +175,9 @@ function onStreamScrollEnd() {
 
 /** גובה שורה השתנה בלי שאנחנו ביקשנו (פונט, רוחב חלון) — מחזירים את העוגן לפני paint */
 function onCalendarResize() {
+    if (typeof syncCalendarFrame === 'function') {
+        syncCalendarFrame();
+    }
     if (typeof syncWeekRowHeight === 'function') {
         syncWeekRowHeight();
     }
@@ -384,6 +387,9 @@ async function initInfiniteCalendar() {
     if (typeof renderDayAgenda === 'function') {
         renderDayAgenda(today);
     }
+    if (typeof syncCalendarFrame === 'function') {
+        syncCalendarFrame();
+    }
     if (typeof syncWeekRowHeight === 'function') {
         syncWeekRowHeight();
     }
@@ -398,6 +404,9 @@ async function initInfiniteCalendar() {
     // שורות כבר על המסך (עדיין מוסתר): מודדים שוב את הכותרת הדביקה, מתקנים גובה,
     // ומרחיבים את ה-DOM. הכול לפני שמורידים את ה-overlay, כדי שהיום לא יקפוץ.
     cal.ready = true;
+    if (typeof syncCalendarFrame === 'function') {
+        syncCalendarFrame();
+    }
     if (typeof syncWeekRowHeight === 'function') {
         syncWeekRowHeight();
     }

@@ -141,7 +141,9 @@ function trimCellChips(cell) {
     chips.forEach((el) => el.classList.remove('is-chip-hidden'));
 
     const compact = typeof isCompactCalendar === 'function' && isCompactCalendar();
-    if (!compact || chips.length <= MOBILE_MAX_CHIPS) {
+    const crowded = compact && chips.length > MOBILE_MAX_CHIPS;
+    cell.classList.toggle('is-crowded', crowded);
+    if (!crowded) {
         return;
     }
 

@@ -419,6 +419,9 @@
     width: 100%;
     table-layout: fixed;
     border-collapse: collapse;
+    /* כרום בטלפון מגדיל ספרה בודדת ("1") בתא טבלה עד שהיא דורסת את התווית העברית */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 .calendar-table th {
@@ -633,10 +636,31 @@
 
 /* טלפון: 375 / 390 — כפתורים בשתי שורות, ימי השבוע באות אחת, תאריכים בשורה */
 @media (max-width: 480px) {
+    /* הכרטיס ממלא את המסך הנראה. הגובה המדויק נקבע ב-syncCalendarFrame לפי visualViewport */
+    html:has(.infinite-calendar),
+    body:has(.infinite-calendar) {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    body:has(.infinite-calendar) .container {
+        margin-top: 0 !important;
+        margin-bottom: 0;
+        padding-top: 0.3rem;
+        padding-bottom: 0.15rem;
+        max-width: 100%;
+        height: 100svh;
+        display: flex;
+        flex-direction: column;
+    }
+
     .calendar-container.infinite-calendar {
-        padding: 0.5rem 0.35rem 0.45rem;
-        /* mt-3 של הקונטיינר כבר אוכל 1rem — בלי זה הפאנל נחתך מתחת למסך */
-        height: calc(100dvh - 1rem);
+        flex: 1 1 auto;
+        min-height: 0;
+        margin-bottom: 0;
+        padding: 0.35rem 0.3rem 0.2rem;
+        height: auto;
+        border-radius: 0.65rem;
     }
 
     .infinite-calendar .calendar-nav {
@@ -701,26 +725,57 @@
     .hebrew-date {
         padding: 0;
         font-size: 0.68rem;
-        line-height: 1.15;
+        line-height: 1.1;
+        /* המספר נשאר ברוחב התוכן; התווית של תחילת החודש מקבלת את מה שנשאר */
+        flex: 0 1 auto;
+        min-width: 0;
     }
 
-    /* עברי נשאר מלא ("א חשון"). לועזי נשאר קצר ("1 נוב") */
+    /* עברי נשאר מלא ("א חשון"). לועזי נשאר קצר ("1 נוב"). אותו גודל, בלי "1" ענק */
     .gregorian-date .month-mark-full { display: none; }
     .gregorian-date .month-mark-short { display: inline; }
 
-    .hebrew-date.month-start {
-        flex: 1 1 auto;
-        font-size: 0.62rem;
-        letter-spacing: -0.02em;
+    .hebrew-date.month-start,
+    .gregorian-date.month-start {
+        font-size: 0.6rem;
+        font-weight: 700;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
     }
 
-    .gregorian-date {
+    td.heb-month-start:not(.greg-month-start) .hebrew-date {
+        flex: 1 1 auto;
+    }
+
+    td.greg-month-start:not(.heb-month-start) .gregorian-date {
+        flex: 1 1 auto;
+    }
+
+    td.heb-month-start:not(.greg-month-start) .gregorian-date,
+    td.greg-month-start:not(.heb-month-start) .hebrew-date {
         flex: 0 0 auto;
     }
 
+    .hebrew-date .day-num,
+    .gregorian-date .day-num,
     .hebrew-date .month-mark,
     .gregorian-date .month-mark {
         font-size: 1em;
+        line-height: 1;
+    }
+
+    /* יום שפותח גם חודש עברי וגם לועזי: שתי שורות, בלי חפיפה */
+    td.heb-month-start.greg-month-start .dates-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+    }
+
+    td.heb-month-start.greg-month-start .hebrew-date,
+    td.heb-month-start.greg-month-start .gregorian-date {
+        width: 100%;
+        max-width: 100%;
+        flex: 0 0 auto;
     }
 
     .holiday, .parasha, .fast,
@@ -752,6 +807,36 @@
         height: 100%;
     }
 
+    /* תא גבוה: הכותרת עד שתי שורות. יום עמוס נשאר שורה אחת ו-"+N" */
+    .day-content .event-item {
+        white-space: normal;
+        height: auto;
+    }
+
+    .day-content .event-title {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    td.is-crowded .day-content .event-item,
+    .multi-day-rail .event-item {
+        white-space: nowrap;
+    }
+
+    td.is-crowded .day-content .event-title {
+        display: block;
+        -webkit-line-clamp: 1;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: normal;
+        text-overflow: ellipsis;
+    }
+
     .cell-more {
         font-size: 0.72rem;
         line-height: 1.2;
@@ -766,8 +851,8 @@
     .day-agenda {
         display: flex;
         flex-direction: column;
-        /* 40% גם כשהיום ריק — אחרת הרשת נמתחת ונכנסים 12–14 שבועות */
-        flex: 0 0 40%;
+        /* חלק קבוע מהכרטיס המלא — הרשת מקבלת את השאר והשורות גבוהות */
+        flex: 0 0 36%;
         min-height: 0;
         overflow: hidden;
         border-top: 1px solid #e5e7eb;

@@ -255,6 +255,10 @@
     background: linear-gradient(90deg, transparent, var(--bs-warning-bg-subtle) 20%, var(--bs-warning-bg-subtle) 80%, transparent);
 }
 
+[data-bs-theme="dark"] .event-meta-line {
+    color: var(--bs-secondary-color);
+}
+
 [data-bs-theme="dark"] .filter-chip {
     background-color: var(--bs-secondary-bg);
     color: var(--bs-body-color);
