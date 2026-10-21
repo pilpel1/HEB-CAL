@@ -301,8 +301,7 @@
     color: #fff;
 }
 
-[data-bs-theme="dark"] .quick-reminder-custom-toggle,
-[data-bs-theme="dark"] .reminder-settings-link {
+[data-bs-theme="dark"] .quick-reminder-custom-toggle {
     color: #93c5fd;
 }
 

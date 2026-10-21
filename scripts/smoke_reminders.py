@@ -62,7 +62,6 @@ def main() -> int:
 
         page.goto(base + "/")
         page.wait_for_selector(".infinite-calendar:not(.is-booting)")
-        expect(page.locator(".reminder-settings-link")).to_be_visible()
 
         page.click("#addEventFromCalendarBtn")
         modal = page.locator("#quickEventModal")
@@ -79,6 +78,7 @@ def main() -> int:
         page.select_option("#quick_reminder_custom_unit", "hours")
         page.click("#quick_reminder_custom_add")
         expect(page.locator("#quick_reminder_custom_list")).to_contain_text("4 שעות")
+        expect(page.locator(".reminder-people-link")).to_be_visible()
         expect(page.locator("#quick_hebrew_date")).not_to_have_value("")
         recipient = page.locator(f'#quick_reminder_recipients input[value="{person["id"]}"]')
         expect(recipient).to_be_visible()
