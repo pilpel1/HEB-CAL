@@ -279,8 +279,7 @@ function initQuickEventModal() {
         setQuickEventModalMode(false);
     });
 
-    const calendarRoot = document.getElementById('calendar-stream')
-        || document.getElementById('calendar-body');
+    const calendarRoot = document.getElementById('calendar-stream');
     if (calendarRoot) {
         calendarRoot.addEventListener('dblclick', (event) => {
             const eventItem = event.target.closest('.event-item[data-event-id]');

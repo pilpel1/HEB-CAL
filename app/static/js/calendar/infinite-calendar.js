@@ -195,7 +195,6 @@ function updateVisibleMonthLabel() {
     if (label.textContent !== text) {
         label.textContent = text;
     }
-    currentDate = new Date(gregYear, gregMonth - 1, 1);
 }
 
 /** ממתין לפונט Heebo כדי שגובה השורות לא ישתנה אחרי המיקום הראשוני (עם תקרת זמן) */
@@ -299,12 +298,7 @@ function jumpToMonth(year, month) {
 }
 
 function goToToday() {
-    if (isInfiniteCalendarPage()) {
-        scrollToDate(getTodayDateStr(), 'center');
-        return;
-    }
-    currentDate = new Date();
-    updateCalendar();
+    scrollToDate(getTodayDateStr(), 'center');
 }
 
 async function initInfiniteCalendar() {

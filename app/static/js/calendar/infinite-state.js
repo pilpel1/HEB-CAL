@@ -1,7 +1,5 @@
 // מצב משותף של הלוח האינסופי: הגדרות, אובייקט המצב, זיהוי הדף
 
-let currentDate = new Date();
-
 // הלוח גולל בתוך #calendar-stream ולא ב-window — אין מיקום ישן שהדפדפן צריך לשחזר
 if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual';

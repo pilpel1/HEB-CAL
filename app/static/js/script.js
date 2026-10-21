@@ -16,8 +16,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (isInfiniteCalendarPage()) {
         await initInfiniteCalendar();
-    } else if (document.getElementById('calendar-body')) {
-        await updateCalendar();
     }
 
     const addEventFromCalendarBtn = document.getElementById('addEventFromCalendarBtn');
@@ -25,10 +23,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         addEventFromCalendarBtn.addEventListener('click', () => {
             openQuickEventModal(formatDate(new Date()));
         });
-    }
-
-    // בדף ניהול האירועים הטעינה נעשית בסקריפט של הדף עצמו
-    if (document.getElementById('eventsTable') && typeof loadAllEvents !== 'function') {
-        await updateEventsList();
     }
 });
