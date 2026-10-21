@@ -94,7 +94,8 @@ def get_calendar(year, month):
         calendar_data.append({
             'gregorian_day': day,
             'hebrew_day': hebrew_day,
-            'hebrew_month': hebrew_month_name if is_hebrew_month_start else '',
+            'hebrew_month': hebrew_month_name,
+            'hebrew_year': format_hebrew_year(hebrew_date[0], with_heh_prefix=True),
             'is_hebrew_month_start': is_hebrew_month_start
         })
     
@@ -128,6 +129,28 @@ def get_calendar(year, month):
         'hebrew_months': sorted_hebrew_months,
         'hebrew_year': hebrew_year_str
     })
+
+@api.route('/jewish-events/month/<int:year>/<int:month>')
+def get_jewish_events_month(year, month):
+    """מחזיר אירועים יהודיים לכל ימי החודש — חוסך N+1 בטעינת לוח."""
+    try:
+        if month < 1 or month > 12:
+            return jsonify({'error': 'Invalid month'}), 400
+
+        num_days = calendar.monthrange(year, month)[1]
+        by_date = {}
+        for day in range(1, num_days + 1):
+            date_obj = datetime(year, month, day).date()
+            date_key = date_obj.isoformat()
+            events = JewishCalendarService.get_all_jewish_events(date_obj)
+            if events:
+                by_date[date_key] = events
+
+        return jsonify(by_date)
+    except Exception as e:
+        logger.error(f"Unexpected error in get_jewish_events_month: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 
 @api.route('/jewish-events/<date>')
 def get_jewish_events(date):
