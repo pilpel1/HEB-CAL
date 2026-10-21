@@ -53,7 +53,7 @@ def process_due_reminders(*, now=None, send=None, token: str | None = None) -> i
                     file=sys.stderr,
                 )
         if ok:
-            mark_reminder_sent(item["id"])
+            mark_reminder_sent(item["id"], occurrence_date=item.get("occurrence_date"))
             delivered += 1
             print(f"sent reminder {item['id']} for event {item['event_id']}")
     return delivered

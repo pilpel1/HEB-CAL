@@ -264,17 +264,45 @@ def delete_reminders_for_event(event_id: int, *, commit: bool = True) -> None:
         db.commit()
 
 
-def mark_reminder_sent(reminder_id: int, sent_at: datetime | None = None) -> None:
+def mark_reminder_sent(
+    reminder_id: int,
+    sent_at: datetime | None = None,
+    *,
+    occurrence_date: str | None = None,
+) -> None:
+    """חותמת שליחה.
+
+    בלי ``occurrence_date`` — ``sent_at`` על שורת התזכורת (אירוע חד-פעמי).
+    עם תאריך מופע — שורה ב-``reminder_sends``, כדי שהמופע הבא בסדרה עדיין יישלח.
+    """
     db = get_db()
     stamp = sent_at or datetime.now(timezone.utc)
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=timezone.utc)
     text = stamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    db.execute(
-        "UPDATE reminders SET sent_at = ? WHERE id = ? AND sent_at IS NULL",
-        (text, reminder_id),
-    )
+    if occurrence_date:
+        db.execute(
+            """
+            INSERT INTO reminder_sends (reminder_id, occurrence_date, sent_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(reminder_id, occurrence_date) DO NOTHING
+            """,
+            (reminder_id, occurrence_date[:10], text),
+        )
+    else:
+        db.execute(
+            "UPDATE reminders SET sent_at = ? WHERE id = ? AND sent_at IS NULL",
+            (text, reminder_id),
+        )
     db.commit()
+
+
+def sent_occurrence_keys() -> set[tuple[int, str]]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT reminder_id, occurrence_date FROM reminder_sends"
+    ).fetchall()
+    return {(row["reminder_id"], row["occurrence_date"]) for row in rows}
 
 
 def load_reminder_rows() -> list[dict]:
@@ -293,7 +321,11 @@ def load_reminder_rows() -> list[dict]:
             e.hebrew_date AS hebrew_date,
             e.time AS time,
             e.description AS description,
-            e.end_date AS end_date
+            e.end_date AS end_date,
+            e.recurrence_freq AS recurrence_freq,
+            e.recurrence_calendar AS recurrence_calendar,
+            e.recurrence_until AS recurrence_until,
+            e.recurrence_count AS recurrence_count
         FROM reminders r
         JOIN events e ON e.id = r.event_id
         ORDER BY r.id

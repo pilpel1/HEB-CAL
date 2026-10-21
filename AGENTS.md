@@ -56,8 +56,9 @@ Manual checks:
 | `app/api/__init__.py` | API blueprint wiring |
 | `app/api/events.py` | Event CRUD endpoints. Optional `reminders` on create/update |
 | `app/api/reminders.py` | Reminder people CRUD + `GET /api/reminders/due` (browser poll) |
-| `app/reminders/` | Offset math, due query, Telegram worker. No recurrence yet: `occurrence_start` is the hook |
+| `app/reminders/` | Offset math, due query, Telegram worker. Recurring events fire per occurrence (`reminder_sends`); `occurrence_start` is the next start |
 | `scripts/reminder_worker.py` | Sends due Telegram reminders and answers `/start` with the chat id. Token: `TELEGRAM_BOT_TOKEN` only |
+| `app/services/recurrence.py` | Expand yearly/monthly occurrences (Hebrew or Gregorian) plus exception overrides |
 | `app/services/jewish_calendar.py` | Jewish calendar / holiday helpers |
 | `app/services/hebrew_format.py` | Hebrew date text normalization/formatting |
 | `app/services/calendar_service.py`, `event_service.py` | Not imported anywhere. Live paths are `app/api/` (calendar + Jewish events) and `app/database.py` (event CRUD) |
@@ -83,6 +84,7 @@ Manual checks:
 | `app/templates/` | Jinja2: `base.html`, `index.html`, `events_list.html`, partials (`quick_event_modal.html`, `theme_toggle.html`) |
 | `app/static/css/` | `style.css` imports `components/`: variables, calendar, events-table, forms, dark-theme |
 | `tests/` | Pytest (`pytest.ini` sets `testpaths = tests`). `conftest.py` points the app at a temp SQLite file, never `data/calendar.db`. Modules: `test_events_api.py` (CRUD, search, import/export), `test_calendar_month_api.py`, `test_hebrew_format.py`, `test_jewish_calendar.py`, `test_static_scripts.py` (404s and duplicate top-level `const`/`let`), `test_theme.py` |
+| `scripts/migrate_recurrence.py` | Idempotent additive migration for existing SQLite files (also applied by `init_db`) |
 | `scripts/verify_infinite_scroll.py`, `scripts/smoke_ui.py` | Playwright checks. Not collected by pytest. See Test |
 | `test_calendar.py` | Manual pyluach script at the repo root. Not part of pytest |
 | `init_db.py` | Optional DB init helper |
@@ -90,7 +92,7 @@ Manual checks:
 ## Known issues / repo reality
 
 1. **Schema lives in `app/database.py`.** Tables are created and evolved at startup (inline SQL). There is no Alembic/Flask-Migrate workflow in this repo.
-2. **Telegram reminders are a separate worker, not a `bot/` package.** `scripts/reminder_worker.py` reads `TELEGRAM_BOT_TOKEN` only (`BOT_TOKEN` stays unused). `/start` replies with the chat id for the settings page (`/settings`). Browser notifications poll `/api/reminders/due` while a tab is open; background Web Push needs HTTPS/PWA and is not built. `sent_at` is the Telegram stamp. Events with no time fire at `REMINDER_DEFAULT_TIME` (default 09:00, `Asia/Jerusalem`). There is no recurrence model.
+2. **Telegram reminders are a separate worker, not a `bot/` package.** `scripts/reminder_worker.py` reads `TELEGRAM_BOT_TOKEN` only (`BOT_TOKEN` stays unused). `/start` replies with the chat id for the settings page (`/settings`). Browser notifications poll `/api/reminders/due` while a tab is open; background Web Push needs HTTPS/PWA and is not built. `sent_at` is the Telegram stamp for a one-off event. A repeating event stamps each occurrence in `reminder_sends` (keyed by the original series date) and does not reuse `sent_at`. Events with no time fire at `REMINDER_DEFAULT_TIME` (default 09:00, `Asia/Jerusalem`). Recurrence lives on the event (`recurrence_freq`, `recurrence_calendar`, `recurrence_until`, `recurrence_count`); a single skipped or moved day is a row in `event_exceptions`. Rules: 30 Cheshvan/Kislev in a short year lands on the 29th of that month; plain Adar in a leap year is Adar II, and Adar I or Adar II in a non-leap year is Adar; Gregorian Feb 29 is Feb 28; a monthly 31st is the last day of the month. `GET /api/events` without a range returns the series master. `?from=&to=` expands occurrences.
 3. **Frontend JS is classic scripts, one shared global scope** (see the lessons below). `base.html` loads `theme.js`, then `script.js`, then the `core/` / `calendar/` / `events/` files. Search, import, and export live in the inline script of `events_list.html`, not in those files.
 4. **`origin/feature/infinite-scroll-calendar` is a stale snapshot, not the current UI.** The infinite calendar is on `main`: it landed as the scroll-stability work, then `script.js` was split into `app/static/js/core/` and `app/static/js/calendar/`. That remote branch is still the older monolithic `script.js`. Do not merge it back and do not treat it as the source of truth.
 

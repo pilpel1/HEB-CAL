@@ -5,19 +5,27 @@ Web Push עתידי צריך לקרוא ל-``browser_due`` (או לחלץ payloa
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from app.reminders.repository import list_people, load_reminder_rows, reminder_to_dict
+from app.reminders.repository import (
+    list_people,
+    load_reminder_rows,
+    reminder_to_dict,
+    sent_occurrence_keys,
+)
 from app.reminders.schedule import (
     browser_body,
-    fire_at,
+    event_start,
     is_due,
     in_browser_window,
-    occurrence_start,
     reminder_default_time,
     reminder_message,
     reminder_timezone,
 )
+from app.services.recurrence import expand_event, is_recurring
+
+# תזכורת של מופע ישן (יותר מיום וחצי) לא נשלחת שוב כשמוסיפים חזרה.
+RECURRENCE_LOOKBACK = timedelta(hours=36)
 
 
 def _people_by_id() -> dict[int, dict]:
@@ -36,41 +44,86 @@ def _chat_ids(recipient_ids, people_by_id) -> list[str]:
     return found
 
 
+def _event_from_row(row) -> dict:
+    return {
+        "id": row["event_id"],
+        "title": row["title"],
+        "gregorian_date": row["gregorian_date"],
+        "hebrew_date": row["hebrew_date"],
+        "time": row["time"],
+        "description": row["description"],
+        "end_date": row["end_date"],
+        "recurrence_freq": row.get("recurrence_freq"),
+        "recurrence_calendar": row.get("recurrence_calendar"),
+        "recurrence_until": row.get("recurrence_until"),
+        "recurrence_count": row.get("recurrence_count"),
+        "exceptions": row.get("exceptions") or [],
+    }
+
+
+def _occurrences_for_reminder(event: dict, current: datetime, offset_minutes: int) -> list[dict]:
+    if not is_recurring(event):
+        return [{
+            **event,
+            "occurrence_date": event.get("gregorian_date"),
+            "recurring": False,
+        }]
+    offset = max(0, int(offset_minutes))
+    start_from = (current - RECURRENCE_LOOKBACK).date()
+    start_to = (current + timedelta(minutes=offset) + timedelta(days=2)).date()
+    return expand_event(event, event.get("exceptions") or [], start_from, start_to)
+
+
 def _evaluated(now: datetime | None = None):
     tz = reminder_timezone()
     default_time = reminder_default_time()
     current = now or datetime.now(tz)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=tz)
     people = _people_by_id()
+    sent_keys = sent_occurrence_keys()
+    rows = load_reminder_rows()
+    from app.database import exceptions_for_events
+
+    exception_map = exceptions_for_events([row["event_id"] for row in rows])
     items = []
-    for row in load_reminder_rows():
-        event = {
-            "title": row["title"],
-            "gregorian_date": row["gregorian_date"],
-            "hebrew_date": row["hebrew_date"],
-            "time": row["time"],
-            "description": row["description"],
-            "end_date": row["end_date"],
-        }
-        try:
-            start = occurrence_start(event, current, tz=tz, default_time=default_time)
-            fire = fire_at(
-                event,
-                row["offset_minutes"],
-                now=current,
-                tz=tz,
-                default_time=default_time,
-            )
-        except (ValueError, TypeError):
-            continue
+    for row in rows:
+        event = _event_from_row(row)
+        event["exceptions"] = exception_map.get(row["event_id"], [])
         reminder = reminder_to_dict(row)
-        items.append({
-            "row": row,
-            "event": event,
-            "reminder": reminder,
-            "start": start,
-            "fire": fire,
-            "chat_ids": _chat_ids(reminder["recipient_ids"], people),
-        })
+        chat_ids = _chat_ids(reminder["recipient_ids"], people)
+        recurring = is_recurring(event)
+        for occ in _occurrences_for_reminder(event, current, row["offset_minutes"]):
+            display = {
+                "title": occ.get("title") or event.get("title"),
+                "gregorian_date": occ.get("gregorian_date"),
+                "hebrew_date": occ.get("hebrew_date") or event.get("hebrew_date"),
+                "time": occ.get("time") if occ.get("time") is not None else event.get("time"),
+                "description": occ.get("description") if occ.get("description") is not None else event.get("description"),
+                "end_date": occ.get("end_date"),
+            }
+            try:
+                start = event_start(display, tz=tz, default_time=default_time)
+            except (ValueError, TypeError):
+                continue
+            fire = start - timedelta(minutes=int(row["offset_minutes"]))
+            occurrence_date = occ.get("occurrence_date") if recurring else None
+            if recurring:
+                already = (row["id"], occurrence_date) in sent_keys
+                if fire < current - RECURRENCE_LOOKBACK:
+                    continue
+            else:
+                already = bool(row["sent_at"])
+            items.append({
+                "row": row,
+                "event": display,
+                "reminder": reminder,
+                "start": start,
+                "fire": fire,
+                "chat_ids": chat_ids,
+                "occurrence_date": occurrence_date,
+                "already_sent": already,
+            })
     return current, items
 
 
@@ -80,7 +133,7 @@ def telegram_due(now: datetime | None = None) -> list[dict]:
     due = []
     for item in items:
         row = item["row"]
-        if not is_due(item["fire"], current, row["sent_at"]):
+        if item["already_sent"] or not is_due(item["fire"], current, None):
             continue
         if not item["chat_ids"]:
             continue
@@ -88,6 +141,7 @@ def telegram_due(now: datetime | None = None) -> list[dict]:
             "id": row["id"],
             "event_id": row["event_id"],
             "offset_minutes": row["offset_minutes"],
+            "occurrence_date": item["occurrence_date"],
             "chat_ids": item["chat_ids"],
             "text": reminder_message(item["event"], row["offset_minutes"], item["start"]),
             "fire_at": item["fire"].isoformat(),
@@ -120,10 +174,12 @@ def browser_due(
             continue
         row = item["row"]
         fire_iso = item["fire"].isoformat()
+        occurrence_date = item["occurrence_date"] or ""
         visible.append({
             "id": row["id"],
             "event_id": row["event_id"],
             "offset_minutes": row["offset_minutes"],
+            "occurrence_date": item["occurrence_date"],
             "recipient_ids": item["reminder"]["recipient_ids"],
             "title": item["event"]["title"],
             "body": browser_body(
@@ -133,7 +189,7 @@ def browser_due(
                 item["fire"],
                 current,
             ),
-            "tag": f"heb-cal-reminder-{row['id']}-{fire_iso}",
+            "tag": f"heb-cal-reminder-{row['id']}-{occurrence_date}-{fire_iso}",
             "fire_at": fire_iso,
             "event_start": item["start"].isoformat(),
         })

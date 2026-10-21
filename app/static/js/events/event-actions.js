@@ -76,8 +76,12 @@ async function updateEvent(eventId, eventData) {
     }
 }
 
-async function deleteEvent(eventId) {
-    if (!confirm('האם אתה בטוח שברצונך למחוק אירוע זה?')) {
+async function deleteEvent(eventId, options) {
+    const series = options && options.series;
+    const message = series
+        ? 'למחוק את כל הסדרה, כולל כל המופעים?'
+        : 'האם אתה בטוח שברצונך למחוק אירוע זה?';
+    if (!confirm(message)) {
         return;
     }
 
@@ -111,8 +115,32 @@ async function deleteEvent(eventId) {
     }
 }
 
+async function deleteEventOccurrence(eventId, occurrenceDate) {
+    if (!confirm('למחוק רק את המופע הזה? שאר הסדרה נשארת.')) {
+        return;
+    }
+    try {
+        const response = await fetch(
+            `/api/events/${eventId}?scope=occurrence&occurrence_date=${encodeURIComponent(occurrenceDate)}`,
+            { method: 'DELETE' },
+        );
+        const result = await response.json();
+        if (result.success) {
+            showMessage('המופע נמחק');
+            await refreshEventsViews();
+            return;
+        }
+        alert(result.error || 'שגיאה במחיקת המופע');
+    } catch (error) {
+        console.error('Error deleting occurrence:', error);
+        alert('שגיאה במחיקת המופע');
+    }
+}
+
 async function refreshEventsViews() {
     infiniteCalendar.eventsCache = null;
+    infiniteCalendar.eventsFrom = null;
+    infiniteCalendar.eventsTo = null;
 
     if (isInfiniteCalendarPage()) {
         await repaintInfiniteCalendarEvents();
@@ -124,9 +152,9 @@ async function refreshEventsViews() {
     }
 }
 
-async function editEvent(eventId) {
+async function editEvent(eventId, occurrenceDate) {
     if (typeof openEditEventModal === 'function') {
-        await openEditEventModal(eventId);
+        await openEditEventModal(eventId, occurrenceDate || null);
         return;
     }
     alert('לא ניתן לפתוח את עריכת האירוע');

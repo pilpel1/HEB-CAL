@@ -10,7 +10,7 @@ function initCalendarContextMenu(calendarBody) {
         document.body.appendChild(menu);
     }
 
-    let menuState = { dateStr: null, eventId: null };
+    let menuState = { dateStr: null, eventId: null, occurrenceDate: null, recurring: false };
     let press = null;
     let suppressClick = false;
     const LONG_PRESS_MS = 500;
@@ -18,7 +18,7 @@ function initCalendarContextMenu(calendarBody) {
     function hideMenu() {
         menu.classList.remove('is-open');
         menu.innerHTML = '';
-        menuState = { dateStr: null, eventId: null };
+        menuState = { dateStr: null, eventId: null, occurrenceDate: null, recurring: false };
     }
 
     function positionMenu(clientX, clientY) {
@@ -53,7 +53,15 @@ function initCalendarContextMenu(calendarBody) {
     function buildMenuItems() {
         const items = [];
 
-        if (menuState.eventId) {
+        if (menuState.eventId && menuState.recurring) {
+            items.push(
+                { label: 'ערוך רק הפעם', action: 'edit-occurrence' },
+                { label: 'ערוך את כל הסדרה', action: 'edit-series' },
+                { label: 'מחק רק הפעם', action: 'delete-occurrence', danger: true },
+                { label: 'מחק את כל הסדרה', action: 'delete-series', danger: true },
+                { separator: true },
+            );
+        } else if (menuState.eventId) {
             items.push(
                 { label: 'ערוך אירוע', action: 'edit-event' },
                 { label: 'מחק אירוע', action: 'delete-event', danger: true },
@@ -108,6 +116,8 @@ function initCalendarContextMenu(calendarBody) {
         menuState = {
             dateStr: cell.getAttribute('data-date'),
             eventId: eventItem ? eventItem.getAttribute('data-event-id') : null,
+            occurrenceDate: eventItem ? eventItem.getAttribute('data-occurrence-date') : null,
+            recurring: eventItem ? eventItem.getAttribute('data-recurring') === '1' : false,
         };
         showMenu(clientX, clientY);
         return true;
@@ -191,7 +201,7 @@ function initCalendarContextMenu(calendarBody) {
         }
 
         const action = button.getAttribute('data-action');
-        const { dateStr, eventId } = menuState;
+        const { dateStr, eventId, occurrenceDate } = menuState;
         hideMenu();
 
         if (action === 'add-event' && dateStr) {
@@ -202,8 +212,24 @@ function initCalendarContextMenu(calendarBody) {
             await openEditEventModal(eventId);
             return;
         }
+        if (action === 'edit-occurrence' && eventId) {
+            await openEditEventModal(eventId, occurrenceDate);
+            return;
+        }
+        if (action === 'edit-series' && eventId) {
+            await openEditEventModal(eventId);
+            return;
+        }
         if (action === 'delete-event' && eventId) {
             await deleteEvent(eventId);
+            return;
+        }
+        if (action === 'delete-occurrence' && eventId && occurrenceDate) {
+            await deleteEventOccurrence(eventId, occurrenceDate);
+            return;
+        }
+        if (action === 'delete-series' && eventId) {
+            await deleteEvent(eventId, { series: true });
             return;
         }
         if (action === 'events-list') {

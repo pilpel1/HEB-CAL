@@ -66,7 +66,7 @@ function assignMultiDayLanes(multiDayEvents, weekDates) {
         } else {
             laneEnds[lane] = endInWeek;
         }
-        eventLanes.set(event.id, lane);
+        eventLanes.set(eventInstanceKey(event), lane);
     }
 
     return { eventLanes, laneCount: laneEnds.length };
@@ -78,6 +78,22 @@ function escapeHtml(text) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+const REPEAT_ICON_SVG = '<svg class="event-repeat-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
+
+function eventInstanceKey(event) {
+    if (event && event.occurrence_date) {
+        return `${event.id}@${event.occurrence_date}`;
+    }
+    return String(event && event.id);
+}
+
+function repeatIconHtml(event) {
+    if (!event || !event.recurrence_freq) {
+        return '';
+    }
+    return REPEAT_ICON_SVG;
 }
 
 function compareEventsByTime(a, b) {
@@ -109,9 +125,11 @@ function buildEventItemHtml(event, extraClasses = []) {
     const timeHtml = event.time
         ? `<span class="event-time">${escapeHtml(event.time)}</span><span class="event-sep"> - </span>`
         : '';
-    const title = escapeHtml(event.title ?? '');
+    const title = `${repeatIconHtml(event)}${escapeHtml(event.title ?? '')}`;
+    const occurrence = escapeHtml(event.occurrence_date || event.gregorian_date || '');
+    const recurring = event.recurrence_freq ? '1' : '0';
 
-    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" title="${label}" style="${style}">${timeHtml}<span class="event-title">${title}</span></div>`;
+    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}" title="${label}" style="${style}">${timeHtml}<span class="event-title">${title}</span></div>`;
 }
 
 function jewishEventHtml(event) {
@@ -258,7 +276,7 @@ function renderMultiDayRail(cell, date, multiDayEvents, eventLanes, weekDates) {
             continue;
         }
 
-        const lane = eventLanes.get(event.id);
+        const lane = eventLanes.get(eventInstanceKey(event));
         if (lane === undefined) {
             continue;
         }

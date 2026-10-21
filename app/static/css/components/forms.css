@@ -247,6 +247,80 @@
     }
 }
 
+/* חזרה: שורה קומפקטית, נפתחת רק כשבוחרים חודש/שנה */
+.quick-recurrence {
+    margin-bottom: 0.65rem;
+}
+
+.quick-recurrence-line {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.35rem 0.4rem;
+    align-items: center;
+    margin-bottom: 0.35rem;
+}
+
+.quick-recurrence-line .form-label {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.quick-recurrence-line .form-select,
+.quick-recurrence-line .form-control {
+    min-width: 0;
+}
+
+#quick_recurrence_freq,
+#quick_recurrence_end_mode {
+    grid-column: 2 / -1;
+}
+
+.quick-recurrence.is-repeating #quick_recurrence_freq,
+.quick-recurrence.has-end-value #quick_recurrence_end_mode {
+    grid-column: auto;
+}
+
+.quick-recurrence-scope {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+}
+
+.quick-recurrence-scope[hidden] {
+    display: none;
+}
+
+.quick-scope-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex: 1 1 0;
+    min-height: 36px;
+    margin: 0;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--border-color, #ced4da);
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.quick-scope-option input {
+    margin: 0;
+}
+
+@media (max-width: 480px) {
+    #quickEventModal .form-select {
+        min-height: 40px;
+        font-size: 16px;
+    }
+
+    .quick-recurrence-line {
+        gap: 0.3rem;
+    }
+}
+
 /* תזכורות במודל — סגור כברירת מחדל, נפתח בתוך הגוף שנגלל */
 .quick-reminder-wrap {
     margin-top: 0.65rem;

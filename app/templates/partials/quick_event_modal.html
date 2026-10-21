@@ -42,6 +42,40 @@
                             <input type="date" class="form-control" id="quick_end_date" dir="ltr">
                         </div>
                     </div>
+                    <div class="quick-recurrence" id="quick_recurrence">
+                        <div class="quick-recurrence-line">
+                            <label class="form-label" for="quick_recurrence_freq">חזרה</label>
+                            <select id="quick_recurrence_freq" class="form-select form-select-sm">
+                                <option value="">ללא</option>
+                                <option value="monthly">כל חודש</option>
+                                <option value="yearly">כל שנה</option>
+                            </select>
+                            <select id="quick_recurrence_calendar" class="form-select form-select-sm" hidden>
+                                <option value="gregorian">לועזי</option>
+                                <option value="hebrew">עברי</option>
+                            </select>
+                        </div>
+                        <div class="quick-recurrence-line" id="quick_recurrence_end_row" hidden>
+                            <label class="form-label" for="quick_recurrence_end_mode">סיום</label>
+                            <select id="quick_recurrence_end_mode" class="form-select form-select-sm">
+                                <option value="never">בלי סוף</option>
+                                <option value="until">עד תאריך</option>
+                                <option value="count">מספר פעמים</option>
+                            </select>
+                            <input type="date" id="quick_recurrence_until" class="form-control form-control-sm" dir="ltr" hidden aria-label="חזרה עד תאריך">
+                            <input type="number" id="quick_recurrence_count" class="form-control form-control-sm" dir="ltr" min="1" max="2400" hidden inputmode="numeric" placeholder="פעמים" aria-label="מספר פעמים">
+                        </div>
+                        <div class="quick-recurrence-scope" id="quick_recurrence_scope" hidden role="radiogroup" aria-label="היקף העריכה">
+                            <label class="quick-scope-option">
+                                <input type="radio" name="quick_recurrence_scope" value="occurrence" checked>
+                                <span>רק הפעם</span>
+                            </label>
+                            <label class="quick-scope-option">
+                                <input type="radio" name="quick_recurrence_scope" value="all">
+                                <span>כל הסדרה</span>
+                            </label>
+                        </div>
+                    </div>
                     <div class="mb-0">
                         <label for="quick_description" class="form-label">תיאור</label>
                         <textarea class="form-control" id="quick_description" rows="2"></textarea>

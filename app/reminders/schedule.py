@@ -1,8 +1,9 @@
 """חישוב מועד תזכורת. בלי רשת ובלי בסיס נתונים — נוח לבדיקות.
 
-אין במערכת מודל חזרות. המופע הוא תאריך הלועזי של האירוע. כשיתווסף שדה
-recurrence (או חישוב לפי תאריך עברי חוזר), ``occurrence_start`` היא נקודת
-ההרחבה: היא צריכה להחזיר את המופע הבא, והשאר (offset, due, שליחה) נשאר.
+אירוע בלי ``recurrence_freq`` מתנהג כמו קודם: המופע הוא התאריך הלועזי,
+ו-``now`` לא מזיז אותו. באירוע חוזר ``occurrence_start`` מחזירה את המופע
+הבא (אחרי חריגות) שזמן ההתחלה שלו לא עבר. שליחה per-occurrence נרשמת
+ב-``reminder_sends``, לא ב-``sent_at``.
 """
 from __future__ import annotations
 
@@ -232,10 +233,30 @@ def occurrence_start(
 ) -> datetime:
     """המופע שעליו חלה התזכורת.
 
-    ``now`` שמור לחישוב המופע הבא כשיהיו חזרות. היום מתעלמים ממנו.
+    בלי חזרה — תאריך האירוע, בלי קשר ל-``now``.
+    עם חזרה — המופע הבא שתחילתו >= ``now`` (ברירת מחדל: עכשיו).
     """
-    del now
-    return event_start(event, tz=tz, default_time=default_time)
+    tz = tz or reminder_timezone()
+    anchor = event_start(event, tz=tz, default_time=default_time)
+    if not event.get("recurrence_freq"):
+        return anchor
+    from app.services.recurrence import expand_event, is_recurring
+
+    if not is_recurring(event):
+        return anchor
+    current = _aware(now or datetime.now(tz), tz)
+    window_from = current.date()
+    window_to = current.date() + timedelta(days=800)
+    rows = expand_event(event, event.get("exceptions") or [], window_from, window_to)
+    for row in rows:
+        start = event_start(
+            {**event, "gregorian_date": row["gregorian_date"], "time": row.get("time")},
+            tz=tz,
+            default_time=default_time,
+        )
+        if start >= current:
+            return start
+    return anchor
 
 
 def fire_at(

@@ -50,11 +50,60 @@ function isWeekReady(weekStart) {
     return weekDatesOf(weekStart).every((dateStr) => dayInfoFor(dateStr));
 }
 
-async function getCachedEvents() {
-    if (!infiniteCalendar.eventsCache) {
-        infiniteCalendar.eventsCache = await loadEvents();
+function neededEventsRange(firstWeek, lastWeek) {
+    return {
+        from: addDaysToDateStr(firstWeek, -21),
+        to: addDaysToDateStr(lastWeek, 6 + 21),
+    };
+}
+
+function eventsCacheCovers(from, to) {
+    const cal = infiniteCalendar;
+    return Boolean(
+        cal.eventsCache
+        && cal.eventsFrom
+        && cal.eventsTo
+        && cal.eventsFrom <= from
+        && cal.eventsTo >= to
+    );
+}
+
+/** טוען מופעים לחלון רחב סביב השבועות המרונדרים. בלי לגעת ב-DOM. */
+async function ensureEventsCovering(firstWeek, lastWeek) {
+    const cal = infiniteCalendar;
+    const need = neededEventsRange(firstWeek, lastWeek);
+    if (eventsCacheCovers(need.from, need.to)) {
+        return cal.eventsCache;
     }
-    return infiniteCalendar.eventsCache;
+    const from = addDaysToDateStr(need.from, -400);
+    const to = addDaysToDateStr(need.to, 400);
+    const gen = (cal.eventsFetchGen || 0) + 1;
+    cal.eventsFetchGen = gen;
+    const events = await loadEvents(from, to);
+    if (cal.eventsFetchGen !== gen) {
+        return cal.eventsCache || events;
+    }
+    cal.eventsCache = events;
+    cal.eventsFrom = from;
+    cal.eventsTo = to;
+    return events;
+}
+
+async function getCachedEvents() {
+    const cal = infiniteCalendar;
+    const today = typeof getTodayDateStr === 'function' ? getTodayDateStr() : '';
+    const first = cal.firstWeek || today;
+    const last = cal.lastWeek || first;
+    if (!first || !last) {
+        if (!cal.eventsCache) {
+            cal.eventsCache = await loadEvents();
+        }
+        return cal.eventsCache;
+    }
+    if (cal.eventsCache && eventsCacheCovers(neededEventsRange(first, last).from, neededEventsRange(first, last).to)) {
+        return cal.eventsCache;
+    }
+    return ensureEventsCovering(first, last);
 }
 
 function loadMonthsAround(dateStr) {
@@ -65,5 +114,5 @@ function loadMonthsAround(dateStr) {
         const target = shiftMonth(y, m, delta);
         requests.push(requestMonth(target.year, target.month));
     }
-    return Promise.all([...requests, getCachedEvents()]);
+    return Promise.all(requests);
 }

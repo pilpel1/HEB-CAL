@@ -243,6 +243,10 @@
     color: var(--bs-secondary-color);
 }
 
+[data-bs-theme="dark"] .event-repeat-badge {
+    color: #93c5fd;
+}
+
 [data-bs-theme="dark"] .event-status-past {
     color: var(--bs-secondary-color);
     background: var(--bs-secondary-bg);

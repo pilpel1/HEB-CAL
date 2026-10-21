@@ -37,7 +37,9 @@ def _empty_events_table(app):
         from app.database import get_db
 
         db = get_db()
+        db.execute("DELETE FROM reminder_sends")
         db.execute("DELETE FROM reminders")
+        db.execute("DELETE FROM event_exceptions")
         db.execute("DELETE FROM reminder_people")
         db.execute("DELETE FROM events")
         db.commit()
