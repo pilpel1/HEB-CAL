@@ -69,8 +69,82 @@
 [data-bs-theme="dark"] .dates-container .gregorian-date.month-start,
 [data-bs-theme="dark"] .dates-container .hebrew-date.month-start {
     color: #9ec5ff;
-    background: rgba(74, 144, 226, 0.22);
-    border-color: rgba(158, 197, 255, 0.7);
+    background: transparent;
+    border-color: transparent;
+}
+
+[data-bs-theme="dark"] .btn-today.btn-outline-primary:hover,
+[data-bs-theme="dark"] .btn-today.btn-outline-primary:focus,
+[data-bs-theme="dark"] .btn-today.btn-outline-primary:focus-visible {
+    color: var(--bs-btn-color);
+    background-color: transparent;
+    border-color: var(--bs-btn-border-color);
+}
+
+[data-bs-theme="dark"] .btn-today.btn-outline-primary:active {
+    color: var(--bs-btn-color);
+    background-color: rgba(147, 197, 253, 0.18);
+    border-color: var(--bs-btn-border-color);
+}
+
+[data-bs-theme="dark"] .agenda-empty,
+[data-bs-theme="dark"] .agenda-range {
+    color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .cell-more {
+    color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .day-agenda {
+    border-top-color: var(--bs-border-color);
+    background: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .agenda-resize {
+    color: #cbd5e1;
+}
+
+[data-bs-theme="dark"] .agenda-resize-grip {
+    background: #64748b;
+}
+
+[data-bs-theme="dark"] .agenda-resize-restore {
+    background: #1e293b;
+    color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .agenda-resize:focus-visible,
+[data-bs-theme="dark"] .agenda-resize-restore:focus-visible {
+    outline-color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .day-agenda-title,
+[data-bs-theme="dark"] .agenda-text,
+[data-bs-theme="dark"] .agenda-time {
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .agenda-holiday .agenda-text { color: #ffa8a0; }
+[data-bs-theme="dark"] .agenda-parasha .agenda-text { color: #a5ccff; }
+[data-bs-theme="dark"] .agenda-fast .agenda-text { color: #ffc078; }
+
+[data-bs-theme="dark"] .agenda-event:active {
+    background: rgba(147, 197, 253, 0.12);
+}
+
+[data-bs-theme="dark"] .calendar-table td.is-agenda-day::after {
+    border-color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .quick-field-hebrew .form-control {
+    color: var(--bs-secondary-color);
+    background: transparent;
+}
+
+[data-bs-theme="dark"] .quick-end-toggle {
+    color: #93c5fd;
+    background: transparent;
 }
 
 /* היום הנוכחי — ירוק כהה במקום ירוק פסטל */
@@ -197,6 +271,10 @@
 [data-bs-theme="dark"] .events-time-separator-today .events-time-separator-label {
     color: var(--bs-warning-text-emphasis);
     background: linear-gradient(90deg, transparent, var(--bs-warning-bg-subtle) 20%, var(--bs-warning-bg-subtle) 80%, transparent);
+}
+
+[data-bs-theme="dark"] .event-meta-line {
+    color: var(--bs-secondary-color);
 }
 
 [data-bs-theme="dark"] .filter-chip {

@@ -112,9 +112,24 @@ function maintainInfiniteCalendar() {
     }
 
     if (!cal.smoothScrolling) {
+        // כל batch מתקן עוגן לבד, ושגיאת עיגול נערמת כשהשורות נמוכות (טלפון).
+        // תיקון אחד מול העוגן המקורי מחזיר את מה שהיה על המסך בלי הסטייה.
+        const anchorBeforePrepend = captureAnchor();
+        let prepended = 0;
         for (let guard = 0; guard < 50; guard += 1) {
             if (stream.scrollTop >= ahead || !prependWeeks(batch)) {
                 break;
+            }
+            prepended += 1;
+        }
+        if (prepended && anchorBeforePrepend && anchorBeforePrepend.row.isConnected) {
+            const slipped = anchorBeforePrepend.row.getBoundingClientRect().top
+                - contentTopY()
+                - anchorBeforePrepend.offset;
+            const rowHeight = anchorBeforePrepend.row.getBoundingClientRect().height || 40;
+            // רק סטיית עיגול. משיכה של שורה שלמה מבטלת גלילה שכבר קרה
+            if (Math.abs(slipped) > 0.5 && Math.abs(slipped) < rowHeight * 0.5) {
+                restoreAnchor(anchorBeforePrepend);
             }
         }
     }
@@ -160,6 +175,12 @@ function onStreamScrollEnd() {
 
 /** גובה שורה השתנה בלי שאנחנו ביקשנו (פונט, רוחב חלון) — מחזירים את העוגן לפני paint */
 function onCalendarResize() {
+    if (typeof syncCalendarFrame === 'function') {
+        syncCalendarFrame();
+    }
+    if (typeof syncWeekRowHeight === 'function') {
+        syncWeekRowHeight();
+    }
     const cal = infiniteCalendar;
     if (!cal.ready || !cal.anchor) {
         return;
@@ -172,26 +193,68 @@ function onCalendarResize() {
     scheduleMaintain();
 }
 
+function bestWeightedKey(scores) {
+    let key = '';
+    let score = -1;
+    for (const [candidate, value] of scores) {
+        if (value > score) {
+            score = value;
+            key = candidate;
+        }
+    }
+    return key;
+}
+
 function updateVisibleMonthLabel() {
     const label = document.getElementById('current-month');
-    if (!label || !infiniteCalendar.body) {
+    const body = infiniteCalendar.body;
+    const stream = infiniteCalendar.stream;
+    if (!label || !body || !stream) {
         return;
     }
-    // שבת של השורה העליונה: ברגע שה-1 לחודש (לועזי או עברי) מגיע לשורה העליונה, הכותרת מתחלפת
-    const row = rowAtY(contentTopY() + 48);
-    const cell = row?.cells[6];
-    if (!cell) {
+    // החודש שתופס הכי הרבה פיקסלים גלויים (לא שבת של השורה העליונה — היא נשארה
+    // בתשרי כשי׳ חשון היה באמצע). הטיה קטנה למרכז שוברת תיקו.
+    const top = contentTopY();
+    const bottom = stream.getBoundingClientRect().bottom;
+    const half = (bottom - top) / 2;
+    if (half <= 0) {
         return;
     }
-
-    const gregYear = Number(cell.dataset.year);
-    const gregMonth = Number(cell.dataset.month);
-    const text = formatToolbarLabel(
-        gregYear,
-        gregMonth,
-        cell.dataset.hebrewMonth || '',
-        cell.dataset.hebrewYear || ''
-    );
+    const mid = (top + bottom) / 2;
+    const greg = new Map();
+    const heb = new Map();
+    const rows = body.rows;
+    for (let i = 0; i < rows.length; i += 1) {
+        const rect = rows[i].getBoundingClientRect();
+        if (rect.bottom <= top) {
+            continue;
+        }
+        if (rect.top >= bottom) {
+            break;
+        }
+        const visible = Math.min(rect.bottom, bottom) - Math.max(rect.top, top);
+        if (visible <= 0) {
+            continue;
+        }
+        const rowMid = (rect.top + rect.bottom) / 2;
+        const weight = visible * (1 + Math.max(0, 1 - Math.abs(rowMid - mid) / half) * 0.15);
+        for (const cell of rows[i].cells) {
+            const gKey = `${cell.dataset.year}-${cell.dataset.month}`;
+            greg.set(gKey, (greg.get(gKey) || 0) + weight);
+            if (cell.dataset.hebrewMonth) {
+                const hKey = `${cell.dataset.hebrewYear || ''}\n${cell.dataset.hebrewMonth}`;
+                heb.set(hKey, (heb.get(hKey) || 0) + weight);
+            }
+        }
+    }
+    const gKey = bestWeightedKey(greg);
+    if (!gKey) {
+        return;
+    }
+    const [gy, gm] = gKey.split('-');
+    const hKey = bestWeightedKey(heb);
+    const [hYear, hMonth] = hKey ? hKey.split('\n') : ['', ''];
+    const text = formatToolbarLabel(Number(gy), Number(gm), hMonth, hYear);
     if (label.textContent !== text) {
         label.textContent = text;
     }
@@ -316,6 +379,20 @@ async function initInfiniteCalendar() {
 
     // הכול מתחת ל-overlay: נתונים + פונט → רינדור → מיקום על היום → חשיפה. אין גלילה אחרי החשיפה.
     await Promise.all([loadMonthsAround(today), waitForFonts()]);
+    // הפאנל תופס גובה לפני המיקום, אחרת חשיפה שלו אחרי center מזיזה את היום
+    cal.agendaDate = today;
+    if (typeof initDayAgenda === 'function') {
+        initDayAgenda();
+    }
+    if (typeof renderDayAgenda === 'function') {
+        renderDayAgenda(today);
+    }
+    if (typeof syncCalendarFrame === 'function') {
+        syncCalendarFrame();
+    }
+    if (typeof syncWeekRowHeight === 'function') {
+        syncWeekRowHeight();
+    }
     const ok = await renderAround(today, 'center');
     if (!ok) {
         if (status) {
@@ -324,9 +401,24 @@ async function initInfiniteCalendar() {
         return;
     }
 
+    // שורות כבר על המסך (עדיין מוסתר): מודדים שוב את הכותרת הדביקה, מתקנים גובה,
+    // ומרחיבים את ה-DOM. הכול לפני שמורידים את ה-overlay, כדי שהיום לא יקפוץ.
+    cal.ready = true;
+    if (typeof syncCalendarFrame === 'function') {
+        syncCalendarFrame();
+    }
+    if (typeof syncWeekRowHeight === 'function') {
+        syncWeekRowHeight();
+    }
+    maintainInfiniteCalendar();
+    const centered = scrollTargetFor(today, 'center');
+    if (centered !== null) {
+        cal.stream.scrollTop = Math.max(0, centered);
+    }
+    cal.anchor = captureAnchor();
+
     root?.classList.remove('is-booting');
     cal.stream.setAttribute('aria-busy', 'false');
-    cal.ready = true;
 
     cal.stream.addEventListener('scroll', onStreamScroll, { passive: true });
     cal.stream.addEventListener('scrollend', onStreamScrollEnd, { passive: true });

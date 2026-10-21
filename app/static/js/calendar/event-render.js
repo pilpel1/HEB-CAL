@@ -80,8 +80,25 @@ function escapeHtml(text) {
         .replace(/"/g, '&quot;');
 }
 
+const MOBILE_MAX_CHIPS = 2;
+
+function compareEventsByTime(a, b) {
+    const ta = a.time || '99:99';
+    const tb = b.time || '99:99';
+    if (ta !== tb) {
+        return ta < tb ? -1 : 1;
+    }
+    return (Number(a.id) || 0) - (Number(b.id) || 0);
+}
+
+function eventTimeLabel(event) {
+    if (event.time) {
+        return `${event.time} - ${event.title ?? ''}`;
+    }
+    return String(event.title ?? '');
+}
+
 function buildEventItemHtml(event, extraClasses = []) {
-    const timeStr = event.time ? `${event.time} - ` : '';
     const classes = ['event-item', ...extraClasses];
     if (!event.color) {
         classes.push('event-uncolored');
@@ -90,9 +107,63 @@ function buildEventItemHtml(event, extraClasses = []) {
     const style = event.color
         ? `background-color: rgba(${getColorRGBA(event.color)})`
         : '';
-    const label = escapeHtml(`${timeStr}${event.title}`);
+    const label = escapeHtml(eventTimeLabel(event));
+    const timeHtml = event.time
+        ? `<span class="event-time">${escapeHtml(event.time)}</span><span class="event-sep"> - </span>`
+        : '';
+    const title = escapeHtml(event.title ?? '');
 
-    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" title="${label}" style="${style}">${label}</div>`;
+    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" title="${label}" style="${style}">${timeHtml}<span class="event-title">${title}</span></div>`;
+}
+
+function jewishEventHtml(event) {
+    const name = String(event.name ?? '');
+    const safeType = ['parasha', 'holiday', 'fast'].includes(event.type) ? event.type : 'holiday';
+    const color = event.color ? ` style="color: ${event.color}"` : '';
+    if (safeType === 'parasha') {
+        const prefix = 'פרשת ';
+        const hasPrefix = name.startsWith(prefix);
+        const shortName = hasPrefix ? name.slice(prefix.length) : name;
+        const prefixHtml = hasPrefix ? '<span class="parasha-prefix">פרשת </span>' : '';
+        return `<div class="parasha"${color} title="${escapeHtml(name)}">${prefixHtml}<span class="parasha-name">${escapeHtml(shortName)}</span></div>`;
+    }
+    return `<div class="${safeType}"${color} title="${escapeHtml(name)}">${escapeHtml(name)}</div>`;
+}
+
+/** בטלפון: עד שני צ'יפים (רב-יומי נשאר, כדי שהפס לא יישבר) ואז "+N". */
+function trimCellChips(cell) {
+    cell.querySelectorAll('.cell-more').forEach((el) => el.remove());
+    const chips = [
+        ...cell.querySelectorAll('.multi-day-rail .event-item'),
+        ...cell.querySelectorAll('.jewish-events-container > div'),
+        ...cell.querySelectorAll('.day-content .event-item'),
+    ];
+    chips.forEach((el) => el.classList.remove('is-chip-hidden'));
+
+    const compact = typeof isCompactCalendar === 'function' && isCompactCalendar();
+    const crowded = compact && chips.length > MOBILE_MAX_CHIPS;
+    cell.classList.toggle('is-crowded', crowded);
+    if (!crowded) {
+        return;
+    }
+
+    const multiCount = cell.querySelectorAll('.multi-day-rail .event-item').length;
+    const keep = Math.max(MOBILE_MAX_CHIPS, multiCount);
+    let hidden = 0;
+    chips.forEach((el, index) => {
+        if (index >= keep) {
+            el.classList.add('is-chip-hidden');
+            hidden += 1;
+        }
+    });
+    if (hidden > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'cell-more';
+        badge.textContent = `+${hidden}`;
+        badge.title = 'כל האירועים';
+        badge.setAttribute('role', 'button');
+        cell.querySelector('.cell-content')?.appendChild(badge);
+    }
 }
 
 function renderMultiDayRail(cell, date, multiDayEvents, eventLanes, weekDates) {
@@ -145,23 +216,20 @@ function paintCellEvents(cell, date, jewishByDate, multiDayEvents, singleDayEven
             const order = { parasha: 1, holiday: 2, fast: 3 };
             return (order[a.type] || 9) - (order[b.type] || 9);
         });
-        jewishContainer.innerHTML = sortedEvents
-            .map((event) => {
-                const name = escapeHtml(event.name);
-                return `<div class="${event.type}" style="color: ${event.color}" title="${name}">${name}</div>`;
-            })
-            .join('');
+        jewishContainer.innerHTML = sortedEvents.map(jewishEventHtml).join('');
     } else {
         jewishContainer.innerHTML = '';
     }
 
     renderMultiDayRail(cell, date, multiDayEvents, eventLanes, weekDates);
 
-    const dayEvents = singleDayEvents.filter((event) => (
-        isDateInRange(date, event.gregorian_date, event.end_date)
-    ));
+    const dayEvents = singleDayEvents
+        .filter((event) => isDateInRange(date, event.gregorian_date, event.end_date))
+        .sort(compareEventsByTime);
     const contentContainer = cell.querySelector('.day-content');
     contentContainer.innerHTML = dayEvents.length > 0
         ? dayEvents.map((event) => buildEventItemHtml(event)).join('')
         : '';
+
+    trimCellChips(cell);
 }

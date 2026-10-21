@@ -82,13 +82,29 @@ function initCalendarContextMenu(calendarBody) {
         positionMenu(clientX, clientY);
     }
 
+    function eventItemAtPoint(cell, x, y) {
+        const items = cell.querySelectorAll('.event-item[data-event-id]');
+        for (const item of items) {
+            const rect = item.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) {
+                continue;
+            }
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                return item;
+            }
+        }
+        return null;
+    }
+
     function openMenuFromTarget(target, clientX, clientY) {
         const cell = target.closest('td[data-date]');
         if (!cell) {
             hideMenu();
             return false;
         }
-        const eventItem = target.closest('.event-item[data-event-id]');
+        // צ'יפים בטלפון הם pointer-events: none, אז האצבע פוגעת בתא. המלבן עדיין של האירוע.
+        const eventItem = target.closest('.event-item[data-event-id]')
+            || eventItemAtPoint(cell, clientX, clientY);
         menuState = {
             dateStr: cell.getAttribute('data-date'),
             eventId: eventItem ? eventItem.getAttribute('data-event-id') : null,

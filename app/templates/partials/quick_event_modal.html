@@ -10,7 +10,7 @@
                 <input type="hidden" id="quick_event_id" value="">
                 <input type="hidden" id="quick_color" value="">
                 <div class="modal-body">
-                    <div class="mb-3">
+                    <div class="mb-2">
                         <label for="quick_title" class="form-label">כותרת</label>
                         <input type="text" class="form-control" id="quick_title" required autofocus>
                         <div class="quick-color-picker mt-2" role="radiogroup" aria-label="צבע האירוע">
@@ -21,36 +21,25 @@
                             <button type="button" class="quick-color-swatch color-green" data-color="green" title="ירוק" aria-label="ירוק"></button>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="quick_gregorian_date" class="form-label">תאריך לועזי</label>
-                            <input type="date" class="form-control" id="quick_gregorian_date" required>
+                    <div class="quick-when">
+                        <div class="quick-field quick-field-date">
+                            <label for="quick_gregorian_date" class="form-label">תאריך</label>
+                            <input type="date" class="form-control" id="quick_gregorian_date" dir="ltr" required>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="quick-field quick-field-time">
+                            <label for="quick_time" class="form-label">שעה</label>
+                            <input type="time" class="form-control" id="quick_time" dir="ltr" step="60">
+                        </div>
+                        <div class="quick-field quick-field-hebrew">
                             <label for="quick_hebrew_date" class="form-label">תאריך עברי</label>
                             <input type="text" class="form-control" id="quick_hebrew_date" readonly required>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label" for="quick_hour">שעה</label>
-                            <div class="quick-time-fields">
-                                <select class="form-select" id="quick_hour" aria-label="שעה">
-                                    <option value="">--</option>
-                                </select>
-                                <span class="quick-time-separator">:</span>
-                                <select class="form-select" id="quick_minute" aria-label="דקות">
-                                    <option value="">--</option>
-                                    <option value="00">00</option>
-                                    <option value="15">15</option>
-                                    <option value="30">30</option>
-                                    <option value="45">45</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
+                    <div class="quick-end-wrap">
+                        <button type="button" class="quick-end-toggle" id="quick_end_toggle" aria-expanded="false" aria-controls="quick_end_date">+ תאריך סיום</button>
+                        <div class="quick-end-field">
                             <label for="quick_end_date" class="form-label">תאריך סיום</label>
-                            <input type="date" class="form-control" id="quick_end_date">
+                            <input type="date" class="form-control" id="quick_end_date" dir="ltr">
                         </div>
                     </div>
                     <div class="mb-0">

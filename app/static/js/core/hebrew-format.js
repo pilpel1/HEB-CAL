@@ -10,7 +10,7 @@ function get_hebrew_day(day) {
 }
 
 function getShortMonthName(month) {
-    const shortMonths = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 
+    const shortMonths = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני',
                         'יולי', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
     return shortMonths[month];
 }

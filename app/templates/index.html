@@ -8,7 +8,7 @@
     <div class="calendar-toolbar">
         <h2 id="current-month" class="toolbar-month-label" aria-live="polite"></h2>
         <div class="calendar-nav">
-            <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
+            <button type="button" class="btn btn-outline-primary btn-today" id="goToTodayBtn" onclick="goToToday()">היום</button>
             <div class="dropdown d-inline-block">
                 <button class="btn btn-outline-primary dropdown-toggle" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false">
                     דלג לתאריך...
@@ -63,6 +63,22 @@
         </div>
         <div id="calendar-boot-status" class="calendar-boot-status" aria-live="polite">טוען לוח…</div>
     </div>
+    <div id="agenda-resize" class="agenda-resize" role="separator" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" aria-valuetext="20 אחוז לפאנל" aria-label="שינוי גודל הפאנל" aria-controls="day-agenda" tabindex="0">
+        <span class="agenda-resize-grip" aria-hidden="true"></span>
+        <button type="button" id="agenda-resize-restore" class="agenda-resize-restore" tabindex="-1" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M3.2 10.2 8 5.4l4.8 4.8-1.1 1.1L8 7.6 4.3 11.3z"/>
+            </svg>
+        </button>
+    </div>
+    <section id="day-agenda" class="day-agenda" aria-label="אירועי היום הנבחר">
+        <div class="day-agenda-head">
+            <h3 id="day-agenda-title" class="day-agenda-title"></h3>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="density-toggle" aria-pressed="false">צפוף</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="day-agenda-add">הוסף</button>
+        </div>
+        <ul id="day-agenda-list" class="day-agenda-list"></ul>
+    </section>
 </div>
 
 {% include 'partials/quick_event_modal.html' %}
