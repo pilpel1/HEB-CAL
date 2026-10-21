@@ -42,6 +42,37 @@
     color: var(--bs-secondary-color);
 }
 
+/*
+ * לוח אינסופי — המרקאפ החדש (כותרת הכלים, כותרת ימים דביקה, מסך טעינה,
+ * סימון ראש חודש). הצבעים הקשיחים יושבים ב-calendar.css.
+ */
+[data-bs-theme="dark"] .infinite-calendar .toolbar-month-label {
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .infinite-calendar .weekday-header {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .infinite-calendar .weekday-header > div {
+    color: var(--bs-body-color);
+    border-inline-end-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .calendar-boot-status {
+    background: var(--bs-body-bg);
+    color: var(--bs-secondary-color);
+}
+
+/* #1a56a8 על רקע כהה יוצא ~1.9:1 — כחול בהיר שומר על הסימון ונקרא */
+[data-bs-theme="dark"] .dates-container .gregorian-date.month-start,
+[data-bs-theme="dark"] .dates-container .hebrew-date.month-start {
+    color: #9ec5ff;
+    background: rgba(74, 144, 226, 0.22);
+    border-color: rgba(158, 197, 255, 0.7);
+}
+
 /* היום הנוכחי — ירוק כהה במקום ירוק פסטל */
 [data-bs-theme="dark"] .calendar-day.today,
 [data-bs-theme="dark"] .current-day,
