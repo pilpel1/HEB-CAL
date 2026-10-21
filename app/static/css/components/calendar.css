@@ -31,6 +31,10 @@
     gap: 0.5rem;
 }
 
+#enterShiftsBtn[hidden] {
+    display: none !important;
+}
+
 .calendar-events-list-btn {
     margin-inline-start: 0.75rem;
 }
@@ -782,6 +786,12 @@
 
     .infinite-calendar .calendar-nav > .theme-toggle-btn:not(.density-toggle-btn) {
         grid-row: 2;
+    }
+
+    /* שורה שלישית, בלי לדחוף את רשת 2×2 של הכפתורים ואת עמודת האייקונים */
+    .infinite-calendar .calendar-nav > #enterShiftsBtn {
+        grid-column: 1 / 3;
+        grid-row: 3;
     }
 
     .calendar-events-list-btn {

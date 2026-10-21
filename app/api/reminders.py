@@ -22,6 +22,15 @@ def _person_error(exc: ValueError):
     return jsonify({"error": str(exc), "success": False}), 400
 
 
+def _person_extras(data: dict) -> dict:
+    extra = {}
+    if "color" in data:
+        extra["color"] = data.get("color")
+    if "shift_allowed" in data:
+        extra["shift_allowed"] = data.get("shift_allowed")
+    return extra
+
+
 @api.route("/reminder-people", methods=["GET"])
 def get_reminder_people():
     return jsonify(list_people())
@@ -31,7 +40,11 @@ def get_reminder_people():
 def add_reminder_person():
     data = _payload()
     try:
-        person = create_person(data.get("name"), data.get("telegram_chat_id"))
+        person = create_person(
+            data.get("name"),
+            data.get("telegram_chat_id"),
+            **_person_extras(data),
+        )
     except ValueError as exc:
         return _person_error(exc)
     return jsonify(person), 201
@@ -41,7 +54,12 @@ def add_reminder_person():
 def edit_reminder_person(person_id):
     data = _payload()
     try:
-        person = update_person(person_id, data.get("name"), data.get("telegram_chat_id"))
+        person = update_person(
+            person_id,
+            data.get("name"),
+            data.get("telegram_chat_id"),
+            **_person_extras(data),
+        )
     except ValueError as exc:
         return _person_error(exc)
     if person is None:

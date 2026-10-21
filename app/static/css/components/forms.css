@@ -448,6 +448,177 @@
     font-variant-numeric: tabular-nums;
 }
 
+#personShiftFields[hidden],
+.shift-week-nav[hidden],
+.shift-person-row[hidden],
+#shiftGrid[hidden],
+#shiftEntryEmpty[hidden] {
+    display: none !important;
+}
+
+.shift-person-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.8rem;
+}
+
+.shift-color-dot {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.shift-color-dot.color-cyan { background-color: rgb(0, 255, 255); }
+.shift-color-dot.color-yellow { background-color: rgb(255, 255, 0); }
+.shift-color-dot.color-orange { background-color: rgb(255, 165, 0); }
+.shift-color-dot.color-green { background-color: rgb(0, 128, 0); }
+
+.shift-person-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.shift-person-field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.shift-person-row > .shift-color-dot {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-bottom: 0.65rem;
+}
+
+.shift-week-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.55rem;
+}
+
+.shift-week-nav .btn {
+    min-width: 4.5rem;
+    min-height: 40px;
+    padding: 0.25rem 0.45rem;
+}
+
+.shift-week-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.92rem;
+    line-height: 1.25;
+}
+
+.shift-matrix {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.shift-matrix th,
+.shift-matrix td {
+    text-align: center;
+    padding: 0;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.shift-matrix thead th {
+    padding: 0.2rem 0 0.35rem;
+    color: var(--bs-secondary-color, #6c757d);
+    font-weight: 700;
+}
+
+.shift-matrix .shift-label-cell {
+    width: 3.4rem;
+    text-align: right;
+    font-size: 0.8rem;
+    padding-inline-end: 0.15rem;
+}
+
+.shift-matrix .shift-day-num {
+    font-weight: 500;
+    font-size: 0.68rem;
+}
+
+.shift-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    margin: 0;
+}
+
+.shift-cell input {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin: 0;
+}
+
+.shift-cell.is-disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+}
+
+.shift-all-days {
+    display: block;
+    margin-top: 0.1rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary-color, #2563eb);
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+#shiftEntryModal .modal-footer .btn,
+#shiftEntryModal .form-select {
+    min-height: 40px;
+}
+
+@media (max-width: 480px) {
+    #shiftEntryModal .modal-dialog {
+        margin: 0.5rem auto;
+        max-height: calc(100dvh - 1rem);
+        min-height: 0;
+    }
+
+    #shiftEntryModal .modal-content {
+        max-height: calc(100dvh - 1rem);
+        overflow: hidden;
+    }
+
+    #shiftEntryModal .modal-body {
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    #shiftEntryModal .modal-footer .btn {
+        min-height: 40px;
+    }
+
+    .shift-matrix .shift-label-cell {
+        width: 3.15rem;
+        font-size: 0.75rem;
+    }
+
+    #personShiftMatrix .shift-label-cell {
+        width: 4.4rem;
+    }
+}
+
 .reminder-help {
     font-size: 0.92rem;
 }

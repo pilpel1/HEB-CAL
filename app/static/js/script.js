@@ -16,8 +16,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof initReminderNotifications === 'function') {
         initReminderNotifications();
     }
+    if (typeof initShiftSettings === 'function') {
+        initShiftSettings();
+    }
     if (typeof initReminderPeoplePage === 'function') {
         initReminderPeoplePage();
+    }
+    if (typeof initShiftEntry === 'function') {
+        initShiftEntry();
     }
 
     if (isInfiniteCalendarPage()) {

@@ -333,6 +333,9 @@ def expand_event(event: dict, exceptions: list[dict] | None, range_from: date, r
                 **rule,
                 **display,
                 "reminders": event.get("reminders") or [],
+                "is_shift": 1 if event.get("is_shift") else 0,
+                "shift_person_id": event.get("shift_person_id"),
+                "shift_label": event.get("shift_label") or None,
             })
 
         if start > limit:

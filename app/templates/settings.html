@@ -13,9 +13,19 @@
         </div>
     </div>
 
+    <div class="card mb-3" id="shiftSettings">
+        <div class="card-body">
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="shiftsEnabled">
+                <label class="form-check-label" for="shiftsEnabled">הפעלת משמרות בבית הזה</label>
+            </div>
+            <p class="text-muted small mb-0">כשזה דלוק, בלוח מופיע כפתור «הזן משמרות». כל משמרת נשמרת כאירוע רגיל של יום שלם — בוקר, ערב או לילה, בלי שעות — בצבע של האדם. אפשר לערוך או למחוק אותו כמו כל אירוע, וגם להוסיף לו תזכורת.</p>
+        </div>
+    </div>
+
     <div class="card mb-3">
         <div class="card-body">
-            <p class="mb-3">כל אדם כאן יכול לקבל תזכורת בטלגרם. בלי מזהה צ׳אט עדיין אפשר להזכיר בדפדפן כשהלוח פתוח.</p>
+            <p class="mb-3">כל אדם כאן יכול לקבל תזכורת בטלגרם. בלי מזהה צ׳אט עדיין אפשר להזכיר בדפדפן כשהלוח פתוח. כשמשמרות דלוקות, לאותו אדם יש גם צבע ומשמרות מותרות.</p>
             <form id="reminderPersonForm" class="row g-2 align-items-end">
                 <input type="hidden" id="reminderPersonId" value="">
                 <div class="col-12 col-md-4">
@@ -29,6 +39,19 @@
                 <div class="col-12 col-md-4 d-flex gap-2">
                     <button type="submit" class="btn btn-primary" id="reminderPersonSave">הוספה</button>
                     <button type="button" class="btn btn-outline-secondary" id="reminderPersonCancel" hidden>ביטול</button>
+                </div>
+                <div class="col-12" id="personShiftFields" hidden>
+                    <div class="form-label mb-1">צבע בלוח</div>
+                    <div class="quick-color-picker mb-2" id="personColorPicker" role="radiogroup" aria-label="צבע האדם">
+                        <button type="button" class="quick-color-swatch is-none is-selected" data-color="" title="ללא צבע" aria-label="ללא צבע"></button>
+                        <button type="button" class="quick-color-swatch color-cyan" data-color="cyan" title="ציאן" aria-label="ציאן"></button>
+                        <button type="button" class="quick-color-swatch color-yellow" data-color="yellow" title="צהוב" aria-label="צהוב"></button>
+                        <button type="button" class="quick-color-swatch color-orange" data-color="orange" title="כתום" aria-label="כתום"></button>
+                        <button type="button" class="quick-color-swatch color-green" data-color="green" title="ירוק" aria-label="ירוק"></button>
+                    </div>
+                    <div class="form-label mb-1">משמרות מותרות</div>
+                    <p class="text-muted small mb-1">בלי שעות. אפשר לסמן רק חלק מהימים — למשל בלי שישי-שבת, או בלי לילה.</p>
+                    <div id="personShiftMatrix"></div>
                 </div>
             </form>
             <p id="reminderPersonError" class="reminder-form-error mt-2" hidden></p>

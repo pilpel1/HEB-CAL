@@ -316,3 +316,21 @@
 [data-bs-theme="dark"] .reminder-person-row {
     border-bottom-color: var(--bs-border-color);
 }
+
+[data-bs-theme="dark"] .shift-matrix th,
+[data-bs-theme="dark"] .shift-matrix td {
+    border-bottom-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .shift-matrix thead th,
+[data-bs-theme="dark"] .shift-person-meta {
+    color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .shift-all-days {
+    color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .shift-color-dot {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
