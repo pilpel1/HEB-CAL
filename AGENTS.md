@@ -38,12 +38,14 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
+`requirements-dev.txt` pulls in `requirements.txt` plus `pytest` and `playwright`. Pytest does not need a browser. The two scripts under `scripts/` do: after the pip install, run `python -m playwright install chromium` once (the browser binary is not a pip package).
+
 Manual checks:
 
 - Start the app (above) and use the browser UI.
-- **`scripts/verify_infinite_scroll.py`** — headless Playwright check of the infinite calendar (refresh lands on today, no jump-backs or empty cells while scrolling, jump-to-date, today button). Needs `pip install playwright && python -m playwright install chromium` and a running app; not part of `pytest`. Run against a temp DB (`DATABASE_PATH=/tmp/x.sqlite`) if you use `--seed-events`. `--smooth` uses full Chromium with Chrome's real scroll pipeline; `--fake-today YYYY-MM-DD` pins the browser date.
+- **`scripts/verify_infinite_scroll.py`** — headless Playwright check of the infinite calendar (refresh lands on today, no jump-backs or empty cells while scrolling, jump-to-date, today button). Not part of `pytest`. Run against a temp DB (`DATABASE_PATH=/tmp/x.sqlite`) if you use `--seed-events`. `--smooth` uses full Chromium with Chrome's real scroll pipeline; `--fake-today YYYY-MM-DD` pins the browser date.
 - **`scripts/smoke_ui.py`** — Playwright smoke of add/edit/delete (calendar + events list), search, JSON export, today button, jump-to-date, and zero console errors. Same browser setup. It writes and deletes events, so point the app at a temp DB. `--snapshot PATH` dumps UI state (globals, rendered calendar HTML, modal titles, context-menu markup) for a before/after diff.
-- **`test_calendar.py`** — standalone script that exercises pyluach/calendar logic (run with `python test_calendar.py` from the repo root when debugging Hebrew dates/holidays).
+- **`test_calendar.py`** — standalone script at the repo root (not under `tests/`, so pytest does not collect it) that exercises pyluach/calendar logic. Run with `python test_calendar.py` from the repo root when debugging Hebrew dates/holidays.
 
 ## File map (key modules)
 
@@ -55,8 +57,9 @@ Manual checks:
 | `app/api/events.py` | Event CRUD endpoints |
 | `app/services/jewish_calendar.py` | Jewish calendar / holiday helpers |
 | `app/services/hebrew_format.py` | Hebrew date text normalization/formatting |
-| `app/services/calendar_service.py`, `event_service.py` | Higher-level calendar/event logic |
+| `app/services/calendar_service.py`, `event_service.py` | Not imported anywhere. Live paths are `app/api/` (calendar + Jewish events) and `app/database.py` (event CRUD) |
 | `app/static/js/script.js` | UI entry only: the `DOMContentLoaded` bootstrap. Comment at the top explains the global scope |
+| `app/static/js/theme.js` | Light/dark toggle. `localStorage` key `heb-cal-theme`. Loaded from `base.html` before `script.js`. The inline script in `<head>` sets `data-bs-theme` before CSS so the page does not flash. Button markup: `partials/theme_toggle.html` |
 | `app/static/js/core/dates.js` | `YYYY-MM-DD` helpers, week/month math, date-range checks |
 | `app/static/js/core/hebrew-format.js` | Hebrew day letters, month names, toolbar label, short dates in the modal title |
 | `app/static/js/core/api.js` | `fetch` GET helpers: month calendar, Jewish events, `/api/events` |
@@ -71,16 +74,19 @@ Manual checks:
 | `app/static/js/events/quick-event-modal.js` | Quick-event modal: fields, time parsed out of the title, color, submit |
 | `app/static/js/events/context-menu.js` | Right-click menu on the calendar |
 | `app/templates/events_list.html` (inline `<script>`) | Events-list page: search, advanced search, import/export, pagination. Not a separate file |
-| `app/templates/` | Jinja2: `base.html`, `index.html`, `events_list.html`, partials |
-| `app/static/css/` | Component CSS (calendar, forms, variables) |
+| `app/templates/` | Jinja2: `base.html`, `index.html`, `events_list.html`, partials (`quick_event_modal.html`, `theme_toggle.html`) |
+| `app/static/css/` | `style.css` imports `components/`: variables, calendar, events-table, forms, dark-theme |
+| `tests/` | Pytest (`pytest.ini` sets `testpaths = tests`). `conftest.py` points the app at a temp SQLite file, never `data/calendar.db`. Modules: `test_events_api.py` (CRUD, search, import/export), `test_calendar_month_api.py`, `test_hebrew_format.py`, `test_jewish_calendar.py`, `test_static_scripts.py` (404s and duplicate top-level `const`/`let`), `test_theme.py` |
+| `scripts/verify_infinite_scroll.py`, `scripts/smoke_ui.py` | Playwright checks. Not collected by pytest. See Test |
+| `test_calendar.py` | Manual pyluach script at the repo root. Not part of pytest |
 | `init_db.py` | Optional DB init helper |
 
 ## Known issues / repo reality
 
 1. **Schema lives in `app/database.py`.** Tables are created and evolved at startup (inline SQL). There is no Alembic/Flask-Migrate workflow in this repo.
 2. **Telegram bot is planned, not started.** Optional `BOT_TOKEN` in `.env` is reserved for a future integration; there is no `bot/` package in the tree yet.
-3. **Frontend JS is classic scripts, one shared global scope** (see the lessons below). `base.html` loads `script.js` and then the `core/` / `calendar/` / `events/` files. Search, import, and export live in the inline script of `events_list.html`, not in those files.
-4. **Branch `feature/infinite-scroll-calendar`** holds unmerged infinite-scroll calendar work — do not confuse with `main` when merging or reviewing.
+3. **Frontend JS is classic scripts, one shared global scope** (see the lessons below). `base.html` loads `theme.js`, then `script.js`, then the `core/` / `calendar/` / `events/` files. Search, import, and export live in the inline script of `events_list.html`, not in those files.
+4. **`origin/feature/infinite-scroll-calendar` is a stale snapshot, not the current UI.** The infinite calendar is on `main`: it landed as the scroll-stability work, then `script.js` was split into `app/static/js/core/` and `app/static/js/calendar/`. That remote branch is still the older monolithic `script.js`. Do not merge it back and do not treat it as the source of truth.
 
 ## Infinite calendar — lessons (scroll stability)
 
@@ -114,4 +120,8 @@ The home page is a continuous stream of week rows scrolled inside `#calendar-str
 
 ## Dependencies (high level)
 
-See `requirements.txt`: `flask`, `pyluach`, `convertdate`, `python-hebrew-numbers`, `python-dotenv`.
+Runtime (`requirements.txt`): `flask`, `pyluach`, `python-hebrew-numbers`, `python-dotenv`.
+
+Hebrew dates in the API go through pyluach (`GregorianDate.to_heb()`), same month numbering as the old `convertdate.hebrew.from_gregorian` (Nisan = 1, Adar II = 13). `convertdate` is not a dependency: its latest release still calls the deprecated `month_days` wrapper from inside `to_jd`.
+
+Dev (`requirements-dev.txt`): the runtime file, plus `pytest` and `playwright`. Chromium for the scripts: `python -m playwright install chromium`.

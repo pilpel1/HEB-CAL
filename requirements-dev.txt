@@ -1,2 +1,6 @@
 -r requirements.txt
 pytest>=8.0,<9
+# scripts/smoke_ui.py and scripts/verify_infinite_scroll.py.
+# The Chromium binary is not a pip package:
+#   python -m playwright install chromium
+playwright>=1.40
