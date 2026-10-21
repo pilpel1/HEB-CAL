@@ -67,35 +67,54 @@ function assertEndDateNotBeforeStart(startDate, endDate, endInput = null) {
 
 let currentDate = new Date();
 
-// מונע מהדפדפן להחזיר scroll ישן אחרי רענון (זה מה שזרק אותנו ליוני/אוקטובר)
+// הלוח גולל בתוך #calendar-stream ולא ב-window — אין מיקום ישן שהדפדפן צריך לשחזר
 if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual';
 }
 
-/** מצב לוח אינסופי — שבועות רציפים בלי תאים ריקים בין חודשים */
+/*
+ * לוח אינסופי — רצף שבועות (ראשון–שבת) בתוך מיכל גלילה משלו (#calendar-stream).
+ *
+ * כללים שהקוד הזה נשען עליהם:
+ * - כל שינוי DOM שיכול להזיז תוכן מעל המסך עובר דרך preserveScrollAnchor:
+ *   מודדים שורה גלויה לפני ואחרי ומתקנים scrollTop באותו task, לפני paint.
+ * - overflow-anchor: none על המיכל, אחרת הדפדפן מפצה פעם שנייה.
+ * - תיקוני גלילה מיידיים בלבד: Bootstrap שם scroll-behavior: smooth על :root,
+ *   ו-scrollTo "מיידי" שהופך לאנימציה הוא מה שגרם לגלילה הנראית ולקפיץ.
+ * - שורת שבוע נכנסת ל-DOM רק כשכל 7 הימים שלה כבר בזיכרון — אין תאים ריקים.
+ */
+const INFINITE_CONFIG = {
+    /** חודשים סביב היעד שנטענים לפני שהלוח נחשף */
+    bootMonthsRadius: 3,
+    /** חודשי נתונים שנשמרים מוכנים מעבר לקצוות של מה שמרונדר */
+    prefetchMonths: 18,
+    /** כמה גבהי מסך מרונדרים מעבר לכל קצה */
+    renderAheadScreens: 4,
+    /** שורות רחוקות מזה (בגבהי מסך) נמחקות כשהגלילה נעצרת */
+    trimBeyondScreens: 8,
+    weeksPerBatch: 4,
+    bootWeeksRadius: 14,
+    idleMs: 180,
+    /** קפיצה רחוקה מזה (בגבהי מסך) — מיידית במקום smooth */
+    smoothJumpMaxScreens: 4,
+    fontWaitMs: 1500,
+};
+
 const infiniteCalendar = {
-    loaded: new Map(), // key "YYYY-M" → { year, month, title }
-    earliest: null,
-    latest: null,
-    loadingPrev: false,
-    loadingNext: false,
-    maintainingBuffer: false,
+    stream: null,
+    body: null,
+    monthData: new Map(), // "YYYY-M" → { days: Map(dateStr → day), jewish: { dateStr: events[] } }
+    monthRequests: new Map(), // "YYYY-M" → Promise
     eventsCache: null,
-    jewishCache: new Map(), // key "YYYY-M" → { dateStr: events[] }
-    observers: [],
+    firstWeek: null, // YYYY-MM-DD של יום ראשון בשורה הראשונה ב-DOM
+    lastWeek: null,
+    anchor: null, // { row, offset, scrollTop } — שורה גלויה ומרחקה מראש אזור התוכן
     initialized: false,
-    readyForInfinite: false,
-    /** כמה חודשים לשמור מכל צד של מה שעל המסך */
-    bufferMonths: 3,
-    /** טעינה ראשונית: היום ± הרדיוס */
-    initialRadius: 3,
-    maxLoadedMonths: 24,
+    ready: false,
     isScrolling: false,
-    scrollIdleTimer: null,
-    pendingPrune: null,
-    bufferRaf: null,
-    /** אחרי חשיפה — לא לרוץ buffer מיד (מונע קפיצות/prepend) */
-    suppressBufferUntil: 0,
+    smoothScrolling: false,
+    idleTimer: null,
+    maintainRaf: null,
 };
 
 function monthKey(year, month) {
@@ -107,6 +126,10 @@ function shiftMonth(year, month, delta) {
     return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
+function splitDateStr(dateStr) {
+    return dateStr.split('-').map(Number);
+}
+
 function isInfiniteCalendarPage() {
     return Boolean(document.getElementById('calendar-weeks'));
 }
@@ -115,24 +138,15 @@ function getWeeksBody() {
     return document.getElementById('calendar-weeks');
 }
 
-function weekdayIndex(year, month, day) {
-    // Sunday = 0 ... Saturday = 6 (תואם לסדר העמודות שלנו)
-    return new Date(year, month - 1, day).getDay();
+function weekStartOf(dateStr) {
+    const [y, m, d] = splitDateStr(dateStr);
+    const date = new Date(y, m - 1, d);
+    date.setDate(date.getDate() - date.getDay());
+    return formatDate(date);
 }
 
-function createPlaceholderCell() {
-    const cell = document.createElement('td');
-    cell.className = 'day-placeholder';
-    return cell;
-}
-
-function createEmptyWeekRow() {
-    const row = document.createElement('tr');
-    row.className = 'week-row';
-    for (let i = 0; i < 7; i += 1) {
-        row.appendChild(createPlaceholderCell());
-    }
-    return row;
+function weekDatesOf(weekStart) {
+    return Array.from({ length: 7 }, (_, i) => addDaysToDateStr(weekStart, i));
 }
 
 function buildDayCell(year, month, day) {
@@ -184,61 +198,6 @@ function getRealDays(calendarData) {
     return calendarData.filter((day) => day.gregorian_day);
 }
 
-function weekRowsOf(tbody) {
-    return [...tbody.querySelectorAll('tr.week-row')];
-}
-
-/**
- * שבוע מתחיל ביום ראשון — מפתח YYYY-MM-DD לזיהוי שורת שבוע משותפת בין חודשים.
- */
-function weekStartOf(year, month, day) {
-    const d = new Date(year, month - 1, day);
-    d.setDate(d.getDate() - d.getDay());
-    return formatDate(d);
-}
-
-function ensureWeekRow(tbody, weekStartStr) {
-    let row = tbody.querySelector(`tr.week-row[data-week-start="${weekStartStr}"]`);
-    if (row) {
-        return row;
-    }
-
-    row = createEmptyWeekRow();
-    row.dataset.weekStart = weekStartStr;
-
-    const following = weekRowsOf(tbody).find((w) => w.dataset.weekStart > weekStartStr);
-    if (following) {
-        tbody.insertBefore(row, following);
-    } else {
-        tbody.appendChild(row);
-    }
-    return row;
-}
-
-/**
- * תופר ימי חודש לתוך רשת שבועות רציפה.
- * placeholders נשארים רק בקצוות הטווח שטרם נטען — לא בין חודשים.
- */
-function stitchMonthDays(tbody, year, month, days) {
-    if (!days.length) {
-        return;
-    }
-
-    for (const day of days) {
-        const ws = weekStartOf(year, month, day.gregorian_day);
-        const dow = weekdayIndex(year, month, day.gregorian_day);
-        const weekRow = ensureWeekRow(tbody, ws);
-        const slot = weekRow.children[dow];
-        if (slot && !slot.hasAttribute('data-date')) {
-            weekRow.replaceChild(buildDayCell(year, month, day), slot);
-        }
-    }
-}
-
-function monthTitleFromData(year, data) {
-    return `${data.month_name} ${year} | ${data.hebrew_months.join(' ')} ${data.hebrew_year}`;
-}
-
 const GREGORIAN_MONTH_NAMES_HE = [
     'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
     'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
@@ -259,453 +218,367 @@ async function fetchMonthData(year, month) {
 }
 
 async function fetchJewishMonth(year, month) {
+    const response = await fetch(`/api/jewish-events/month/${year}/${month}`);
+    if (!response.ok) {
+        throw new Error(`Failed to load jewish events ${year}-${month}`);
+    }
+    return response.json();
+}
+
+/** טוען (פעם אחת) נתוני חודש: תאריכים עבריים + חגים/פרשות. מחזיר null בכישלון. */
+function requestMonth(year, month) {
+    const cal = infiniteCalendar;
     const key = monthKey(year, month);
-    if (infiniteCalendar.jewishCache.has(key)) {
-        return infiniteCalendar.jewishCache.get(key);
+    if (cal.monthData.has(key)) {
+        return Promise.resolve(cal.monthData.get(key));
     }
-    try {
-        const response = await fetch(`/api/jewish-events/month/${year}/${month}`);
-        const data = response.ok ? await response.json() : {};
-        infiniteCalendar.jewishCache.set(key, data);
-        return data;
-    } catch (error) {
-        console.error('Error loading monthly jewish events:', error);
-        return {};
+    if (cal.monthRequests.has(key)) {
+        return cal.monthRequests.get(key);
+    }
+
+    const request = Promise.all([fetchMonthData(year, month), fetchJewishMonth(year, month)])
+        .then(([data, jewish]) => {
+            const days = new Map();
+            for (const day of getRealDays(data.calendar)) {
+                days.set(formatDate(new Date(year, month - 1, day.gregorian_day)), day);
+            }
+            const entry = { year, month, days, jewish };
+            cal.monthData.set(key, entry);
+            cal.monthRequests.delete(key);
+            scheduleMaintain();
+            return entry;
+        })
+        .catch((error) => {
+            console.error('Error loading month:', error);
+            // ניסיון חוזר רק אחרי השהיה — שלא נציף שרת שנפל בבקשה בכל פריים גלילה
+            setTimeout(() => cal.monthRequests.delete(key), 3000);
+            return null;
+        });
+    cal.monthRequests.set(key, request);
+    return request;
+}
+
+function monthEntryFor(dateStr) {
+    const [y, m] = splitDateStr(dateStr);
+    return infiniteCalendar.monthData.get(monthKey(y, m)) || null;
+}
+
+function dayInfoFor(dateStr) {
+    return monthEntryFor(dateStr)?.days.get(dateStr) || null;
+}
+
+function isWeekReady(weekStart) {
+    return weekDatesOf(weekStart).every((dateStr) => dayInfoFor(dateStr));
+}
+
+function paintWeekRow(row, events) {
+    const multiDayEvents = events.filter(isMultiDayEvent);
+    const singleDayEvents = events.filter((event) => !isMultiDayEvent(event));
+    const cells = [...row.querySelectorAll('td[data-date]')];
+    const weekDates = cells.map((cell) => cell.dataset.date);
+    const jewishByDate = {};
+    for (const dateStr of weekDates) {
+        jewishByDate[dateStr] = monthEntryFor(dateStr)?.jewish[dateStr] || [];
+    }
+    const { eventLanes } = assignMultiDayLanes(multiDayEvents, weekDates);
+
+    for (const cell of cells) {
+        paintCellEvents(
+            cell,
+            cell.dataset.date,
+            jewishByDate,
+            multiDayEvents,
+            singleDayEvents,
+            eventLanes,
+            weekDates
+        );
     }
 }
 
-function updateEarliestLatest(year, month) {
-    if (!infiniteCalendar.earliest
-        || year < infiniteCalendar.earliest.year
-        || (year === infiniteCalendar.earliest.year && month < infiniteCalendar.earliest.month)) {
-        infiniteCalendar.earliest = { year, month };
+function buildWeekRow(weekStart) {
+    const row = document.createElement('tr');
+    row.className = 'week-row';
+    row.dataset.weekStart = weekStart;
+    for (const dateStr of weekDatesOf(weekStart)) {
+        const [y, m] = splitDateStr(dateStr);
+        row.appendChild(buildDayCell(y, m, dayInfoFor(dateStr)));
     }
-    if (!infiniteCalendar.latest
-        || year > infiniteCalendar.latest.year
-        || (year === infiniteCalendar.latest.year && month > infiniteCalendar.latest.month)) {
-        infiniteCalendar.latest = { year, month };
-    }
+    paintWeekRow(row, infiniteCalendar.eventsCache || []);
+    return row;
 }
 
-/** פיצוי גלילה אחרי שינוי גובה מעל ה-viewport (prepend/prune). */
-function adjustScrollForHeightDelta(beforeHeight) {
-    const delta = document.documentElement.scrollHeight - beforeHeight;
-    if (delta !== 0) {
-        window.scrollTo(0, window.scrollY + delta);
-    }
+/* --- גיאומטריה ועוגן גלילה --- */
+
+/** Y (ב-viewport) שבו מתחיל התוכן הגלוי — מתחת לשורת ימי השבוע הדביקה */
+function contentTopY() {
+    const { stream } = infiniteCalendar;
+    const header = stream.querySelector('.weekday-header');
+    return header ? header.getBoundingClientRect().bottom : stream.getBoundingClientRect().top;
 }
 
-/** מוחק חודש רחוק מהקצה הנגדי — רק כשהגלילה רגועה */
-function pruneFarMonths(keepNearYear, keepNearMonth) {
-    if (infiniteCalendar.isScrolling) {
-        infiniteCalendar.pendingPrune = { year: keepNearYear, month: keepNearMonth };
+/** השורה הראשונה שתחתיתה מתחת ל-y (חיפוש בינארי — השורות ממוינות) */
+function rowAtY(y) {
+    const rows = infiniteCalendar.body.rows;
+    let lo = 0;
+    let hi = rows.length - 1;
+    let found = null;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (rows[mid].getBoundingClientRect().bottom > y) {
+            found = rows[mid];
+            hi = mid - 1;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return found;
+}
+
+function captureAnchor() {
+    const top = contentTopY();
+    const row = rowAtY(top);
+    if (!row) {
+        return null;
+    }
+    return {
+        row,
+        offset: row.getBoundingClientRect().top - top,
+        scrollTop: infiniteCalendar.stream.scrollTop,
+    };
+}
+
+function restoreAnchor(anchor) {
+    if (!anchor || !anchor.row.isConnected) {
         return;
     }
+    const delta = anchor.row.getBoundingClientRect().top - contentTopY() - anchor.offset;
+    if (Math.abs(delta) >= 0.5) {
+        infiniteCalendar.stream.scrollTop += delta;
+    }
+}
 
-    while (infiniteCalendar.loaded.size > infiniteCalendar.maxLoadedMonths) {
-        const keys = [...infiniteCalendar.loaded.keys()];
-        const center = keepNearYear * 12 + keepNearMonth;
-        let farthestKey = keys[0];
-        let farthestDist = -1;
-        for (const key of keys) {
-            const meta = infiniteCalendar.loaded.get(key);
-            const dist = Math.abs(meta.year * 12 + meta.month - center);
-            if (dist > farthestDist) {
-                farthestDist = dist;
-                farthestKey = key;
-            }
-        }
-        if (farthestDist <= 3) {
+/** מריץ שינוי DOM סינכרוני ומשאיר את מה שעל המסך בדיוק באותו מקום */
+function preserveScrollAnchor(mutate) {
+    const anchor = captureAnchor();
+    const result = mutate();
+    restoreAnchor(anchor);
+    infiniteCalendar.anchor = captureAnchor();
+    return result;
+}
+
+/** scrollTop שמציב את התאריך למעלה (מתחת לכותרת) או במרכז; null אם לא מרונדר */
+function scrollTargetFor(dateStr, align) {
+    const { stream, body } = infiniteCalendar;
+    const cell = body.querySelector(`td[data-date="${dateStr}"]`);
+    if (!cell) {
+        return null;
+    }
+    const row = cell.parentElement;
+    const streamTop = stream.getBoundingClientRect().top;
+    const headerHeight = contentTopY() - streamTop;
+    const rowTop = row.getBoundingClientRect().top - streamTop + stream.scrollTop;
+    if (align === 'center') {
+        const visibleHeight = stream.clientHeight - headerHeight;
+        return rowTop - headerHeight - Math.max(0, (visibleHeight - row.offsetHeight) / 2);
+    }
+    return rowTop - headerHeight;
+}
+
+/* --- הרחבה / קיצוץ של טווח השבועות --- */
+
+function appendWeeks(count) {
+    const cal = infiniteCalendar;
+    const fragment = document.createDocumentFragment();
+    let added = 0;
+    let next = addDaysToDateStr(cal.lastWeek, 7);
+    while (added < count && isWeekReady(next)) {
+        fragment.appendChild(buildWeekRow(next));
+        cal.lastWeek = next;
+        next = addDaysToDateStr(next, 7);
+        added += 1;
+    }
+    if (added) {
+        // הוספה מתחת לכל מה שעל המסך — לא מזיזה כלום, אין צורך בעוגן
+        cal.body.appendChild(fragment);
+    }
+    return added;
+}
+
+function prependWeeks(count) {
+    const cal = infiniteCalendar;
+    const rows = [];
+    let prev = addDaysToDateStr(cal.firstWeek, -7);
+    while (rows.length < count && isWeekReady(prev)) {
+        rows.unshift(buildWeekRow(prev));
+        prev = addDaysToDateStr(prev, -7);
+    }
+    if (!rows.length) {
+        return 0;
+    }
+    preserveScrollAnchor(() => {
+        cal.body.prepend(...rows);
+        cal.firstWeek = rows[0].dataset.weekStart;
+    });
+    return rows.length;
+}
+
+function trimFarWeeks() {
+    const cal = infiniteCalendar;
+    const { stream, body } = cal;
+    const limit = stream.clientHeight * INFINITE_CONFIG.trimBeyondScreens;
+    const viewTop = stream.getBoundingClientRect().top;
+    const viewBottom = viewTop + stream.clientHeight;
+
+    const below = [];
+    for (let i = body.rows.length - 1; i > 0; i -= 1) {
+        if (body.rows[i].getBoundingClientRect().top - viewBottom <= limit) {
             break;
         }
-        removeMonthFromStream(farthestKey);
+        below.push(body.rows[i]);
     }
-    infiniteCalendar.pendingPrune = null;
-}
-
-function removeMonthFromStream(key) {
-    const meta = infiniteCalendar.loaded.get(key);
-    if (!meta) {
-        return;
+    if (below.length) {
+        below.forEach((row) => row.remove());
+        cal.lastWeek = body.rows[body.rows.length - 1].dataset.weekStart;
     }
 
-    const tbody = getWeeksBody();
-    if (!tbody) {
-        return;
-    }
-
-    const removingFromTop = infiniteCalendar.earliest
-        && meta.year === infiniteCalendar.earliest.year
-        && meta.month === infiniteCalendar.earliest.month;
-
-    const beforeHeight = removingFromTop ? document.documentElement.scrollHeight : 0;
-
-    tbody.querySelectorAll(`td[data-year="${meta.year}"][data-month="${meta.month}"]`).forEach((cell) => {
-        const row = cell.parentElement;
-        row.replaceChild(createPlaceholderCell(), cell);
-    });
-
-    weekRowsOf(tbody).forEach((row) => {
-        const hasDay = [...row.children].some((c) => c.hasAttribute('data-date'));
-        if (!hasDay) {
-            row.remove();
+    const above = [];
+    for (let i = 0; i < body.rows.length - 1; i += 1) {
+        if (viewTop - body.rows[i].getBoundingClientRect().bottom <= limit) {
+            break;
         }
-    });
-
-    infiniteCalendar.loaded.delete(key);
-    infiniteCalendar.jewishCache.delete(key);
-
-    const remaining = [...infiniteCalendar.loaded.values()]
-        .sort((a, b) => (a.year * 12 + a.month) - (b.year * 12 + b.month));
-    infiniteCalendar.earliest = remaining[0] || null;
-    infiniteCalendar.latest = remaining[remaining.length - 1] || null;
-
-    if (removingFromTop) {
-        adjustScrollForHeightDelta(beforeHeight);
+        above.push(body.rows[i]);
+    }
+    if (above.length) {
+        preserveScrollAnchor(() => {
+            above.forEach((row) => row.remove());
+            cal.firstWeek = body.rows[0].dataset.weekStart;
+        });
     }
 }
 
-async function loadMonth(year, month, { prepend = false } = {}) {
-    const key = monthKey(year, month);
-    if (infiniteCalendar.loaded.has(key)) {
-        return infiniteCalendar.loaded.get(key);
-    }
-
-    const tbody = getWeeksBody();
-    if (!tbody) {
-        return null;
-    }
-
-    try {
-        // רשת קודם — רק אחר כך נוגעים ב-DOM
-        const [data, jewishByDate] = await Promise.all([
-            fetchMonthData(year, month),
-            fetchJewishMonth(year, month),
-        ]);
-        // מוודאים שאירועי משתמש ב-cache לפני צביעה סינכרונית
-        await getCachedEvents();
-
-        const days = getRealDays(data.calendar);
-        const meta = {
-            year,
-            month,
-            monthName: data.month_name,
-            title: monthTitleFromData(year, data),
-        };
-
-        infiniteCalendar.loaded.set(key, meta);
-        updateEarliestLatest(year, month);
-
-        if (prepend) {
-            const booting = document.querySelector('.infinite-calendar.is-booting');
-            const todayCell = !booting ? getTodayCell() : null;
-            const beforeTop = todayCell ? todayCell.getBoundingClientRect().top : null;
-            const beforeHeight = document.documentElement.scrollHeight;
-
-            stitchMonthDays(tbody, year, month, days);
-            await paintEventsForMonth(year, month, jewishByDate);
-
-            // בזמן boot לא מיישרים — קופצים ל"היום" פעם אחת בסוף
-            if (!booting) {
-                if (todayCell && todayCell.isConnected && beforeTop !== null) {
-                    window.scrollBy(0, todayCell.getBoundingClientRect().top - beforeTop);
-                } else {
-                    adjustScrollForHeightDelta(beforeHeight);
-                }
-            }
-        } else {
-            stitchMonthDays(tbody, year, month, days);
-            await paintEventsForMonth(year, month, jewishByDate);
+function prefetchAroundRenderedRange() {
+    const cal = infiniteCalendar;
+    const [fy, fm] = splitDateStr(cal.firstWeek);
+    const [ly, lm] = splitDateStr(addDaysToDateStr(cal.lastWeek, 6));
+    // הקרובים קודם — הם אלה שהגלילה תצטרך ראשונים
+    for (let i = 0; i <= INFINITE_CONFIG.prefetchMonths; i += 1) {
+        const before = shiftMonth(fy, fm, -i);
+        const after = shiftMonth(ly, lm, i);
+        if (!cal.monthData.has(monthKey(before.year, before.month))) {
+            requestMonth(before.year, before.month);
         }
-
-        if (infiniteCalendar.readyForInfinite) {
-            pruneFarMonths(year, month);
-            updateVisibleMonthLabel();
-        }
-        return meta;
-    } catch (error) {
-        console.error('Error loading month:', error);
-        infiniteCalendar.loaded.delete(key);
-        return null;
-    }
-}
-
-async function resetStreamAround(year, month) {
-    const tbody = getWeeksBody();
-    if (!tbody) {
-        return;
-    }
-
-    tbody.innerHTML = '';
-    infiniteCalendar.loaded.clear();
-    infiniteCalendar.jewishCache.clear();
-    infiniteCalendar.earliest = null;
-    infiniteCalendar.latest = null;
-    infiniteCalendar.eventsCache = null;
-
-    const prev = shiftMonth(year, month, -1);
-    const next = shiftMonth(year, month, 1);
-    await loadMonth(prev.year, prev.month, { prepend: false });
-    await loadMonth(year, month, { prepend: false });
-    await loadMonth(next.year, next.month, { prepend: false });
-}
-
-async function ensureMonthLoaded(year, month) {
-    const key = monthKey(year, month);
-    if (infiniteCalendar.loaded.has(key)) {
-        return infiniteCalendar.loaded.get(key);
-    }
-
-    const farFromRange = !infiniteCalendar.earliest || !infiniteCalendar.latest
-        || (Math.abs(
-            (year * 12 + month)
-            - (infiniteCalendar.latest.year * 12 + infiniteCalendar.latest.month)
-        ) > 2
-        && Math.abs(
-            (year * 12 + month)
-            - (infiniteCalendar.earliest.year * 12 + infiniteCalendar.earliest.month)
-        ) > 2);
-
-    if (farFromRange) {
-        await resetStreamAround(year, month);
-        return infiniteCalendar.loaded.get(key);
-    }
-
-    if (infiniteCalendar.latest) {
-        let cursor = { ...infiniteCalendar.latest };
-        while (
-            cursor.year < year
-            || (cursor.year === year && cursor.month < month)
-        ) {
-            cursor = shiftMonth(cursor.year, cursor.month, 1);
-            // eslint-disable-next-line no-await-in-loop
-            await loadMonth(cursor.year, cursor.month, { prepend: false });
+        if (!cal.monthData.has(monthKey(after.year, after.month))) {
+            requestMonth(after.year, after.month);
         }
     }
-    if (infiniteCalendar.earliest) {
-        let cursor = { ...infiniteCalendar.earliest };
-        while (
-            cursor.year > year
-            || (cursor.year === year && cursor.month > month)
-        ) {
-            cursor = shiftMonth(cursor.year, cursor.month, -1);
-            // eslint-disable-next-line no-await-in-loop
-            await loadMonth(cursor.year, cursor.month, { prepend: true });
-        }
-    }
-
-    if (!infiniteCalendar.loaded.has(key)) {
-        await loadMonth(year, month, { prepend: false });
-    }
-    return infiniteCalendar.loaded.get(key);
-}
-
-async function loadPreviousMonth() {
-    if (!infiniteCalendar.readyForInfinite
-        || infiniteCalendar.loadingPrev
-        || !infiniteCalendar.earliest) {
-        return null;
-    }
-    infiniteCalendar.loadingPrev = true;
-    try {
-        const prev = shiftMonth(
-            infiniteCalendar.earliest.year,
-            infiniteCalendar.earliest.month,
-            -1
-        );
-        return await loadMonth(prev.year, prev.month, { prepend: true });
-    } finally {
-        infiniteCalendar.loadingPrev = false;
-    }
-}
-
-async function loadNextMonth() {
-    if (!infiniteCalendar.readyForInfinite
-        || infiniteCalendar.loadingNext
-        || !infiniteCalendar.latest) {
-        return null;
-    }
-    infiniteCalendar.loadingNext = true;
-    try {
-        const next = shiftMonth(
-            infiniteCalendar.latest.year,
-            infiniteCalendar.latest.month,
-            1
-        );
-        // append למטה — לא מזיז scroll, בטוח גם באמצע גלילה
-        return await loadMonth(next.year, next.month, { prepend: false });
-    } finally {
-        infiniteCalendar.loadingNext = false;
-    }
-}
-
-function visibleMonthIndex() {
-    const probe = findProbeDayCell();
-    if (probe) {
-        return Number(probe.dataset.year) * 12 + Number(probe.dataset.month);
-    }
-    if (infiniteCalendar.latest) {
-        return infiniteCalendar.latest.year * 12 + infiniteCalendar.latest.month;
-    }
-    return null;
 }
 
 /**
- * שומר באפר של חודשים מסביב למה שרואים.
- * למטה (עתיד): מותר לטעון גם תוך כדי גלילה — אין קפיצה.
- * למעלה (עבר): רק כשהגלילה רגועה — prepend מזיז את ה-scroll.
+ * שומר מספיק תוכן מרונדר מעל ומתחת למסך, מזמין נתונים מראש, ומקצץ רחוק כשרגוע.
+ * prepend מותר גם באמצע גלילה מהירה — העוגן מתקן לפני paint, אז אין קפיצה,
+ * ואין "קיר" בראש הרשימה. רק בזמן smooth scroll תכנותי לא מוסיפים למעלה,
+ * כי שינוי scrollTop היה עוצר את האנימציה באמצע הדרך.
  */
-async function maintainMonthBuffer() {
-    if (!infiniteCalendar.readyForInfinite
-        || infiniteCalendar.maintainingBuffer
-        || !infiniteCalendar.earliest
-        || !infiniteCalendar.latest
-        || Date.now() < infiniteCalendar.suppressBufferUntil) {
+function maintainInfiniteCalendar() {
+    const cal = infiniteCalendar;
+    if (!cal.ready) {
         return;
     }
+    const { stream } = cal;
+    const ahead = stream.clientHeight * INFINITE_CONFIG.renderAheadScreens;
+    const batch = INFINITE_CONFIG.weeksPerBatch;
 
-    infiniteCalendar.maintainingBuffer = true;
-    try {
-        const buffer = infiniteCalendar.bufferMonths;
-        let guard = 0;
-
-        // --- עתיד (append) — תמיד מותר ---
-        while (guard < 8) {
-            guard += 1;
-            const vis = visibleMonthIndex();
-            if (vis === null) {
-                break;
-            }
-            const late = infiniteCalendar.latest.year * 12 + infiniteCalendar.latest.month;
-            if (late - vis >= buffer) {
-                break;
-            }
-            // eslint-disable-next-line no-await-in-loop
-            const loaded = await loadNextMonth();
-            if (!loaded) {
-                break;
-            }
+    for (let guard = 0; guard < 50; guard += 1) {
+        if (stream.scrollHeight - stream.scrollTop - stream.clientHeight >= ahead
+            || !appendWeeks(batch)) {
+            break;
         }
-
-        // --- עבר (prepend) — רק בלי מומנטום ---
-        if (infiniteCalendar.isScrolling) {
-            return;
-        }
-
-        guard = 0;
-        while (guard < 8) {
-            guard += 1;
-            const vis = visibleMonthIndex();
-            if (vis === null) {
-                break;
-            }
-            const early = infiniteCalendar.earliest.year * 12 + infiniteCalendar.earliest.month;
-            if (vis - early >= buffer) {
-                break;
-            }
-            // eslint-disable-next-line no-await-in-loop
-            const loaded = await loadPreviousMonth();
-            if (!loaded) {
-                break;
-            }
-        }
-
-        const vis = visibleMonthIndex();
-        if (vis !== null) {
-            const year = Math.floor((vis - 1) / 12);
-            const month = ((vis - 1) % 12) + 1;
-            pruneFarMonths(year, month);
-        }
-    } finally {
-        infiniteCalendar.maintainingBuffer = false;
     }
+
+    if (!cal.smoothScrolling) {
+        for (let guard = 0; guard < 50; guard += 1) {
+            if (stream.scrollTop >= ahead || !prependWeeks(batch)) {
+                break;
+            }
+        }
+    }
+
+    prefetchAroundRenderedRange();
+
+    if (!cal.isScrolling && !cal.smoothScrolling) {
+        trimFarWeeks();
+    }
+
+    cal.anchor = captureAnchor();
+    updateVisibleMonthLabel();
 }
 
-function scheduleMaintainBuffer() {
-    if (infiniteCalendar.bufferRaf) {
+function scheduleMaintain() {
+    const cal = infiniteCalendar;
+    if (!cal.ready || cal.maintainRaf) {
         return;
     }
-    infiniteCalendar.bufferRaf = requestAnimationFrame(() => {
-        infiniteCalendar.bufferRaf = null;
-        maintainMonthBuffer();
+    cal.maintainRaf = requestAnimationFrame(() => {
+        cal.maintainRaf = null;
+        maintainInfiniteCalendar();
     });
 }
 
-function onInfiniteCalendarScroll() {
-    infiniteCalendar.isScrolling = true;
-    updateVisibleMonthLabel();
-
-    // עתיד אפשר למלא תוך כדי גלילה — מונע משבצות ריקות ב-fling למטה
-    scheduleMaintainBuffer();
-
-    if (infiniteCalendar.scrollIdleTimer) {
-        clearTimeout(infiniteCalendar.scrollIdleTimer);
-    }
-    // fallback לדפדפנים בלי scrollend — ארוך מספיק לא לירות באמצע fling
-    infiniteCalendar.scrollIdleTimer = setTimeout(onInfiniteCalendarScrollEnd, 380);
+function onStreamScroll() {
+    const cal = infiniteCalendar;
+    cal.isScrolling = true;
+    clearTimeout(cal.idleTimer);
+    // גיבוי לדפדפנים בלי scrollend (Safari)
+    cal.idleTimer = setTimeout(onStreamScrollEnd, INFINITE_CONFIG.idleMs);
+    scheduleMaintain();
 }
 
-function onInfiniteCalendarScrollEnd() {
-    infiniteCalendar.isScrolling = false;
-    if (infiniteCalendar.scrollIdleTimer) {
-        clearTimeout(infiniteCalendar.scrollIdleTimer);
-        infiniteCalendar.scrollIdleTimer = null;
-    }
-    if (infiniteCalendar.pendingPrune) {
-        const { year, month } = infiniteCalendar.pendingPrune;
-        pruneFarMonths(year, month);
-    }
-    maintainMonthBuffer();
+function onStreamScrollEnd() {
+    const cal = infiniteCalendar;
+    clearTimeout(cal.idleTimer);
+    cal.idleTimer = null;
+    cal.isScrolling = false;
+    cal.smoothScrolling = false;
+    scheduleMaintain();
 }
 
-function findProbeDayCell() {
-    const chrome = document.querySelector('.calendar-sticky-chrome');
-    const probeY = (chrome ? chrome.getBoundingClientRect().bottom : 0) + 48;
-    const probeX = Math.min(window.innerWidth / 2, window.innerWidth - 8);
-    const hitY = Math.min(Math.max(probeY, 8), window.innerHeight - 8);
-
-    const hits = document.elementsFromPoint(probeX, hitY);
-    const fromHit = hits.find((el) => el.matches?.('td[data-date]'))
-        || hits.map((el) => el.closest?.('td[data-date]')).find(Boolean);
-    if (fromHit) {
-        return fromHit;
+/** גובה שורה השתנה בלי שאנחנו ביקשנו (פונט, רוחב חלון) — מחזירים את העוגן לפני paint */
+function onCalendarResize() {
+    const cal = infiniteCalendar;
+    if (!cal.ready || !cal.anchor) {
+        return;
     }
-
-    // fallback: התא הקרוב ביותר לקו הגלילה מתחת לכרום
-    const cells = [...document.querySelectorAll('#calendar-weeks td[data-date]')];
-    let best = null;
-    let bestDist = Infinity;
-    for (const cell of cells) {
-        const rect = cell.getBoundingClientRect();
-        if (rect.bottom < hitY - 120 || rect.top > window.innerHeight) {
-            continue;
-        }
-        const dist = Math.abs(rect.top - hitY);
-        if (dist < bestDist) {
-            bestDist = dist;
-            best = cell;
-        }
+    // אם נגללו מאז שנמדד העוגן, הוא כבר לא מתאר את המסך — שחזור היה מושך אחורה
+    if (cal.stream.scrollTop === cal.anchor.scrollTop) {
+        restoreAnchor(cal.anchor);
     }
-    return best;
+    cal.anchor = captureAnchor();
+    scheduleMaintain();
 }
 
 function updateVisibleMonthLabel() {
     const label = document.getElementById('current-month');
-    if (!label) {
+    if (!label || !infiniteCalendar.body) {
+        return;
+    }
+    // שבת של השורה העליונה: ברגע שה-1 לחודש (לועזי או עברי) מגיע לשורה העליונה, הכותרת מתחלפת
+    const row = rowAtY(contentTopY() + 48);
+    const cell = row?.cells[6];
+    if (!cell) {
         return;
     }
 
-    const dayCell = findProbeDayCell();
-    if (!dayCell) {
-        return;
+    const gregYear = Number(cell.dataset.year);
+    const gregMonth = Number(cell.dataset.month);
+    const text = formatToolbarLabel(
+        gregYear,
+        gregMonth,
+        cell.dataset.hebrewMonth || '',
+        cell.dataset.hebrewYear || ''
+    );
+    if (label.textContent !== text) {
+        label.textContent = text;
     }
-
-    const gregYear = Number(dayCell.dataset.year);
-    const gregMonth = Number(dayCell.dataset.month);
-    const hebrewMonth = dayCell.dataset.hebrewMonth || '';
-    const hebrewYear = dayCell.dataset.hebrewYear || '';
-
-    label.textContent = formatToolbarLabel(gregYear, gregMonth, hebrewMonth, hebrewYear);
     currentDate = new Date(gregYear, gregMonth - 1, 1);
 }
 
@@ -714,234 +587,169 @@ function getTodayDateStr() {
 }
 
 function getTodayCell() {
-    return document.querySelector('#calendar-weeks td.current-day')
-        || document.querySelector(`#calendar-weeks td[data-date="${getTodayDateStr()}"]`);
+    return document.querySelector(`#calendar-weeks td[data-date="${getTodayDateStr()}"]`);
 }
 
-/** קפיצה ישירה ל"היום" — scrollTo מוחלט, בלי scrollIntoView */
-function forceScrollToToday() {
-    const todayCell = getTodayCell();
-    if (!todayCell) {
+function loadMonthsAround(dateStr) {
+    const [y, m] = splitDateStr(dateStr);
+    const radius = INFINITE_CONFIG.bootMonthsRadius;
+    const requests = [];
+    for (let delta = -radius; delta <= radius; delta += 1) {
+        const target = shiftMonth(y, m, delta);
+        requests.push(requestMonth(target.year, target.month));
+    }
+    return Promise.all([...requests, getCachedEvents()]);
+}
+
+/** ממתין לפונט Heebo כדי שגובה השורות לא ישתנה אחרי המיקום הראשוני (עם תקרת זמן) */
+function waitForFonts() {
+    if (!document.fonts || !document.fonts.load) {
+        return Promise.resolve();
+    }
+    const loads = Promise.all(
+        ['400 1em Heebo', '700 1em Heebo'].map((font) => document.fonts.load(font))
+    ).catch(() => {});
+    const timeout = new Promise((resolve) => setTimeout(resolve, INFINITE_CONFIG.fontWaitMs));
+    return Promise.race([loads, timeout]);
+}
+
+/** בונה מחדש את הרצף סביב תאריך וממקם אותו מיידית (למעלה או במרכז) */
+async function renderAround(dateStr, align) {
+    const cal = infiniteCalendar;
+    await loadMonthsAround(dateStr);
+
+    const target = weekStartOf(dateStr);
+    if (!isWeekReady(target)) {
         return false;
     }
-    if (!todayCell.classList.contains('current-day')) {
-        todayCell.classList.add('current-day');
+
+    let first = target;
+    let last = target;
+    for (let i = 0; i < INFINITE_CONFIG.bootWeeksRadius; i += 1) {
+        const prev = addDaysToDateStr(first, -7);
+        if (!isWeekReady(prev)) {
+            break;
+        }
+        first = prev;
+    }
+    for (let i = 0; i < INFINITE_CONFIG.bootWeeksRadius; i += 1) {
+        const next = addDaysToDateStr(last, 7);
+        if (!isWeekReady(next)) {
+            break;
+        }
+        last = next;
     }
 
-    syncChromeHeightVar();
-    const chrome = document.querySelector('.calendar-sticky-chrome');
-    const chromeH = chrome ? chrome.getBoundingClientRect().height : 0;
-    const absoluteTop = todayCell.getBoundingClientRect().top + window.scrollY;
-    const target = Math.max(0, absoluteTop - chromeH - 12);
-    // גם assignment ישיר — יותר אמין מול overflow/restoration
-    window.scrollTo(0, target);
-    document.documentElement.scrollTop = target;
-    if (document.body) {
-        document.body.scrollTop = target;
+    const fragment = document.createDocumentFragment();
+    for (let ws = first; ws <= last; ws = addDaysToDateStr(ws, 7)) {
+        fragment.appendChild(buildWeekRow(ws));
     }
+
+    // הכותרת לפני המיקום — אם היא משנה גובה, זה יקרה לפני שמודדים
+    const day = dayInfoFor(dateStr);
+    const [y, m] = splitDateStr(dateStr);
+    document.getElementById('current-month').textContent = formatToolbarLabel(
+        y,
+        m,
+        day.hebrew_month,
+        day.hebrew_year
+    );
+
+    cal.smoothScrolling = false;
+    cal.body.replaceChildren(fragment);
+    cal.firstWeek = first;
+    cal.lastWeek = last;
+
+    const top = scrollTargetFor(dateStr, align);
+    cal.stream.scrollTop = Math.max(0, top);
+    cal.anchor = captureAnchor();
     updateVisibleMonthLabel();
     return true;
 }
 
-/** האם תא "היום" כבר מתחת לכותרת בטווח סביר */
-function isTodaySettledInView() {
-    const todayCell = getTodayCell();
-    if (!todayCell) {
-        return false;
-    }
-    const chrome = document.querySelector('.calendar-sticky-chrome');
-    const chromeH = chrome ? chrome.getBoundingClientRect().height : 0;
-    const top = todayCell.getBoundingClientRect().top;
-    return top >= chromeH - 8 && top <= chromeH + 80;
-}
-
 /**
- * ממקם על היום מתחת ל-overlay.
- * חשוב: קודם משחררים overflow:hidden (calendar-booting) — אחרת scrollTo לא נתפס.
+ * גלילה לתאריך. קרוב ומרונדר → smooth; רחוק → מיידי;
+ * לא מרונדר או שאין מספיק תוכן סביבו → בנייה מחדש סביבו.
  */
-async function settleOnTodayBeforeReveal() {
-    // Phase 1: unlock scroll, overlay עדיין מכסה
-    document.body.classList.remove('calendar-booting');
-    syncChromeHeightVar();
-    await waitAnimationFrames(2);
-
-    for (let i = 0; i < 4; i += 1) {
-        forceScrollToToday();
-        // eslint-disable-next-line no-await-in-loop
-        await waitAnimationFrames(1);
-        if (isTodaySettledInView()) {
-            break;
-        }
-    }
-
-    // פריים נוסף אחרי fonts/layout
-    await waitAnimationFrames(1);
-    if (!isTodaySettledInView()) {
-        forceScrollToToday();
-        await waitAnimationFrames(1);
-    }
-    return isTodaySettledInView();
-}
-
-function scrollTodayCellIntoView(todayCell, behavior = 'auto') {
-    if (!todayCell.classList.contains('current-day')) {
-        todayCell.classList.add('current-day');
-    }
-    if (behavior === 'smooth') {
-        syncChromeHeightVar();
-        const chrome = document.querySelector('.calendar-sticky-chrome');
-        const chromeH = chrome ? chrome.getBoundingClientRect().height : 0;
-        const cellTop = todayCell.getBoundingClientRect().top + window.scrollY;
-        const available = Math.max(window.innerHeight - chromeH, 1);
-        const targetTop = Math.max(0, cellTop - chromeH - (available / 2) + (todayCell.offsetHeight / 2));
-        window.scrollTo({ top: targetTop, behavior: 'smooth' });
-        setTimeout(updateVisibleMonthLabel, 350);
+async function scrollToDate(dateStr, align = 'top') {
+    const cal = infiniteCalendar;
+    if (!cal.ready) {
         return;
     }
-    forceScrollToToday();
-}
-
-function scrollToToday(behavior = 'auto') {
-    if (getTodayCell()) {
-        if (behavior === 'smooth') {
-            scrollTodayCellIntoView(getTodayCell(), 'smooth');
-            return Promise.resolve(true);
-        }
-        return Promise.resolve(forceScrollToToday());
-    }
-
-    const now = new Date();
-    return ensureMonthLoaded(now.getFullYear(), now.getMonth() + 1).then(() => forceScrollToToday());
-}
-
-function waitAnimationFrames(count = 2) {
-    return new Promise((resolve) => {
-        const step = () => {
-            if (count <= 0) {
-                resolve();
-                return;
-            }
-            count -= 1;
-            requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
-    });
-}
-
-async function jumpToMonth(year, month) {
-    const meta = await ensureMonthLoaded(year, month);
-    const firstDay = document.querySelector(
-        `#calendar-weeks td[data-year="${year}"][data-month="${month}"][data-date$="-01"]`
-    ) || document.querySelector(
-        `#calendar-weeks td[data-year="${year}"][data-month="${month}"]`
-    );
-
-    if (firstDay) {
-        syncChromeHeightVar();
-        const chrome = document.querySelector('.calendar-sticky-chrome');
-        const chromeH = chrome ? chrome.getBoundingClientRect().height : 0;
-        const top = firstDay.getBoundingClientRect().top + window.scrollY - chromeH - 8;
-        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-        updateVisibleMonthLabel();
-    }
-    return meta;
-}
-
-function syncChromeHeightVar() {
-    const chrome = document.querySelector('.calendar-sticky-chrome');
-    if (!chrome) {
-        return;
-    }
-    const height = chrome.getBoundingClientRect().height;
-    document.documentElement.style.setProperty('--calendar-chrome-height', `${height}px`);
-}
-
-function setupInfiniteScrollObservers() {
-    infiniteCalendar.observers.forEach((obs) => obs.disconnect());
-    infiniteCalendar.observers = [];
-
-    const topSentinel = document.getElementById('scroll-sentinel-top');
-    const bottomSentinel = document.getElementById('scroll-sentinel-bottom');
-    if (!topSentinel || !bottomSentinel) {
+    const { stream } = cal;
+    const target = scrollTargetFor(dateStr, align);
+    const maxTop = stream.scrollHeight - stream.clientHeight;
+    if (target === null || target < 0 || target > maxTop) {
+        await renderAround(dateStr, align);
+        scheduleMaintain();
         return;
     }
 
-    syncChromeHeightVar();
+    const distance = Math.abs(target - stream.scrollTop);
+    if (distance < 1) {
+        return;
+    }
+    if (distance <= stream.clientHeight * INFINITE_CONFIG.smoothJumpMaxScreens) {
+        cal.smoothScrolling = true;
+        stream.scrollTo({ top: target, behavior: 'smooth' });
+    } else {
+        stream.scrollTop = target;
+    }
+}
 
-    // רשת בטחון: אם ממש מתקרבים לקצה — ממלאים באפר
-    const topObs = new IntersectionObserver((entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-            maintainMonthBuffer();
-        }
-    }, { rootMargin: '600px 0px 0px 0px' });
-
-    const bottomObs = new IntersectionObserver((entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-            maintainMonthBuffer();
-        }
-    }, { rootMargin: '0px 0px 900px 0px' });
-
-    topObs.observe(topSentinel);
-    bottomObs.observe(bottomSentinel);
-    infiniteCalendar.observers.push(topObs, bottomObs);
-
-    window.addEventListener('scroll', onInfiniteCalendarScroll, { passive: true });
-    window.addEventListener('scrollend', onInfiniteCalendarScrollEnd, { passive: true });
-    window.addEventListener('resize', syncChromeHeightVar, { passive: true });
+function jumpToMonth(year, month) {
+    return scrollToDate(formatDate(new Date(year, month - 1, 1)), 'top');
 }
 
 async function initInfiniteCalendar() {
-    if (infiniteCalendar.initialized || !isInfiniteCalendarPage()) {
+    const cal = infiniteCalendar;
+    if (cal.initialized || !isInfiniteCalendarPage()) {
         return;
     }
-    infiniteCalendar.initialized = true;
-    infiniteCalendar.readyForInfinite = false;
-    infiniteCalendar.suppressBufferUntil = Number.MAX_SAFE_INTEGER;
-
-    if ('scrollRestoration' in history) {
-        history.scrollRestoration = 'manual';
-    }
-    window.scrollTo(0, 0);
+    cal.initialized = true;
+    cal.stream = document.getElementById('calendar-stream');
+    cal.body = getWeeksBody();
 
     const root = document.querySelector('.infinite-calendar');
-    const stream = document.getElementById('calendar-stream');
-    root?.classList.add('is-booting');
-    document.body.classList.add('calendar-booting');
+    const status = document.getElementById('calendar-boot-status');
+    const today = getTodayDateStr();
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const radius = infiniteCalendar.initialRadius;
-
-    // stitchMonthDays מסדר לפי weekStart — אפשר לטעון כולם כ-append בלי יישורי scroll
-    for (let delta = -radius; delta <= radius; delta += 1) {
-        const target = shiftMonth(year, month, delta);
-        // eslint-disable-next-line no-await-in-loop
-        await loadMonth(target.year, target.month, { prepend: false });
+    // הכול מתחת ל-overlay: נתונים + פונט → רינדור → מיקום על היום → חשיפה. אין גלילה אחרי החשיפה.
+    await Promise.all([loadMonthsAround(today), waitForFonts()]);
+    const ok = await renderAround(today, 'center');
+    if (!ok) {
+        if (status) {
+            status.textContent = 'שגיאה בטעינת הלוח. נסה לרענן את הדף.';
+        }
+        return;
     }
 
-    // ממקמים על היום מתחת ל-overlay (משחרר overflow קודם — אחרת scroll לא נתפס)
-    await settleOnTodayBeforeReveal();
-    updateVisibleMonthLabel();
-
-    // וידוא אחרון עדיין מתחת ל-overlay — אחרי זה אין scroll
-    await waitAnimationFrames(1);
-    if (!isTodaySettledInView()) {
-        forceScrollToToday();
-        await waitAnimationFrames(1);
-    }
-
-    // חושפים — בלי forceScroll / maintainMonthBuffer בפריים הזה
     root?.classList.remove('is-booting');
-    document.body.classList.remove('calendar-booting');
-    if (stream) {
-        stream.setAttribute('aria-busy', 'false');
-    }
+    cal.stream.setAttribute('aria-busy', 'false');
+    cal.ready = true;
 
-    infiniteCalendar.readyForInfinite = true;
-    // חוסמים buffer/observers-driven loads לרגע אחרי חשיפה
-    infiniteCalendar.suppressBufferUntil = Date.now() + 900;
-    setupInfiniteScrollObservers();
+    cal.stream.addEventListener('scroll', onStreamScroll, { passive: true });
+    cal.stream.addEventListener('scrollend', onStreamScrollEnd, { passive: true });
+    const resizeObserver = new ResizeObserver(onCalendarResize);
+    resizeObserver.observe(cal.stream);
+    resizeObserver.observe(cal.body);
+    // מקשי חצים / PageDown עובדים מיד בלי ללחוץ קודם על הלוח
+    cal.stream.focus({ preventScroll: true });
+
+    scheduleMaintain();
+}
+
+async function repaintInfiniteCalendarEvents() {
+    const cal = infiniteCalendar;
+    if (!cal.ready) {
+        return;
+    }
+    const events = await getCachedEvents();
+    preserveScrollAnchor(() => {
+        for (const row of cal.body.rows) {
+            paintWeekRow(row, events);
+        }
+    });
 }
 
 /** תאימות לאחור — דף ישן עם #calendar-body בודד */
@@ -1016,11 +824,9 @@ async function updateCalendar() {
 }
 
 function previousMonth() {
-    if (isInfiniteCalendarPage() && infiniteCalendar.earliest) {
-        const target = shiftMonth(infiniteCalendar.earliest.year, infiniteCalendar.earliest.month, -1);
-        loadMonth(target.year, target.month, { prepend: true }).then(() => {
-            jumpToMonth(target.year, target.month);
-        });
+    if (isInfiniteCalendarPage()) {
+        const target = shiftMonth(currentDate.getFullYear(), currentDate.getMonth() + 1, -1);
+        jumpToMonth(target.year, target.month);
         return;
     }
     currentDate.setMonth(currentDate.getMonth() - 1);
@@ -1028,11 +834,9 @@ function previousMonth() {
 }
 
 function nextMonth() {
-    if (isInfiniteCalendarPage() && infiniteCalendar.latest) {
-        const target = shiftMonth(infiniteCalendar.latest.year, infiniteCalendar.latest.month, 1);
-        loadMonth(target.year, target.month, { prepend: false }).then(() => {
-            jumpToMonth(target.year, target.month);
-        });
+    if (isInfiniteCalendarPage()) {
+        const target = shiftMonth(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+        jumpToMonth(target.year, target.month);
         return;
     }
     currentDate.setMonth(currentDate.getMonth() + 1);
@@ -1105,8 +909,7 @@ async function refreshEventsViews() {
     infiniteCalendar.eventsCache = null;
 
     if (isInfiniteCalendarPage()) {
-        const metas = [...infiniteCalendar.loaded.values()];
-        await Promise.all(metas.map((meta) => paintEventsForMonth(meta.year, meta.month)));
+        await repaintInfiniteCalendarEvents();
     } else if (document.getElementById('calendar-body')) {
         await loadAndDisplayEvents();
     }
@@ -1798,7 +1601,7 @@ async function editEvent(eventId) {
 
 function goToToday() {
     if (isInfiniteCalendarPage()) {
-        scrollToToday('smooth');
+        scrollToDate(getTodayDateStr(), 'center');
         return;
     }
     currentDate = new Date();
@@ -1968,14 +1771,6 @@ async function getCachedEvents() {
     return infiniteCalendar.eventsCache;
 }
 
-function mergedJewishCache() {
-    const all = {};
-    for (const data of infiniteCalendar.jewishCache.values()) {
-        Object.assign(all, data);
-    }
-    return all;
-}
-
 function paintCellEvents(cell, date, jewishByDate, multiDayEvents, singleDayEvents, eventLanes, weekDates) {
     const jewishEvents = jewishByDate[date] || [];
     const jewishContainer = cell.querySelector('.jewish-events-container');
@@ -2002,56 +1797,10 @@ function paintCellEvents(cell, date, jewishByDate, multiDayEvents, singleDayEven
         : '';
 }
 
-/** צובע אירועים לחודש — כולל שבועות משותפים עם חודש שכן */
-async function paintEventsForMonth(year, month, jewishByDate = null) {
-    try {
-        if (!jewishByDate) {
-            jewishByDate = await fetchJewishMonth(year, month);
-        } else {
-            infiniteCalendar.jewishCache.set(monthKey(year, month), jewishByDate);
-        }
-
-        const events = await getCachedEvents();
-        const multiDayEvents = events.filter(isMultiDayEvent);
-        const singleDayEvents = events.filter((event) => !isMultiDayEvent(event));
-        const allJewish = mergedJewishCache();
-
-        const monthCells = [...document.querySelectorAll(
-            `#calendar-weeks td[data-year="${year}"][data-month="${month}"]`
-        )];
-        const rows = [...new Set(monthCells.map((cell) => cell.parentElement))];
-
-        for (const row of rows) {
-            const cells = [...row.querySelectorAll('td[data-date]')];
-            if (cells.length === 0) {
-                continue;
-            }
-            const weekDates = cells.map((cell) => cell.getAttribute('data-date'));
-            const { eventLanes } = assignMultiDayLanes(multiDayEvents, weekDates);
-
-            for (const cell of cells) {
-                const date = cell.getAttribute('data-date');
-                paintCellEvents(
-                    cell,
-                    date,
-                    allJewish,
-                    multiDayEvents,
-                    singleDayEvents,
-                    eventLanes,
-                    weekDates
-                );
-            }
-        }
-    } catch (error) {
-        console.error('Error painting events for month:', error);
-    }
-}
-
 // פונקציה לטעינת והצגת אירועים בלוח (דף ישן / fallback)
 async function loadAndDisplayEvents() {
     if (isInfiniteCalendarPage()) {
-        const metas = [...infiniteCalendar.loaded.values()];
-        await Promise.all(metas.map((meta) => paintEventsForMonth(meta.year, meta.month)));
+        await repaintInfiniteCalendarEvents();
         return;
     }
 

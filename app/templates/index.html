@@ -5,66 +5,63 @@
 {% block content %}
 <!-- לוח שנה אינסופי — גלילה רציפה עם טעינה הדרגתית -->
 <div class="calendar-container infinite-calendar is-booting">
-    <div class="calendar-sticky-chrome">
-        <div class="calendar-toolbar">
-            <h2 id="current-month" class="toolbar-month-label" aria-live="polite"></h2>
-            <div class="calendar-nav">
-                <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
-                <div class="dropdown d-inline-block">
-                    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false">
-                        דלג לתאריך...
-                    </button>
-                    <div class="dropdown-menu p-3" aria-labelledby="jumpToDateBtn">
-                        <div class="mb-2">
-                            <select class="form-select" id="monthSelect">
-                                <option value="0">ינואר</option>
-                                <option value="1">פברואר</option>
-                                <option value="2">מרץ</option>
-                                <option value="3">אפריל</option>
-                                <option value="4">מאי</option>
-                                <option value="5">יוני</option>
-                                <option value="6">יולי</option>
-                                <option value="7">אוגוסט</option>
-                                <option value="8">ספטמבר</option>
-                                <option value="9">אוקטובר</option>
-                                <option value="10">נובמבר</option>
-                                <option value="11">דצמבר</option>
-                            </select>
-                        </div>
-                        <div class="mb-2">
-                            <select class="form-select" id="yearSelect">
-                                <!-- יתמלא דינמית ע"י JavaScript -->
-                            </select>
-                        </div>
-                        <button class="btn btn-primary w-100" onclick="jumpToDate()">אישור</button>
+    <div class="calendar-toolbar">
+        <h2 id="current-month" class="toolbar-month-label" aria-live="polite"></h2>
+        <div class="calendar-nav">
+            <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
+            <div class="dropdown d-inline-block">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                    דלג לתאריך...
+                </button>
+                <div class="dropdown-menu p-3" aria-labelledby="jumpToDateBtn">
+                    <div class="mb-2">
+                        <select class="form-select" id="monthSelect">
+                            <option value="0">ינואר</option>
+                            <option value="1">פברואר</option>
+                            <option value="2">מרץ</option>
+                            <option value="3">אפריל</option>
+                            <option value="4">מאי</option>
+                            <option value="5">יוני</option>
+                            <option value="6">יולי</option>
+                            <option value="7">אוגוסט</option>
+                            <option value="8">ספטמבר</option>
+                            <option value="9">אוקטובר</option>
+                            <option value="10">נובמבר</option>
+                            <option value="11">דצמבר</option>
+                        </select>
                     </div>
+                    <div class="mb-2">
+                        <select class="form-select" id="yearSelect">
+                            <!-- יתמלא דינמית ע"י JavaScript -->
+                        </select>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="jumpToDate()">אישור</button>
                 </div>
-                <button type="button" class="btn btn-primary calendar-events-list-btn" id="addEventFromCalendarBtn">הוסף אירוע</button>
-                <a href="/events_list" class="btn btn-outline-secondary">רשימת אירועים</a>
             </div>
-        </div>
-
-        <div class="weekday-header" aria-hidden="true">
-            <div>ראשון</div>
-            <div>שני</div>
-            <div>שלישי</div>
-            <div>רביעי</div>
-            <div>חמישי</div>
-            <div>שישי</div>
-            <div>שבת</div>
+            <button type="button" class="btn btn-primary calendar-events-list-btn" id="addEventFromCalendarBtn">הוסף אירוע</button>
+            <a href="/events_list" class="btn btn-outline-secondary">רשימת אירועים</a>
         </div>
     </div>
 
-    <div id="calendar-stream" class="calendar-stream" aria-busy="true">
-        <div id="scroll-sentinel-top" class="scroll-sentinel" aria-hidden="true"></div>
-        <table class="table table-bordered calendar-table continuous-calendar">
-            <tbody id="calendar-weeks">
-                <!-- שבועות רציפים נטענים לכאן -->
-            </tbody>
-        </table>
-        <div id="scroll-sentinel-bottom" class="scroll-sentinel" aria-hidden="true"></div>
+    <div class="calendar-stream-frame">
+        <div id="calendar-stream" class="calendar-stream" tabindex="-1" aria-busy="true">
+            <div class="weekday-header" aria-hidden="true">
+                <div>ראשון</div>
+                <div>שני</div>
+                <div>שלישי</div>
+                <div>רביעי</div>
+                <div>חמישי</div>
+                <div>שישי</div>
+                <div>שבת</div>
+            </div>
+            <table class="table table-bordered calendar-table continuous-calendar">
+                <tbody id="calendar-weeks">
+                    <!-- שבועות רציפים נטענים לכאן -->
+                </tbody>
+            </table>
+        </div>
+        <div id="calendar-boot-status" class="calendar-boot-status" aria-live="polite">טוען לוח…</div>
     </div>
-    <div id="calendar-boot-status" class="calendar-boot-status" aria-live="polite">טוען לוח…</div>
 </div>
 
 {% include 'partials/quick_event_modal.html' %}
