@@ -32,3 +32,15 @@ def test_page_scripts_load_without_lexical_collisions(client, page):
         for name in TOP_LEVEL_LEXICAL.findall(body):
             assert name not in owners, f"{name} declared in both {owners[name]} and {origin}"
             owners[name] = origin
+
+
+def test_every_static_script_is_loaded(client):
+    """קובץ JS שאף דף לא טוען הוא קוד מת (כך נשאר events.js יתום)."""
+    from pathlib import Path
+
+    js_root = Path(__file__).resolve().parent.parent / "app" / "static" / "js"
+    on_disk = {f"/static/js/{p.relative_to(js_root).as_posix()}" for p in js_root.rglob("*.js")}
+    loaded = set()
+    for page in ["/", "/events_list"]:
+        loaded |= set(SCRIPT_SRC.findall(client.get(page).get_data(as_text=True)))
+    assert on_disk - loaded == set()
