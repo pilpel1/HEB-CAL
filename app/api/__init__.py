@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from datetime import datetime
+from datetime import MAXYEAR, MINYEAR, datetime
 from convertdate import hebrew
 import logging
 import calendar
@@ -134,8 +134,8 @@ def get_calendar(year, month):
 def get_jewish_events_month(year, month):
     """מחזיר אירועים יהודיים לכל ימי החודש — חוסך N+1 בטעינת לוח."""
     try:
-        if month < 1 or month > 12:
-            return jsonify({'error': 'Invalid month'}), 400
+        if not 1 <= month <= 12 or not MINYEAR <= year <= MAXYEAR:
+            return jsonify({'error': 'Invalid year or month'}), 400
 
         num_days = calendar.monthrange(year, month)[1]
         by_date = {}
