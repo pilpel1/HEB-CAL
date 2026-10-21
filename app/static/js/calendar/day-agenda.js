@@ -368,6 +368,9 @@ function syncWeekRowHeight() {
             root.style.removeProperty('--week-row-height');
         }
         root.removeAttribute('data-cal-density');
+        if (typeof fitRenderedWeekChips === 'function') {
+            fitRenderedWeekChips();
+        }
         return;
     }
     const grid = referenceWeekRowsArea();
@@ -377,10 +380,24 @@ function syncWeekRowHeight() {
     const divisor = densityDivisor();
     root.dataset.calDensity = divisor === 9 ? 'compact' : 'comfortable';
     const next = `${Math.max(28, Math.floor(grid / divisor))}px`;
+    const width = stream.clientWidth;
     if (root.style.getPropertyValue('--week-row-height') === next) {
+        // הרוחב משנה שבירת שורה בלי לשנות את גובה הצפיפות
+        if (infiniteCalendar.chipFitWidth !== width
+            && infiniteCalendar.ready
+            && infiniteCalendar.body
+            && infiniteCalendar.body.rows.length
+            && typeof fitRenderedWeekChips === 'function') {
+            preserveScrollAnchor(() => fitRenderedWeekChips());
+        }
         return;
     }
-    const apply = () => root.style.setProperty('--week-row-height', next);
+    const apply = () => {
+        root.style.setProperty('--week-row-height', next);
+        if (typeof fitRenderedWeekChips === 'function') {
+            fitRenderedWeekChips();
+        }
+    };
     if (infiniteCalendar.ready && infiniteCalendar.body && infiniteCalendar.body.rows.length) {
         preserveScrollAnchor(apply);
     } else {
