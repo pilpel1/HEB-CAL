@@ -586,10 +586,6 @@ function getTodayDateStr() {
     return formatDate(new Date());
 }
 
-function getTodayCell() {
-    return document.querySelector(`#calendar-weeks td[data-date="${getTodayDateStr()}"]`);
-}
-
 function loadMonthsAround(dateStr) {
     const [y, m] = splitDateStr(dateStr);
     const radius = INFINITE_CONFIG.bootMonthsRadius;
