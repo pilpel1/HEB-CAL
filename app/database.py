@@ -84,6 +84,9 @@ def init_db():
 
     ensure_reminder_schema(db)
     ensure_recurrence_schema(db)
+    from app.services.shifts import ensure_shift_schema
+
+    ensure_shift_schema(db)
     db.commit()
 
     _migrate_hebrew_years_to_letters(db)
@@ -195,11 +198,13 @@ def get_all_colors():
 
 def export_data():
     from app.reminders.repository import list_people
+    from app.services.shifts import shifts_enabled
 
     return {
         "events": get_all_events(),
         "colors": get_all_colors(),
         "reminder_people": list_people(),
+        "shifts_enabled": shifts_enabled(),
     }
 
 
@@ -302,6 +307,21 @@ def _recurrence_for_write(event, gregorian_date, keep_existing=False):
     )
 
 
+def _import_shift_values(event):
+    from app.services.shifts import shift_columns_from_payload
+
+    return shift_columns_from_payload(event, missing="defaults")
+
+
+def _import_shift_sql(event):
+    from app.services.shifts import shift_columns_from_payload
+
+    values = shift_columns_from_payload(event, missing="keep")
+    if values == "keep":
+        return "", ()
+    return ", is_shift = ?, shift_person_id = ?, shift_label = ?", values
+
+
 def _import_recurrence_sql(event, gregorian_date, old):
     del old
     rule = _recurrence_for_write(event, gregorian_date, keep_existing=True)
@@ -373,6 +393,18 @@ def import_data(payload, mode="replace"):
                 db.execute("DELETE FROM reminder_people")
         elif mode != "merge":
             raise ValueError("Unsupported import mode")
+
+        if "shifts_enabled" in payload:
+            flag = payload.get("shifts_enabled")
+            if not isinstance(flag, bool) and flag not in (0, 1):
+                raise ValueError("shifts_enabled must be a boolean")
+            db.execute(
+                """
+                INSERT INTO household_settings (id, shifts_enabled) VALUES (1, ?)
+                ON CONFLICT(id) DO UPDATE SET shifts_enabled = excluded.shifts_enabled
+                """,
+                (1 if flag else 0,),
+            )
 
         if "reminder_people" in payload:
             from app.reminders.repository import upsert_person_for_import
@@ -467,11 +499,12 @@ def import_data(payload, mode="replace"):
                 recurrence_sql, recurrence_params = _import_recurrence_sql(
                     event, gregorian_date, old
                 )
+                shift_sql, shift_params = _import_shift_sql(event)
                 db.execute(
                     f'''
                     UPDATE events
                     SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
-                        description = ?, end_date = ?, color = ?{recurrence_sql}
+                        description = ?, end_date = ?, color = ?{recurrence_sql}{shift_sql}
                     WHERE id = ?
                     ''',
                     (
@@ -483,6 +516,7 @@ def import_data(payload, mode="replace"):
                         end_date,
                         color_value,
                         *recurrence_params,
+                        *shift_params,
                         target_id,
                     ),
                 )
@@ -514,13 +548,15 @@ def import_data(payload, mode="replace"):
                 updated_events += 1
             else:
                 rule = _recurrence_for_write(event, gregorian_date, keep_existing=False)
+                is_shift, shift_person_id, shift_label = _import_shift_values(event)
                 cursor = db.execute(
                     '''
                     INSERT INTO events (
                         title, gregorian_date, hebrew_date, time, description, end_date, color,
-                        recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count
+                        recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count,
+                        is_shift, shift_person_id, shift_label
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''',
                     (
                         title,
@@ -534,6 +570,9 @@ def import_data(payload, mode="replace"):
                         rule["recurrence_calendar"] if rule else None,
                         rule["recurrence_until"] if rule else None,
                         rule["recurrence_count"] if rule else None,
+                        is_shift,
+                        shift_person_id,
+                        shift_label,
                     ),
                 )
                 new_id = cursor.lastrowid

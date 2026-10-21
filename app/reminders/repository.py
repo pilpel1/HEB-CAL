@@ -84,10 +84,16 @@ def _clean_name(value) -> str:
 
 
 def person_to_dict(row) -> dict:
+    from app.services.shifts import parse_shift_allowed
+
+    keys = row.keys()
+    raw_allowed = row["shift_allowed"] if "shift_allowed" in keys else None
     return {
         "id": row["id"],
         "name": row["name"],
         "telegram_chat_id": row["telegram_chat_id"],
+        "color": row["color"] if "color" in keys else None,
+        "shift_allowed": parse_shift_allowed(raw_allowed),
     }
 
 
@@ -117,7 +123,7 @@ def reminder_to_dict(row) -> dict:
 def list_people() -> list[dict]:
     db = get_db()
     rows = db.execute(
-        "SELECT id, name, telegram_chat_id FROM reminder_people ORDER BY name, id"
+        "SELECT * FROM reminder_people ORDER BY name, id"
     ).fetchall()
     return [person_to_dict(row) for row in rows]
 
@@ -125,7 +131,7 @@ def list_people() -> list[dict]:
 def get_person(person_id: int) -> dict | None:
     db = get_db()
     row = db.execute(
-        "SELECT id, name, telegram_chat_id FROM reminder_people WHERE id = ?",
+        "SELECT * FROM reminder_people WHERE id = ?",
         (person_id,),
     ).fetchone()
     return person_to_dict(row) if row else None
@@ -135,31 +141,74 @@ def people_ids() -> set[int]:
     return {person["id"] for person in list_people()}
 
 
-def create_person(name, telegram_chat_id=None, *, person_id=None) -> dict:
+_MISSING = object()
+
+
+def _person_color_and_rules(color, shift_allowed):
+    from app.services.shifts import clean_person_color, dump_shift_allowed
+
+    color_value = None if color is _MISSING else clean_person_color(color)
+    rules_value = None if shift_allowed is _MISSING else dump_shift_allowed(shift_allowed)
+    return color_value, rules_value
+
+
+def create_person(
+    name,
+    telegram_chat_id=None,
+    *,
+    person_id=None,
+    color=_MISSING,
+    shift_allowed=_MISSING,
+) -> dict:
     db = get_db()
     clean_name = _clean_name(name)
     chat_id = _clean_chat_id(telegram_chat_id)
+    color_value, rules_value = _person_color_and_rules(color, shift_allowed)
     if person_id is None:
         cursor = db.execute(
-            "INSERT INTO reminder_people (name, telegram_chat_id) VALUES (?, ?)",
-            (clean_name, chat_id),
+            """
+            INSERT INTO reminder_people (name, telegram_chat_id, color, shift_allowed)
+            VALUES (?, ?, ?, ?)
+            """,
+            (clean_name, chat_id, color_value, rules_value),
         )
     else:
         cursor = db.execute(
-            "INSERT INTO reminder_people (id, name, telegram_chat_id) VALUES (?, ?, ?)",
-            (int(person_id), clean_name, chat_id),
+            """
+            INSERT INTO reminder_people (id, name, telegram_chat_id, color, shift_allowed)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (int(person_id), clean_name, chat_id, color_value, rules_value),
         )
     db.commit()
     return get_person(cursor.lastrowid)
 
 
-def update_person(person_id: int, name, telegram_chat_id=None) -> dict | None:
+def update_person(
+    person_id: int,
+    name,
+    telegram_chat_id=None,
+    *,
+    color=_MISSING,
+    shift_allowed=_MISSING,
+) -> dict | None:
     if get_person(person_id) is None:
         return None
     db = get_db()
+    assignments = ["name = ?", "telegram_chat_id = ?"]
+    params: list = [_clean_name(name), _clean_chat_id(telegram_chat_id)]
+    if color is not _MISSING or shift_allowed is not _MISSING:
+        color_value, rules_value = _person_color_and_rules(color, shift_allowed)
+        if color is not _MISSING:
+            assignments.append("color = ?")
+            params.append(color_value)
+        if shift_allowed is not _MISSING:
+            assignments.append("shift_allowed = ?")
+            params.append(rules_value)
+    params.append(person_id)
     db.execute(
-        "UPDATE reminder_people SET name = ?, telegram_chat_id = ? WHERE id = ?",
-        (_clean_name(name), _clean_chat_id(telegram_chat_id), person_id),
+        f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
+        params,
     )
     db.commit()
     return get_person(person_id)
@@ -334,6 +383,27 @@ def load_reminder_rows() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def _apply_imported_person_extras(db, person_id: int, person: dict) -> None:
+    """צבע וכללי משמרת רק אם המפתח בקובץ — ייבוא ישן לא מוחק אותם."""
+    assignments = []
+    params: list = []
+    if "color" in person:
+        color_value, _ignored = _person_color_and_rules(person.get("color"), _MISSING)
+        assignments.append("color = ?")
+        params.append(color_value)
+    if "shift_allowed" in person:
+        _ignored, rules_value = _person_color_and_rules(_MISSING, person.get("shift_allowed"))
+        assignments.append("shift_allowed = ?")
+        params.append(rules_value)
+    if not assignments:
+        return
+    params.append(person_id)
+    db.execute(
+        f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
+        params,
+    )
+
+
 def upsert_person_for_import(person: dict, *, replace_ids: bool) -> None:
     """ייבוא אדם. בייבוא replace מזהים נשמרים כדי ש-recipient_ids ימשיכו להתאים."""
     if not isinstance(person, dict):
@@ -349,6 +419,7 @@ def upsert_person_for_import(person: dict, *, replace_ids: bool) -> None:
             raise ValueError("reminder person id must be an integer") from exc
 
     db = get_db()
+    saved_id = None
     if person_id is not None:
         existing = db.execute(
             "SELECT id FROM reminder_people WHERE id = ?",
@@ -359,34 +430,38 @@ def upsert_person_for_import(person: dict, *, replace_ids: bool) -> None:
                 "UPDATE reminder_people SET name = ?, telegram_chat_id = ? WHERE id = ?",
                 (name, chat_id, person_id),
             )
-            return
-        db.execute(
-            "INSERT INTO reminder_people (id, name, telegram_chat_id) VALUES (?, ?, ?)",
-            (person_id, name, chat_id),
-        )
-        return
-
-    if replace_ids:
-        db.execute(
+            saved_id = person_id
+        else:
+            db.execute(
+                "INSERT INTO reminder_people (id, name, telegram_chat_id) VALUES (?, ?, ?)",
+                (person_id, name, chat_id),
+            )
+            saved_id = person_id
+    elif replace_ids:
+        cursor = db.execute(
             "INSERT INTO reminder_people (name, telegram_chat_id) VALUES (?, ?)",
             (name, chat_id),
         )
-        return
-
-    by_name = db.execute(
-        "SELECT id FROM reminder_people WHERE name = ? ORDER BY id LIMIT 1",
-        (name,),
-    ).fetchone()
-    if by_name:
-        db.execute(
-            "UPDATE reminder_people SET telegram_chat_id = ? WHERE id = ?",
-            (chat_id, by_name["id"]),
-        )
-        return
-    db.execute(
-        "INSERT INTO reminder_people (name, telegram_chat_id) VALUES (?, ?)",
-        (name, chat_id),
-    )
+        saved_id = cursor.lastrowid
+    else:
+        by_name = db.execute(
+            "SELECT id FROM reminder_people WHERE name = ? ORDER BY id LIMIT 1",
+            (name,),
+        ).fetchone()
+        if by_name:
+            db.execute(
+                "UPDATE reminder_people SET telegram_chat_id = ? WHERE id = ?",
+                (chat_id, by_name["id"]),
+            )
+            saved_id = by_name["id"]
+        else:
+            cursor = db.execute(
+                "INSERT INTO reminder_people (name, telegram_chat_id) VALUES (?, ?)",
+                (name, chat_id),
+            )
+            saved_id = cursor.lastrowid
+    if saved_id is not None:
+        _apply_imported_person_extras(db, saved_id, person)
 
 
 def delete_all_people() -> None:
