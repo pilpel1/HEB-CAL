@@ -33,12 +33,15 @@ Open the URL Flask prints (default `http://127.0.0.1:5000`).
 
 ## Test
 
-There is **no pytest suite** yet. Manual checks:
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+Manual checks:
 
 - Start the app (above) and use the browser UI.
 - **`test_calendar.py`** — standalone script that exercises pyluach/calendar logic (run with `python test_calendar.py` from the repo root when debugging Hebrew dates/holidays).
-
-Do not assume CI runs automated tests until pytest is added.
 
 ## File map (key modules)
 
