@@ -332,7 +332,12 @@ def test_settings_page_and_start_command(client):
     assert start_chat_id({"message": {"text": "/start", "chat": {"id": 42}}}) == 42
     assert start_chat_id({"message": {"text": "/start@HebCalBot now", "chat": {"id": -7}}}) == -7
     assert start_chat_id({"message": {"text": "/started", "chat": {"id": 1}}}) is None
-    assert "42" in chat_id_reply(42)
+    assert chat_id_reply(42) == (
+        "מזהה הצ'אט שלך: <code>42</code>\n"
+        "העתיקו את המספר לעמוד «אנשים לתזכורות» בלוח."
+    )
+    assert "<code>-100</code>" in chat_id_reply(-100)
+    assert "<code>&lt;id&gt;</code>" in chat_id_reply("<id>")
 
     calls = []
 
@@ -345,7 +350,8 @@ def test_settings_page_and_start_command(client):
     assert consume_updates("token", None, api=api) == 8
     assert calls[1][0] == "sendMessage"
     assert calls[1][1]["chat_id"] == 42
-    assert "42" in calls[1][1]["text"]
+    assert calls[1][1]["parse_mode"] == "HTML"
+    assert "<code>42</code>" in calls[1][1]["text"]
 
 
 def test_delete_person_missing_and_empty_name(client):

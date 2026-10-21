@@ -40,6 +40,14 @@
             </div>
             <button type="button" class="btn btn-primary calendar-events-list-btn" id="addEventFromCalendarBtn">הוסף אירוע</button>
             <a href="/events_list" class="btn btn-outline-secondary">רשימת אירועים</a>
+            <button type="button" class="btn btn-outline-secondary theme-toggle-btn density-toggle-btn" id="density-toggle" title="מרווח" aria-label="מרווח" aria-pressed="false">
+                <svg class="density-icon density-icon-spacious" viewBox="0 0 16 16" width="1em" height="1em" aria-hidden="true" focusable="false">
+                    <path d="M1.5 4.75h13M1.5 11.25h13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                </svg>
+                <svg class="density-icon density-icon-compact" viewBox="0 0 16 16" width="1em" height="1em" aria-hidden="true" focusable="false">
+                    <path d="M1.5 3.5h13M1.5 8h13M1.5 12.5h13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                </svg>
+            </button>
             {% include 'partials/theme_toggle.html' %}
         </div>
     </div>
@@ -74,7 +82,6 @@
     <section id="day-agenda" class="day-agenda" aria-label="אירועי היום הנבחר">
         <div class="day-agenda-head">
             <h3 id="day-agenda-title" class="day-agenda-title"></h3>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="density-toggle" aria-pressed="false">צפוף</button>
             <button type="button" class="btn btn-outline-primary btn-sm" id="day-agenda-add">הוסף</button>
         </div>
         <ul id="day-agenda-list" class="day-agenda-list"></ul>

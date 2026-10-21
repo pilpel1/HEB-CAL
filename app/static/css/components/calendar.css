@@ -459,7 +459,9 @@
     cursor: pointer;
 }
 
-/* גובה שורה: בדסקטופ לפי התוכן. בטלפון --week-row-height (אזור הגלילה / 6) הוא מינימום */
+/* גובה שורה: בדסקטופ לפי התוכן.
+   בטלפון --week-row-height הוא מינימום לפי הצפיפות בלבד (רשת של חלוקת 80/20 / 6 או / 9).
+   גרירת הידית לא משנה אותו — היא רק מקטינה או מגדילה את חלון הגלילה. */
 .calendar-table tbody tr {
     height: var(--week-row-height, auto);
 }
@@ -727,7 +729,9 @@
 
     .infinite-calendar .calendar-nav {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+        /* עמודה שלישית: צפיפות מעל מתג הערכה, כל אחד בגובה שורת הכפתורים */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
+        align-items: stretch;
         width: 100%;
         gap: 0.35rem;
     }
@@ -749,12 +753,26 @@
         min-width: 0;
     }
 
-    .infinite-calendar .calendar-nav > .theme-toggle-btn {
+    .infinite-calendar .calendar-nav > .theme-toggle-btn,
+    .infinite-calendar .calendar-nav > .density-toggle-btn {
         grid-column: 3;
-        grid-row: 1 / span 2;
-        width: 44px;
-        min-width: 44px;
+        width: 40px;
+        min-width: 40px;
+        height: auto;
+        min-height: 40px;
         padding: 0;
+        align-self: stretch;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .infinite-calendar .calendar-nav > .density-toggle-btn {
+        grid-row: 1;
+    }
+
+    .infinite-calendar .calendar-nav > .theme-toggle-btn:not(.density-toggle-btn) {
+        grid-row: 2;
     }
 
     .calendar-events-list-btn {
@@ -970,11 +988,71 @@
     min-width: 0;
 }
 
-.day-agenda #day-agenda-add,
-.day-agenda #density-toggle {
+.day-agenda #day-agenda-add {
     flex: 0 0 auto;
     min-height: 36px;
     padding: 0.15rem 0.7rem;
+}
+
+/* בדסקטופ שני כפתורי האייקון באותה קופסה (הערכה נמדדה 46×42) */
+@media (min-width: 481px) {
+    .calendar-nav > .theme-toggle-btn,
+    .calendar-nav > .density-toggle-btn {
+        width: 46px;
+        height: 42px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* outline כמו מתג הערכה גם כש-aria-pressed דלוק — בלי המילוי האפור של Bootstrap */
+.calendar-nav > .theme-toggle-btn,
+.calendar-nav > .density-toggle-btn {
+    --bs-btn-hover-color: var(--bs-btn-color);
+    --bs-btn-hover-bg: transparent;
+    --bs-btn-hover-border-color: var(--bs-btn-border-color);
+    --bs-btn-active-color: var(--bs-btn-color);
+    --bs-btn-active-bg: transparent;
+    --bs-btn-active-border-color: var(--bs-btn-border-color);
+}
+
+.calendar-nav > .theme-toggle-btn:hover,
+.calendar-nav > .theme-toggle-btn:focus,
+.calendar-nav > .theme-toggle-btn:focus-visible,
+.calendar-nav > .theme-toggle-btn:active,
+.calendar-nav > .theme-toggle-btn[aria-pressed="true"],
+.calendar-nav > .density-toggle-btn:hover,
+.calendar-nav > .density-toggle-btn:focus,
+.calendar-nav > .density-toggle-btn:focus-visible,
+.calendar-nav > .density-toggle-btn:active,
+.calendar-nav > .density-toggle-btn[aria-pressed="true"] {
+    color: var(--bs-btn-color);
+    background-color: transparent;
+    background-image: none;
+    border-color: var(--bs-btn-border-color);
+    box-shadow: none;
+}
+
+/* אותו כפתור מרובע כמו מתג הערכה: אייקון בלבד, צפוף = 3 קווים, מרווח = 2 */
+.density-toggle-btn .density-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+}
+
+.density-toggle-btn .density-icon-compact {
+    display: none;
+}
+
+.density-toggle-btn[aria-pressed="true"] .density-icon-spacious {
+    display: none;
+}
+
+.density-toggle-btn[aria-pressed="true"] .density-icon-compact {
+    display: inline-block;
 }
 
 .day-agenda-list {

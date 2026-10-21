@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import html
 import json
 import urllib.error
 import urllib.request
@@ -40,8 +41,10 @@ def send_message(token: str, chat_id, text: str) -> bool:
 
 
 def chat_id_reply(chat_id) -> str:
+    """המזהה ב-<code> כדי שלחיצה עליו בטלגרם תעתיק (parse_mode HTML)."""
+    safe_id = html.escape(str(chat_id), quote=False)
     return (
-        f"מזהה הצ'אט שלך: {chat_id}\n"
+        f"מזהה הצ'אט שלך: <code>{safe_id}</code>\n"
         "העתיקו את המספר לעמוד «אנשים לתזכורות» בלוח."
     )
 
@@ -79,5 +82,13 @@ def consume_updates(token: str, offset: int | None, *, long_poll: int = 0, api=t
         chat_id = start_chat_id(update)
         if chat_id is None:
             continue
-        api(token, "sendMessage", {"chat_id": chat_id, "text": chat_id_reply(chat_id)})
+        api(
+            token,
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": chat_id_reply(chat_id),
+                "parse_mode": "HTML",
+            },
+        )
     return next_offset

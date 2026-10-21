@@ -18,9 +18,10 @@ function updateDensityToggle() {
         return;
     }
     const compact = densityDivisor() === 9;
-    button.textContent = compact ? 'רחב' : 'צפוף';
+    const label = compact ? 'צפוף' : 'מרווח';
     button.setAttribute('aria-pressed', compact ? 'true' : 'false');
-    button.title = compact ? 'שורות גבוהות יותר' : 'יותר שבועות על המסך';
+    button.title = label;
+    button.setAttribute('aria-label', label);
 }
 
 function clampAgendaShare(value) {
@@ -73,6 +74,16 @@ function writeAgendaPrev(share) {
     } catch (error) {
         /* מצב פרטי */
     }
+}
+
+/** פיקסלים לפאנל. בלי גרירה חיה הפאנל הפתוח לא יורד מ-100px. */
+function agendaPixels(track, share, live) {
+    const clamped = clampAgendaShare(share);
+    let agendaPx = Math.round(track.available * clamped);
+    if (!live && clamped > 0.001 && clamped < 0.999) {
+        agendaPx = Math.min(track.available, Math.max(100, agendaPx));
+    }
+    return Math.max(0, Math.min(track.available, agendaPx));
 }
 
 function snapAgendaShare(share) {
@@ -182,14 +193,15 @@ function applyAgendaSplit(share, options) {
     if (!track) {
         return;
     }
-    let agendaPx = Math.round(track.available * next);
-    if (!live && next > 0.001 && next < 0.999) {
-        agendaPx = Math.min(track.available, Math.max(100, agendaPx));
-    }
+    const agendaPx = agendaPixels(track, next, live);
     const streamPx = Math.max(0, track.available - agendaPx);
     const rows = `auto ${streamPx}px auto ${agendaPx}px`;
     if (cal.style.gridTemplateRows !== rows) {
         cal.style.gridTemplateRows = rows;
+        // חלון הרשת השתנה — למלא שבועות מעבר לקצה, בלי לגעת בגובה התא
+        if (typeof scheduleMaintain === 'function') {
+            scheduleMaintain();
+        }
     }
 }
 
@@ -197,7 +209,6 @@ function restoreAgendaSplit() {
     const prev = snapAgendaShare(readStoredPrev());
     applyAgendaSplit(prev);
     writeAgendaShare(prev);
-    syncWeekRowHeight();
     document.getElementById('agenda-resize')?.focus();
 }
 
@@ -231,8 +242,8 @@ function bindAgendaResize() {
             return;
         }
         drag.moved = true;
+        // הידית משנה רק את גובה חלון הרשת. גובה התא נשאר לפי הצפיפות.
         applyAgendaSplit(shareFromClientY(event.clientY), { live: true });
-        syncWeekRowHeight();
     });
 
     const finishDrag = (event) => {
@@ -259,7 +270,6 @@ function bindAgendaResize() {
         }
         applyAgendaSplit(snapped);
         writeAgendaShare(snapped);
-        syncWeekRowHeight();
     };
     handle.addEventListener('pointerup', finishDrag);
     handle.addEventListener('pointercancel', finishDrag);
@@ -295,7 +305,6 @@ function bindAgendaResize() {
         }
         applyAgendaSplit(next);
         writeAgendaShare(next);
-        syncWeekRowHeight();
     });
 
     document.getElementById('agenda-resize-restore')?.addEventListener('click', (event) => {
@@ -331,7 +340,26 @@ function syncCalendarFrame() {
     applyAgendaSplit(activeAgendaShare());
 }
 
-/** בטלפון גובה שורה ≈ אזור הגלילה / 6 (או / 9 במצב צפוף). */
+/**
+ * גובה אזור השורות כאילו החלוקה היא 80/20.
+ * לא תלוי בידית: גרירה רק חושפת או מסתירה שורות בתוך אותו גובה תא.
+ */
+function referenceWeekRowsArea() {
+    const stream = infiniteCalendar.stream;
+    const header = stream && stream.querySelector('.weekday-header');
+    const headerH = header ? header.offsetHeight : 0;
+    const track = splitTrack();
+    if (track && track.available > 0) {
+        const streamPx = track.available - agendaPixels(track, 0.2, false);
+        return streamPx - headerH;
+    }
+    if (!stream) {
+        return 0;
+    }
+    return stream.clientHeight - headerH;
+}
+
+/** בטלפון גובה שורה = רשת 80/20 / 6 (או / 9 במצב צפוף). הידית לא משנה את זה. */
 function syncWeekRowHeight() {
     const root = document.documentElement;
     const stream = infiniteCalendar.stream;
@@ -342,9 +370,7 @@ function syncWeekRowHeight() {
         root.removeAttribute('data-cal-density');
         return;
     }
-    const header = stream.querySelector('.weekday-header');
-    const headerH = header ? header.offsetHeight : 0;
-    const grid = stream.clientHeight - headerH;
+    const grid = referenceWeekRowsArea();
     if (grid < 80) {
         return;
     }
