@@ -138,6 +138,14 @@ td span[style*="background-color"] {
     flex-wrap: wrap;
 }
 
+.event-repeat-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #1d4ed8;
+    white-space: nowrap;
+}
+
 .event-status-badge {
     display: inline-block;
     font-size: 0.7rem;

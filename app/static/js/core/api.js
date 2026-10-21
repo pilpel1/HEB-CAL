@@ -17,11 +17,15 @@ async function fetchJewishMonth(year, month) {
 }
 
 // פונקציות טיפול באירועים
-async function loadEvents() {
+async function loadEvents(fromDate, toDate) {
     try {
-        const response = await fetch('/api/events');
+        let url = '/api/events';
+        if (fromDate && toDate) {
+            url += `?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
+        }
+        const response = await fetch(url);
         const events = await response.json();
-        return events;
+        return Array.isArray(events) ? events : [];
     } catch (error) {
         console.error('Error loading events:', error);
         return [];

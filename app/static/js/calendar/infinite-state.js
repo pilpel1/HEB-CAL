@@ -39,6 +39,9 @@ const infiniteCalendar = {
     monthData: new Map(), // "YYYY-M" → { days: Map(dateStr → day), jewish: { dateStr: events[] } }
     monthRequests: new Map(), // "YYYY-M" → Promise
     eventsCache: null,
+    eventsFrom: null,
+    eventsTo: null,
+    eventsFetchGen: 0,
     firstWeek: null, // YYYY-MM-DD של יום ראשון בשורה הראשונה ב-DOM
     lastWeek: null,
     anchor: null, // { row, offset, scrollTop } — שורה גלויה ומרחקה מראש אזור התוכן

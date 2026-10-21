@@ -144,6 +144,7 @@ function maintainInfiniteCalendar() {
     }
 
     prefetchAroundRenderedRange();
+    maybeExtendEventsCache();
 
     if (!cal.isScrolling && !cal.smoothScrolling) {
         trimFarWeeks();
@@ -151,6 +152,34 @@ function maintainInfiniteCalendar() {
 
     cal.anchor = captureAnchor();
     updateVisibleMonthLabel();
+}
+
+function maybeExtendEventsCache() {
+    const cal = infiniteCalendar;
+    if (!cal.ready || !cal.firstWeek || !cal.lastWeek || cal.eventsExtendPending) {
+        return;
+    }
+    const need = neededEventsRange(cal.firstWeek, cal.lastWeek);
+    if (eventsCacheCovers(need.from, need.to)) {
+        return;
+    }
+    cal.eventsExtendPending = true;
+    ensureEventsCovering(cal.firstWeek, cal.lastWeek).then(() => {
+        cal.eventsExtendPending = false;
+        if (!cal.ready || !cal.body) {
+            return;
+        }
+        preserveScrollAnchor(() => {
+            for (const row of cal.body.rows) {
+                paintWeekRow(row, cal.eventsCache || []);
+            }
+        });
+        if (typeof renderDayAgenda === 'function' && cal.agendaDate) {
+            renderDayAgenda(cal.agendaDate);
+        }
+    }).catch(() => {
+        cal.eventsExtendPending = false;
+    });
 }
 
 function scheduleMaintain() {
@@ -308,6 +337,8 @@ async function renderAround(dateStr, align) {
         last = next;
     }
 
+    await ensureEventsCovering(first, last);
+
     const fragment = document.createDocumentFragment();
     for (let ws = first; ws <= last; ws = addDaysToDateStr(ws, 7)) {
         fragment.appendChild(buildWeekRow(ws));
@@ -335,6 +366,9 @@ async function renderAround(dateStr, align) {
     cal.stream.scrollTop = Math.max(0, top);
     cal.anchor = captureAnchor();
     updateVisibleMonthLabel();
+    if (typeof renderDayAgenda === 'function' && cal.agendaDate) {
+        renderDayAgenda(cal.agendaDate);
+    }
     return true;
 }
 

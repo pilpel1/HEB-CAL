@@ -5,6 +5,7 @@ from pathlib import Path
 from flask import g
 
 from app.services.hebrew_format import normalize_hebrew_date_text
+from app.services.recurrence import clean_recurrence, recurrence_fields
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -82,9 +83,67 @@ def init_db():
     from app.reminders.repository import ensure_reminder_schema
 
     ensure_reminder_schema(db)
+    ensure_recurrence_schema(db)
     db.commit()
 
     _migrate_hebrew_years_to_letters(db)
+
+
+_RECURRENCE_COLUMNS = (
+    ("recurrence_freq", "TEXT"),
+    ("recurrence_calendar", "TEXT"),
+    ("recurrence_until", "TEXT"),
+    ("recurrence_count", "INTEGER"),
+)
+
+
+def ensure_recurrence_schema(db) -> None:
+    """מוסיף עמודות חזרה וטבלת חריגות. בטוח להרצה חוזרת; לא משנה שורות קיימות.
+
+    אירוע ישן נשאר בלי recurrence_freq (NULL) — כלומר בלי חזרה.
+    """
+    existing = {row[1] for row in db.execute("PRAGMA table_info(events)")}
+    for name, decl in _RECURRENCE_COLUMNS:
+        if name not in existing:
+            db.execute(f"ALTER TABLE events ADD COLUMN {name} {decl}")
+
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS event_exceptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL,
+            original_date TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            title TEXT,
+            gregorian_date TEXT,
+            hebrew_date TEXT,
+            time TEXT,
+            description TEXT,
+            end_date TEXT,
+            color TEXT,
+            UNIQUE (event_id, original_date),
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+        )
+        """
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_exceptions_event ON event_exceptions(event_id)"
+    )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS reminder_sends (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reminder_id INTEGER NOT NULL,
+            occurrence_date TEXT NOT NULL,
+            sent_at TEXT,
+            UNIQUE (reminder_id, occurrence_date),
+            FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE CASCADE
+        )
+        """
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reminder_sends_reminder ON reminder_sends(reminder_id)"
+    )
 
 def _migrate_hebrew_years_to_letters(db):
     """ממיר שנים מספריות בתאריכים עבריים שמורים לאותיות (פעם אחת לנתונים קיימים)."""
@@ -220,6 +279,75 @@ def _apply_imported_reminders(event_id, raw_reminders):
     replace_event_reminders(event_id, parsed, commit=False)
 
 
+def _anchor_date(gregorian_date):
+    from datetime import date as date_cls
+
+    return date_cls.fromisoformat(str(gregorian_date)[:10])
+
+
+def _recurrence_for_write(event, gregorian_date, keep_existing=False):
+    """מחזיר dict של הכלל, None אם אין חזרה, או 'keep' אם המפתח לא בייבוא."""
+    has_freq = "recurrence_freq" in event
+    has_nested = isinstance(event.get("recurrence"), dict)
+    if not has_freq and not has_nested:
+        return "keep" if keep_existing else None
+    source = event["recurrence"] if has_nested and not has_freq else event
+    anchor = _anchor_date(gregorian_date)
+    return clean_recurrence(
+        source.get("recurrence_freq") if has_freq or not has_nested else source.get("freq"),
+        source.get("recurrence_calendar") if has_freq or not has_nested else source.get("calendar"),
+        source.get("recurrence_until") if has_freq or not has_nested else source.get("until"),
+        source.get("recurrence_count") if has_freq or not has_nested else source.get("count"),
+        anchor,
+    )
+
+
+def _import_recurrence_sql(event, gregorian_date, old):
+    del old
+    rule = _recurrence_for_write(event, gregorian_date, keep_existing=True)
+    if rule == "keep":
+        return "", ()
+    if not rule:
+        return (
+            ", recurrence_freq = NULL, recurrence_calendar = NULL, "
+            "recurrence_until = NULL, recurrence_count = NULL",
+            (),
+        )
+    return (
+        ", recurrence_freq = ?, recurrence_calendar = ?, recurrence_until = ?, recurrence_count = ?",
+        (
+            rule["recurrence_freq"],
+            rule["recurrence_calendar"],
+            rule["recurrence_until"],
+            rule["recurrence_count"],
+        ),
+    )
+
+
+def _apply_imported_exceptions(event_id, raw, *, replace: bool):
+    if raw is None:
+        return
+    if not isinstance(raw, list):
+        raise ValueError("'exceptions' must be an array")
+    db = get_db()
+    if replace:
+        db.execute("DELETE FROM event_exceptions WHERE event_id = ?", (event_id,))
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("Each exception must be an object")
+        original = item.get("original_date")
+        kind = item.get("kind")
+        if not original or kind not in ("deleted", "edited"):
+            raise ValueError("Exception needs original_date and kind deleted|edited")
+        upsert_exception(
+            event_id,
+            original_date=str(original)[:10],
+            kind=kind,
+            fields=item,
+            commit=False,
+        )
+
+
 def import_data(payload, mode="replace"):
     if not isinstance(payload, dict):
         raise ValueError("Import payload must be a JSON object")
@@ -236,7 +364,9 @@ def import_data(payload, mode="replace"):
         db.execute("BEGIN")
 
         if mode == "replace":
+            db.execute("DELETE FROM reminder_sends")
             db.execute("DELETE FROM reminders")
+            db.execute("DELETE FROM event_exceptions")
             db.execute("DELETE FROM events")
             db.execute("DELETE FROM event_colors")
             if "reminder_people" in payload:
@@ -334,11 +464,14 @@ def import_data(payload, mode="replace"):
 
             if target_id is not None:
                 old = existing_by_id.get(target_id) or {}
+                recurrence_sql, recurrence_params = _import_recurrence_sql(
+                    event, gregorian_date, old
+                )
                 db.execute(
-                    '''
+                    f'''
                     UPDATE events
                     SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
-                        description = ?, end_date = ?, color = ?
+                        description = ?, end_date = ?, color = ?{recurrence_sql}
                     WHERE id = ?
                     ''',
                     (
@@ -349,6 +482,7 @@ def import_data(payload, mode="replace"):
                         description,
                         end_date,
                         color_value,
+                        *recurrence_params,
                         target_id,
                     ),
                 )
@@ -379,10 +513,14 @@ def import_data(payload, mode="replace"):
                 existing_by_slot[slot].append(updated)
                 updated_events += 1
             else:
+                rule = _recurrence_for_write(event, gregorian_date, keep_existing=False)
                 cursor = db.execute(
                     '''
-                    INSERT INTO events (title, gregorian_date, hebrew_date, time, description, end_date, color)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO events (
+                        title, gregorian_date, hebrew_date, time, description, end_date, color,
+                        recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''',
                     (
                         title,
@@ -392,6 +530,10 @@ def import_data(payload, mode="replace"):
                         description,
                         end_date,
                         color_value,
+                        rule["recurrence_freq"] if rule else None,
+                        rule["recurrence_calendar"] if rule else None,
+                        rule["recurrence_until"] if rule else None,
+                        rule["recurrence_count"] if rule else None,
                     ),
                 )
                 new_id = cursor.lastrowid
@@ -413,6 +555,12 @@ def import_data(payload, mode="replace"):
             saved_id = target_id if target_id is not None else new_id
             if "reminders" in event:
                 _apply_imported_reminders(saved_id, event.get("reminders"))
+            if "exceptions" in event:
+                _apply_imported_exceptions(
+                    saved_id,
+                    event.get("exceptions"),
+                    replace=True,
+                )
 
         db.commit()
         return {
@@ -429,15 +577,58 @@ def import_data(payload, mode="replace"):
 
 # פונקציות CRUD
 
-def create_event(title, gregorian_date, hebrew_date, time=None, description="", end_date=None, color=None):
+def _with_recurrence(data):
+    data.update(recurrence_fields(data))
+    return data
+
+
+def _attach_related(events):
+    from app.reminders.repository import attach_reminders
+
+    attach_reminders(events)
+    grouped = exceptions_for_events([event["id"] for event in events if event.get("id") is not None])
+    for event in events:
+        event["exceptions"] = grouped.get(event.get("id"), [])
+    return events
+
+
+def create_event(
+    title,
+    gregorian_date,
+    hebrew_date,
+    time=None,
+    description="",
+    end_date=None,
+    color=None,
+    recurrence=None,
+):
     db = get_db()
     try:
         end_date = _normalize_end_date(gregorian_date, end_date)
         hebrew_date = normalize_hebrew_date_text(hebrew_date)
-        cursor = db.execute('''
-            INSERT INTO events (title, gregorian_date, hebrew_date, time, description, end_date, color)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (title, gregorian_date, hebrew_date, time, description, end_date, color))
+        rule = recurrence or {}
+        cursor = db.execute(
+            '''
+            INSERT INTO events (
+                title, gregorian_date, hebrew_date, time, description, end_date, color,
+                recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                title,
+                gregorian_date,
+                hebrew_date,
+                time,
+                description,
+                end_date,
+                color,
+                rule.get("recurrence_freq"),
+                rule.get("recurrence_calendar"),
+                rule.get("recurrence_until"),
+                rule.get("recurrence_count"),
+            ),
+        )
         db.commit()
         return cursor.lastrowid
     except sqlite3.Error as e:
@@ -450,10 +641,9 @@ def get_event(event_id):
         event = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
         if not event:
             return None
-        data = dict(event)
+        data = _with_recurrence(dict(event))
         data["hebrew_date"] = normalize_hebrew_date_text(data.get("hebrew_date"))
-        from app.reminders.repository import attach_reminders
-        return attach_reminders([data])[0]
+        return _attach_related([data])[0]
     except sqlite3.Error as e:
         print(f"Error getting event: {e}")
         return None
@@ -464,25 +654,68 @@ def get_all_events():
         events = db.execute('SELECT * FROM events ORDER BY gregorian_date, time').fetchall()
         result = []
         for event in events:
-            data = dict(event)
+            data = _with_recurrence(dict(event))
             data["hebrew_date"] = normalize_hebrew_date_text(data.get("hebrew_date"))
             result.append(data)
-        from app.reminders.repository import attach_reminders
-        return attach_reminders(result)
+        return _attach_related(result)
     except sqlite3.Error as e:
         print(f"Error getting all events: {e}")
         return []
 
-def update_event(event_id, title, gregorian_date, hebrew_date, time=None, description="", end_date=None, color=None):
+def update_event(
+    event_id,
+    title,
+    gregorian_date,
+    hebrew_date,
+    time=None,
+    description="",
+    end_date=None,
+    color=None,
+    recurrence="keep",
+    clear_exceptions=False,
+):
     db = get_db()
     try:
         end_date = _normalize_end_date(gregorian_date, end_date)
         hebrew_date = normalize_hebrew_date_text(hebrew_date)
-        db.execute('''
-            UPDATE events 
-            SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?, description = ?, end_date = ?, color = ?
-            WHERE id = ?
-        ''', (title, gregorian_date, hebrew_date, time, description, end_date, color, event_id))
+        if recurrence == "keep":
+            db.execute(
+                '''
+                UPDATE events
+                SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
+                    description = ?, end_date = ?, color = ?
+                WHERE id = ?
+                ''',
+                (title, gregorian_date, hebrew_date, time, description, end_date, color, event_id),
+            )
+        else:
+            rule = recurrence or {}
+            db.execute(
+                '''
+                UPDATE events
+                SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
+                    description = ?, end_date = ?, color = ?,
+                    recurrence_freq = ?, recurrence_calendar = ?,
+                    recurrence_until = ?, recurrence_count = ?
+                WHERE id = ?
+                ''',
+                (
+                    title,
+                    gregorian_date,
+                    hebrew_date,
+                    time,
+                    description,
+                    end_date,
+                    color,
+                    rule.get("recurrence_freq"),
+                    rule.get("recurrence_calendar"),
+                    rule.get("recurrence_until"),
+                    rule.get("recurrence_count"),
+                    event_id,
+                ),
+            )
+        if clear_exceptions:
+            db.execute("DELETE FROM event_exceptions WHERE event_id = ?", (event_id,))
         db.commit()
         return True
     except sqlite3.Error as e:
@@ -492,13 +725,81 @@ def update_event(event_id, title, gregorian_date, hebrew_date, time=None, descri
 def delete_event(event_id):
     db = get_db()
     try:
-        db.execute('DELETE FROM reminders WHERE event_id = ?', (event_id,))
-        db.execute('DELETE FROM events WHERE id = ?', (event_id,))
+        db.execute(
+            "DELETE FROM reminder_sends WHERE reminder_id IN (SELECT id FROM reminders WHERE event_id = ?)",
+            (event_id,),
+        )
+        db.execute("DELETE FROM reminders WHERE event_id = ?", (event_id,))
+        db.execute("DELETE FROM event_exceptions WHERE event_id = ?", (event_id,))
+        db.execute("DELETE FROM events WHERE id = ?", (event_id,))
         db.commit()
         return True
     except sqlite3.Error as e:
         print(f"Error deleting event: {e}")
         return False
+
+
+def exceptions_for_events(event_ids):
+    db = get_db()
+    if not event_ids:
+        return {}
+    marks = ",".join("?" for _ in event_ids)
+    rows = db.execute(
+        f"""
+        SELECT id, event_id, original_date, kind, title, gregorian_date, hebrew_date,
+               time, description, end_date, color
+        FROM event_exceptions
+        WHERE event_id IN ({marks})
+        ORDER BY original_date, id
+        """,
+        tuple(event_ids),
+    ).fetchall()
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(row["event_id"], []).append(dict(row))
+    return grouped
+
+
+def list_exceptions(event_id):
+    return exceptions_for_events([event_id]).get(event_id, [])
+
+
+def upsert_exception(event_id, original_date, kind, fields=None, commit=True):
+    db = get_db()
+    fields = fields or {}
+    db.execute(
+        """
+        INSERT INTO event_exceptions (
+            event_id, original_date, kind, title, gregorian_date, hebrew_date,
+            time, description, end_date, color
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(event_id, original_date) DO UPDATE SET
+            kind = excluded.kind,
+            title = excluded.title,
+            gregorian_date = excluded.gregorian_date,
+            hebrew_date = excluded.hebrew_date,
+            time = excluded.time,
+            description = excluded.description,
+            end_date = excluded.end_date,
+            color = excluded.color
+        """,
+        (
+            event_id,
+            original_date,
+            kind,
+            fields.get("title"),
+            fields.get("gregorian_date"),
+            fields.get("hebrew_date"),
+            fields.get("time"),
+            fields.get("description"),
+            fields.get("end_date"),
+            fields.get("color"),
+        ),
+    )
+    if commit:
+        db.commit()
+    return True
 
 def test_database_connection():
     try:

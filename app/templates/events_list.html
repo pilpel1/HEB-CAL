@@ -831,7 +831,12 @@ function buildEventRowHtml(event) {
     const color = event.color ? convertToRGBA(event.color) : '';
     const category = getEventTimeCategory(event);
     const meta = CATEGORY_META[category];
-    const metaBits = [event.gregorian_date, event.hebrew_date, event.time].filter(Boolean);
+    const repeatNote = event.recurrence_freq === 'yearly'
+        ? (event.recurrence_calendar === 'hebrew' ? 'כל שנה · עברי' : 'כל שנה · לועזי')
+        : event.recurrence_freq === 'monthly'
+            ? (event.recurrence_calendar === 'hebrew' ? 'כל חודש · עברי' : 'כל חודש · לועזי')
+            : '';
+    const metaBits = [event.gregorian_date, event.hebrew_date, event.time, repeatNote].filter(Boolean);
 
     return `
         <tr id="row-${event.id}" class="${meta.rowClass}">
@@ -844,6 +849,7 @@ function buildEventRowHtml(event) {
                         </span>` :
                         event.title
                     }
+                    ${repeatNote ? `<span class="event-repeat-badge">${repeatNote}</span>` : ''}
                 </div>
                 <div class="event-meta-line">${metaBits.join(' · ')}</div>
             </td>

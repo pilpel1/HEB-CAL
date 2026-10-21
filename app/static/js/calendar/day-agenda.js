@@ -500,10 +500,13 @@ function renderDayAgenda(dateStr) {
         const swatchStyle = ev.color
             ? ` style="background: rgba(${getColorRGBA(ev.color)})"`
             : '';
+        const occurrence = escapeHtml(ev.occurrence_date || ev.gregorian_date || '');
+        const recurring = ev.recurrence_freq ? '1' : '0';
+        const icon = typeof repeatIconHtml === 'function' ? repeatIconHtml(ev) : '';
         items.push(
-            `<li class="agenda-item agenda-event" data-event-id="${ev.id}">`
+            `<li class="agenda-item agenda-event" data-event-id="${ev.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}">`
             + `<span class="agenda-swatch${ev.color ? '' : ' is-empty'}"${swatchStyle}></span>`
-            + `${time}<span class="agenda-text">${escapeHtml(ev.title || '')}</span>${range}</li>`
+            + `${time}<span class="agenda-text">${icon}${escapeHtml(ev.title || '')}</span>${range}</li>`
         );
     }
 
@@ -560,7 +563,10 @@ function initDayAgenda() {
         if (!item) {
             return;
         }
-        openEditEventModal(item.getAttribute('data-event-id'));
+        openEditEventModal(
+            item.getAttribute('data-event-id'),
+            item.getAttribute('data-occurrence-date')
+        );
     });
 
     const compactQuery = window.matchMedia('(max-width: 480px)');

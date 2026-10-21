@@ -325,6 +325,15 @@
     display: none;
 }
 
+.event-repeat-icon {
+    width: 0.95em;
+    height: 0.95em;
+    margin-inline-end: 0.15em;
+    vertical-align: -0.15em;
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
 .event-item {
     margin: 1px 0;
     padding: 2px 4px;

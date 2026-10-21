@@ -1,4 +1,7 @@
-// מודל אירוע מהיר (הוספה/עריכה): שדות, שעה מהכותרת, צבע, שליחה
+// מודל אירוע מהיר (הוספה/עריכה): שדות, שעה מהכותרת, צבע, חזרה, שליחה
+
+let quickSeriesSnapshot = null;
+let quickOccurrenceSnapshot = null;
 
 async function fillHebrewDateFromGregorian(gregorianValue, hebrewInputId) {
     if (!gregorianValue) {
@@ -52,6 +55,116 @@ function populateQuickHourOptions() {
 
 function clearExtraQuickMinuteOptions() {
     // נשאר גלובלי: דקות חופשיות נכנסות ישירות לשדה השעה
+}
+
+function recurrenceEndMode(eventData) {
+    if (eventData && eventData.recurrence_count) {
+        return 'count';
+    }
+    if (eventData && eventData.recurrence_until) {
+        return 'until';
+    }
+    return 'never';
+}
+
+function syncRecurrenceControls() {
+    const freq = document.getElementById('quick_recurrence_freq');
+    const calendar = document.getElementById('quick_recurrence_calendar');
+    const endRow = document.getElementById('quick_recurrence_end_row');
+    const mode = document.getElementById('quick_recurrence_end_mode');
+    const until = document.getElementById('quick_recurrence_until');
+    const count = document.getElementById('quick_recurrence_count');
+    if (!freq || !calendar || !endRow || !mode || !until || !count) {
+        return;
+    }
+    const repeating = Boolean(freq.value);
+    calendar.hidden = !repeating;
+    endRow.hidden = !repeating;
+    until.hidden = !repeating || mode.value !== 'until';
+    count.hidden = !repeating || mode.value !== 'count';
+    const wrap = document.getElementById('quick_recurrence');
+    if (wrap) {
+        wrap.classList.toggle('is-repeating', repeating);
+        wrap.classList.toggle('has-end-value', repeating && mode.value !== 'never');
+    }
+    const scope = document.getElementById('quick_recurrence_scope');
+    const occurrenceOnly = scope && !scope.hidden && scope.querySelector('input[value="occurrence"]')?.checked;
+    const lockRule = Boolean(occurrenceOnly);
+    freq.disabled = lockRule;
+    calendar.disabled = lockRule;
+    mode.disabled = lockRule;
+    until.disabled = lockRule;
+    count.disabled = lockRule;
+    const start = document.getElementById('quick_gregorian_date')?.value || '';
+    if (start) {
+        until.min = start;
+        if (until.value && until.value < start) {
+            until.value = start;
+        }
+    }
+}
+
+function setRecurrenceScopeVisible(show, which) {
+    const scope = document.getElementById('quick_recurrence_scope');
+    if (!scope) {
+        return;
+    }
+    scope.hidden = !show;
+    if (show) {
+        const value = which || 'occurrence';
+        const input = scope.querySelector(`input[value="${value}"]`);
+        if (input) {
+            input.checked = true;
+        }
+    }
+    syncRecurrenceControls();
+}
+
+function applyRecurrenceFields(eventData) {
+    const freq = document.getElementById('quick_recurrence_freq');
+    const calendar = document.getElementById('quick_recurrence_calendar');
+    const mode = document.getElementById('quick_recurrence_end_mode');
+    const until = document.getElementById('quick_recurrence_until');
+    const count = document.getElementById('quick_recurrence_count');
+    if (!freq || !calendar || !mode || !until || !count) {
+        return;
+    }
+    freq.value = eventData.recurrence_freq || '';
+    calendar.value = eventData.recurrence_calendar === 'hebrew' ? 'hebrew' : 'gregorian';
+    mode.value = recurrenceEndMode(eventData);
+    until.value = eventData.recurrence_until || '';
+    count.value = eventData.recurrence_count ? String(eventData.recurrence_count) : '';
+    syncRecurrenceControls();
+}
+
+function readRecurrenceFields() {
+    const freq = document.getElementById('quick_recurrence_freq')?.value || '';
+    if (!freq) {
+        return {
+            recurrence_freq: '',
+            recurrence_calendar: null,
+            recurrence_until: null,
+            recurrence_count: null,
+        };
+    }
+    const mode = document.getElementById('quick_recurrence_end_mode')?.value || 'never';
+    const untilValue = document.getElementById('quick_recurrence_until')?.value || '';
+    const countRaw = document.getElementById('quick_recurrence_count')?.value || '';
+    return {
+        recurrence_freq: freq,
+        recurrence_calendar: document.getElementById('quick_recurrence_calendar')?.value || 'gregorian',
+        recurrence_until: mode === 'until' ? (untilValue || null) : null,
+        recurrence_count: mode === 'count' ? Number(countRaw) : null,
+    };
+}
+
+function currentEditScope() {
+    const scope = document.getElementById('quick_recurrence_scope');
+    if (!scope || scope.hidden) {
+        return 'all';
+    }
+    const checked = scope.querySelector('input:checked');
+    return checked ? checked.value : 'occurrence';
 }
 
 function setEndDateOpen(isOpen) {
@@ -154,7 +267,7 @@ function applyTimeFromTitlePrefix(titleValue) {
     return true;
 }
 
-function fillQuickEventForm(eventData = {}) {
+function fillQuickEventForm(eventData = {}, options = {}) {
     document.getElementById('quick_event_id').value = eventData.id || '';
     document.getElementById('quick_title').value = eventData.title || '';
     document.getElementById('quick_gregorian_date').value = eventData.gregorian_date || '';
@@ -167,6 +280,14 @@ function fillQuickEventForm(eventData = {}) {
         fillReminderFields(eventData.reminders || []);
     }
     setQuickColor(eventData.color || '');
+    applyRecurrenceFields(eventData);
+    if (!options.keepScope) {
+        quickSeriesSnapshot = null;
+        quickOccurrenceSnapshot = null;
+        setRecurrenceScopeVisible(false);
+    } else {
+        syncRecurrenceControls();
+    }
     syncEndDateMin(
         eventData.gregorian_date || '',
         document.getElementById('quick_end_date')
@@ -183,6 +304,7 @@ function getQuickEventFormData() {
         end_date: document.getElementById('quick_end_date').value || null,
         color: document.getElementById('quick_color').value || null,
         reminders: typeof readReminderFields === 'function' ? readReminderFields() : [],
+        ...readRecurrenceFields(),
     };
 }
 
@@ -206,21 +328,30 @@ async function openQuickEventModal(dateStr) {
     bootstrap.Modal.getOrCreateInstance(modalElement).show();
 }
 
-async function openEditEventModal(eventId) {
+async function openEditEventModal(eventId, occurrenceDate) {
     const modalElement = document.getElementById('quickEventModal');
     if (!modalElement) {
         return;
     }
 
     try {
-        const response = await fetch(`/api/events/${eventId}`);
+        const url = occurrenceDate
+            ? `/api/events/${eventId}?occurrence_date=${encodeURIComponent(occurrenceDate)}`
+            : `/api/events/${eventId}`;
+        const response = await fetch(url);
         if (!response.ok) {
             alert('לא ניתן לטעון את האירוע');
             return;
         }
 
         const event = await response.json();
-        fillQuickEventForm(event);
+        const series = event.series || null;
+        quickOccurrenceSnapshot = series ? { ...event } : null;
+        quickSeriesSnapshot = series;
+        fillQuickEventForm(event, { keepScope: Boolean(series) });
+        if (series) {
+            setRecurrenceScopeVisible(true, 'occurrence');
+        }
         setQuickEventModalMode(true);
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (error) {
@@ -273,8 +404,9 @@ function initQuickEventModal() {
             const eventItem = event.target.closest('.event-item[data-event-id]');
             if (eventItem) {
                 const eventId = eventItem.getAttribute('data-event-id');
+                const occurrenceDate = eventItem.getAttribute('data-occurrence-date');
                 clearTimeout(tapTimer);
-                tapTimer = setTimeout(() => openEditEventModal(eventId), 280);
+                tapTimer = setTimeout(() => openEditEventModal(eventId, occurrenceDate), 280);
                 return;
             }
             if (!window.matchMedia('(pointer: coarse)').matches) {
@@ -296,7 +428,10 @@ function initQuickEventModal() {
             const eventItem = event.target.closest('.event-item[data-event-id]');
             if (eventItem) {
                 event.stopPropagation();
-                openEditEventModal(eventItem.getAttribute('data-event-id'));
+                openEditEventModal(
+                    eventItem.getAttribute('data-event-id'),
+                    eventItem.getAttribute('data-occurrence-date')
+                );
                 return;
             }
 
@@ -353,6 +488,25 @@ function initQuickEventModal() {
         });
     }
 
+    const recurrenceFreq = document.getElementById('quick_recurrence_freq');
+    const recurrenceMode = document.getElementById('quick_recurrence_end_mode');
+    if (recurrenceFreq) {
+        recurrenceFreq.addEventListener('change', syncRecurrenceControls);
+    }
+    if (recurrenceMode) {
+        recurrenceMode.addEventListener('change', syncRecurrenceControls);
+    }
+    document.getElementById('quick_recurrence_scope')?.addEventListener('change', () => {
+        const scope = currentEditScope();
+        const source = scope === 'all' ? quickSeriesSnapshot : quickOccurrenceSnapshot;
+        if (source) {
+            fillQuickEventForm(source, { keepScope: true });
+            setRecurrenceScopeVisible(true, scope);
+        } else {
+            syncRecurrenceControls();
+        }
+    });
+
     const quickEndDate = document.getElementById('quick_end_date');
     if (quickEndDate) {
         // אם בכל זאת הוקלד תאריך לא תקין ידנית — מנקים מיד
@@ -372,7 +526,23 @@ function initQuickEventModal() {
         if (eventData.reminders === null) {
             return;
         }
-        if (eventData.reminders.length && typeof maybeRequestReminderPermission === 'function') {
+        if (eventData.recurrence_freq && eventData.recurrence_count !== null) {
+            if (!Number.isInteger(eventData.recurrence_count) || eventData.recurrence_count < 1) {
+                alert('מספר הפעמים חייב להיות מספר שלם חיובי');
+                return;
+            }
+        }
+        if (eventData.recurrence_freq && document.getElementById('quick_recurrence_end_mode')?.value === 'until' && !eventData.recurrence_until) {
+            alert('חסר תאריך סיום לחזרה');
+            return;
+        }
+        const scope = currentEditScope();
+        if (scope === 'occurrence' && quickOccurrenceSnapshot?.occurrence_date) {
+            eventData.scope = 'occurrence';
+            eventData.occurrence_date = quickOccurrenceSnapshot.occurrence_date;
+            delete eventData.reminders;
+        }
+        if (eventData.reminders && eventData.reminders.length && typeof maybeRequestReminderPermission === 'function') {
             maybeRequestReminderPermission();
         }
         const endInput = document.getElementById('quick_end_date');
