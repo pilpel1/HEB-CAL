@@ -35,6 +35,116 @@
     margin-inline-start: 0.75rem;
 }
 
+/* === לוח אינסופי (גלילה רציפה) === */
+/* הלוח ממלא את גובה החלון והגלילה מתרחשת בתוך .calendar-stream, לא ב-window */
+.calendar-container.infinite-calendar {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 2rem);
+    height: calc(100dvh - 2rem);
+    min-height: 420px;
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem 1rem;
+}
+
+.infinite-calendar .calendar-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    padding: 0 0 0.5rem;
+}
+
+.infinite-calendar .toolbar-month-label {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+    color: #333;
+    line-height: 1.3;
+}
+
+.calendar-stream-frame {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+}
+
+.calendar-stream {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* הפיצוי על שבועות שנוספים מעל המסך נעשה ב-JS; anchoring של הדפדפן היה מפצה פעם שנייה */
+    overflow-anchor: none;
+    /* Bootstrap שם smooth על :root; תיקוני scrollTop חייבים להיות מיידיים */
+    scroll-behavior: auto;
+    overscroll-behavior: contain;
+    outline: none;
+}
+
+/* visibility (לא display) — הפריסה וה-scrollTop עובדים גם כשהלוח מוסתר */
+.infinite-calendar.is-booting .calendar-stream {
+    visibility: hidden;
+}
+
+.calendar-boot-status {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    color: #888;
+    font-size: 0.95rem;
+}
+
+.infinite-calendar:not(.is-booting) .calendar-boot-status {
+    display: none;
+}
+
+.infinite-calendar .weekday-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-bottom: none;
+}
+
+.infinite-calendar .weekday-header > div {
+    padding: 6px 4px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-inline-end: 1px solid #ddd;
+}
+
+.infinite-calendar .weekday-header > div:last-child {
+    border-inline-end: none;
+}
+
+.continuous-calendar {
+    margin-bottom: 0;
+}
+
+/* תחילת חודש לועזי / עברי — סימון עדין בתוך התא */
+.dates-container .gregorian-date.month-start,
+.dates-container .hebrew-date.month-start {
+    font-weight: 700;
+    font-size: 0.95em;
+    color: #1a56a8;
+    border: 1px solid rgba(26, 86, 168, 0.35);
+    border-radius: 3px;
+    padding: 1px 4px;
+    background: rgba(26, 86, 168, 0.06);
+}
+
 /* רשת הימים - יוצר רשת של 7 עמודות */
 .calendar-grid {
     display: grid;

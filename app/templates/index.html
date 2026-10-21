@@ -3,14 +3,12 @@
 {% block title %}לוח שנה{% endblock %}
 
 {% block content %}
-<!-- לוח השנה -->
-<div class="calendar-container">
-    <div class="calendar-header">
-        <h2 id="current-month"></h2>
+<!-- לוח שנה אינסופי — גלילה רציפה עם טעינה הדרגתית -->
+<div class="calendar-container infinite-calendar is-booting">
+    <div class="calendar-toolbar">
+        <h2 id="current-month" class="toolbar-month-label" aria-live="polite"></h2>
         <div class="calendar-nav">
-            <button class="btn btn-outline-primary" onclick="previousMonth()">חודש קודם</button>
             <button class="btn btn-outline-primary" onclick="goToToday()">היום</button>
-            <button class="btn btn-outline-primary" onclick="nextMonth()">חודש הבא</button>
             <div class="dropdown d-inline-block">
                 <button class="btn btn-outline-primary dropdown-toggle" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false">
                     דלג לתאריך...
@@ -44,34 +42,35 @@
             <a href="/events_list" class="btn btn-outline-secondary">רשימת אירועים</a>
         </div>
     </div>
-    <table class="table table-bordered calendar-table">
-        <thead>
-            <tr>
-                <th>ראשון</th>
-                <th>שני</th>
-                <th>שלישי</th>
-                <th>רביעי</th>
-                <th>חמישי</th>
-                <th>שישי</th>
-                <th>שבת</th>
-            </tr>
-        </thead>
-        <tbody id="calendar-body">
-            <!-- הנתונים יוכנסו כאן דרך JavaScript -->
-        </tbody>
-    </table>
+
+    <div class="calendar-stream-frame">
+        <div id="calendar-stream" class="calendar-stream" tabindex="-1" aria-busy="true">
+            <div class="weekday-header" aria-hidden="true">
+                <div>ראשון</div>
+                <div>שני</div>
+                <div>שלישי</div>
+                <div>רביעי</div>
+                <div>חמישי</div>
+                <div>שישי</div>
+                <div>שבת</div>
+            </div>
+            <table class="table table-bordered calendar-table continuous-calendar">
+                <tbody id="calendar-weeks">
+                    <!-- שבועות רציפים נטענים לכאן -->
+                </tbody>
+            </table>
+        </div>
+        <div id="calendar-boot-status" class="calendar-boot-status" aria-live="polite">טוען לוח…</div>
+    </div>
 </div>
 
 {% include 'partials/quick_event_modal.html' %}
 
 <script>
-// פונקציה שתרוץ בטעינת העמוד
 document.addEventListener('DOMContentLoaded', function() {
-    // מילוי שנים בדרופדאון
     const yearSelect = document.getElementById('yearSelect');
     const currentYear = new Date().getFullYear();
-    
-    // הוספת שנים מ-1900 עד 20 שנה קדימה
+
     for (let year = 1900; year <= currentYear + 20; year++) {
         const option = document.createElement('option');
         option.value = year;
@@ -81,29 +80,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         yearSelect.appendChild(option);
     }
-    
-    // בחירת החודש הנוכחי בדרופדאון
-    const currentMonth = new Date().getMonth();
-    document.getElementById('monthSelect').value = currentMonth;
+
+    document.getElementById('monthSelect').value = new Date().getMonth();
 });
 
-// פונקציה לקפיצה לתאריך שנבחר
 function jumpToDate() {
-    const selectedMonth = parseInt(document.getElementById('monthSelect').value);
-    const selectedYear = parseInt(document.getElementById('yearSelect').value);
-    
-    // עדכון התאריך הנוכחי בלוח השנה
-    currentDate = new Date(selectedYear, selectedMonth, 1);
-    
-    // עדכון הלוח
-    updateCalendar();
-    
-    // סגירת הדרופדאון
-    const dropdownMenu = document.querySelector('.dropdown-menu');
+    const selectedMonth = parseInt(document.getElementById('monthSelect').value, 10);
+    const selectedYear = parseInt(document.getElementById('yearSelect').value, 10);
+
+    if (typeof jumpToMonth === 'function') {
+        jumpToMonth(selectedYear, selectedMonth + 1);
+    }
+
     const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('jumpToDateBtn'));
     if (dropdown) {
         dropdown.hide();
     }
 }
 </script>
-{% endblock %} 
+{% endblock %}
