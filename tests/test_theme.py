@@ -1,18 +1,4 @@
-import os
-import tempfile
-
 import pytest
-
-os.environ.setdefault("DATABASE_PATH", os.path.join(tempfile.mkdtemp(), "test.db"))
-
-from app import app as flask_app  # noqa: E402
-
-
-@pytest.fixture()
-def client():
-    flask_app.config["TESTING"] = True
-    with flask_app.test_client() as client:
-        yield client
 
 
 @pytest.mark.parametrize("path", ["/", "/events_list"])
