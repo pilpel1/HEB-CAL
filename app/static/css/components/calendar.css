@@ -729,7 +729,9 @@
 
     .infinite-calendar .calendar-nav {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px 44px;
+        /* עמודה שלישית: צפיפות מעל מתג הערכה, כל אחד בגובה שורת הכפתורים */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
+        align-items: stretch;
         width: 100%;
         gap: 0.35rem;
     }
@@ -753,18 +755,24 @@
 
     .infinite-calendar .calendar-nav > .theme-toggle-btn,
     .infinite-calendar .calendar-nav > .density-toggle-btn {
-        grid-row: 1 / span 2;
-        width: 44px;
-        min-width: 44px;
+        grid-column: 3;
+        width: 40px;
+        min-width: 40px;
+        height: auto;
+        min-height: 40px;
         padding: 0;
-    }
-
-    .infinite-calendar .calendar-nav > .theme-toggle-btn:not(.density-toggle-btn) {
-        grid-column: 4;
+        align-self: stretch;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .infinite-calendar .calendar-nav > .density-toggle-btn {
-        grid-column: 3;
+        grid-row: 1;
+    }
+
+    .infinite-calendar .calendar-nav > .theme-toggle-btn:not(.density-toggle-btn) {
+        grid-row: 2;
     }
 
     .calendar-events-list-btn {
@@ -997,6 +1005,34 @@
         align-items: center;
         justify-content: center;
     }
+}
+
+/* outline כמו מתג הערכה גם כש-aria-pressed דלוק — בלי המילוי האפור של Bootstrap */
+.calendar-nav > .theme-toggle-btn,
+.calendar-nav > .density-toggle-btn {
+    --bs-btn-hover-color: var(--bs-btn-color);
+    --bs-btn-hover-bg: transparent;
+    --bs-btn-hover-border-color: var(--bs-btn-border-color);
+    --bs-btn-active-color: var(--bs-btn-color);
+    --bs-btn-active-bg: transparent;
+    --bs-btn-active-border-color: var(--bs-btn-border-color);
+}
+
+.calendar-nav > .theme-toggle-btn:hover,
+.calendar-nav > .theme-toggle-btn:focus,
+.calendar-nav > .theme-toggle-btn:focus-visible,
+.calendar-nav > .theme-toggle-btn:active,
+.calendar-nav > .theme-toggle-btn[aria-pressed="true"],
+.calendar-nav > .density-toggle-btn:hover,
+.calendar-nav > .density-toggle-btn:focus,
+.calendar-nav > .density-toggle-btn:focus-visible,
+.calendar-nav > .density-toggle-btn:active,
+.calendar-nav > .density-toggle-btn[aria-pressed="true"] {
+    color: var(--bs-btn-color);
+    background-color: transparent;
+    background-image: none;
+    border-color: var(--bs-btn-border-color);
+    box-shadow: none;
 }
 
 /* אותו כפתור מרובע כמו מתג הערכה: אייקון בלבד, צפוף = 3 קווים, מרווח = 2 */
