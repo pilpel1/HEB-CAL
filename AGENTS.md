@@ -56,13 +56,11 @@ Do not assume CI runs automated tests until pytest is added.
 | `app/templates/` | Jinja2: `base.html`, `index.html`, `events_list.html`, partials |
 | `app/static/css/` | Component CSS (calendar, forms, variables) |
 | `init_db.py` | Optional DB init helper |
-| `migrations/` | **Stale** — see known issues |
-| `bot/` | **Stubs** — Telegram bot not implemented |
 
 ## Known issues / repo reality
 
-1. **`migrations/` is stale and unused.** `app/database.py` creates and evolves tables directly at startup. Do not treat Alembic versions as source of truth without reconciling with `database.py`.
-2. **`bot/`** contains empty/stub code; the Telegram bot is not finished (`BOT_TOKEN` in `.env` is optional).
+1. **Schema lives in `app/database.py`.** Tables are created and evolved at startup (inline SQL). There is no Alembic/Flask-Migrate workflow in this repo.
+2. **Telegram bot is planned, not started.** Optional `BOT_TOKEN` in `.env` is reserved for a future integration; there is no `bot/` package in the tree yet.
 3. **`app/static/js/script.js`** is monolithic and hard to navigate; refactors should stay small and behavior-preserving.
 4. **Branch `feature/infinite-scroll-calendar`** holds unmerged infinite-scroll calendar work — do not confuse with `main` when merging or reviewing.
 
