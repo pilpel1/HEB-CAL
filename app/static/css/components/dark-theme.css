@@ -101,6 +101,24 @@
     background: var(--bs-body-bg);
 }
 
+[data-bs-theme="dark"] .agenda-resize {
+    color: #cbd5e1;
+}
+
+[data-bs-theme="dark"] .agenda-resize-grip {
+    background: #64748b;
+}
+
+[data-bs-theme="dark"] .agenda-resize-restore {
+    background: #1e293b;
+    color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .agenda-resize:focus-visible,
+[data-bs-theme="dark"] .agenda-resize-restore:focus-visible {
+    outline-color: #93c5fd;
+}
+
 [data-bs-theme="dark"] .day-agenda-title,
 [data-bs-theme="dark"] .agenda-text,
 [data-bs-theme="dark"] .agenda-time {

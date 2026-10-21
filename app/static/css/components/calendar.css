@@ -630,7 +630,8 @@
     touch-action: manipulation;
 }
 
-.day-agenda {
+.day-agenda,
+.agenda-resize {
     display: none;
 }
 
@@ -661,6 +662,67 @@
         padding: 0.35rem 0.3rem 0.2rem;
         height: auto;
         border-radius: 0.65rem;
+        /* ברירת מחדל 80/20. הגרירה קובעת פיקסלים; 0.25fr הוא אותו יחס לפני שהסקריפט רץ */
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 0.25fr);
+    }
+
+    .agenda-resize {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 28px;
+        min-height: 28px;
+        margin: 0;
+        touch-action: none;
+        cursor: ns-resize;
+        user-select: none;
+        background: transparent;
+        color: #64748b;
+    }
+
+    .agenda-resize-grip {
+        width: 40px;
+        height: 4px;
+        border-radius: 999px;
+        background: #c5c9d1;
+    }
+
+    .agenda-resize.is-collapsed .agenda-resize-grip {
+        display: none;
+    }
+
+    .agenda-resize-restore {
+        display: none;
+        width: 36px;
+        height: 22px;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: #e8eef8;
+        color: #1d4ed8;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .agenda-resize.is-collapsed .agenda-resize-restore {
+        display: inline-flex;
+    }
+
+    .agenda-resize.is-collapsed-grid .agenda-resize-restore svg {
+        transform: rotate(180deg);
+    }
+
+    .agenda-resize:focus-visible,
+    .agenda-resize-restore:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+    }
+
+    .calendar-stream-frame {
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
     }
 
     .infinite-calendar .calendar-nav {
@@ -851,12 +913,11 @@
     .day-agenda {
         display: flex;
         flex-direction: column;
-        /* חלק קבוע מהכרטיס המלא — הרשת מקבלת את השאר והשורות גבוהות */
-        flex: 0 0 36%;
         min-height: 0;
+        height: 100%;
         overflow: hidden;
         border-top: 1px solid #e5e7eb;
-        margin-top: 0.15rem;
+        margin-top: 0;
         background: #fff;
     }
 
@@ -921,6 +982,7 @@
     margin: 0;
     padding: 0 0.1rem 0.2rem;
     overflow-y: auto;
+    overscroll-behavior: contain;
     min-height: 0;
     flex: 1 1 auto;
 }
@@ -987,7 +1049,8 @@
 .agenda-parasha .agenda-text { color: #2980b9; font-weight: 700; }
 .agenda-fast .agenda-text { color: #d35400; font-weight: 700; }
 
-.infinite-calendar.is-booting .day-agenda {
+.infinite-calendar.is-booting .day-agenda,
+.infinite-calendar.is-booting .agenda-resize {
     visibility: hidden;
 }
 
