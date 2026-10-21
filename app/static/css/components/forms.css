@@ -246,3 +246,151 @@
         padding-bottom: 0.6rem;
     }
 }
+
+/* תזכורות במודל — סגור כברירת מחדל, נפתח בתוך הגוף שנגלל */
+.quick-reminder-wrap {
+    margin-top: 0.65rem;
+}
+
+.quick-reminder-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    margin: 0;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.quick-reminder-check input {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin: 0;
+}
+
+.quick-reminder-panel:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.15rem;
+}
+
+.reminder-offset-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.reminder-offset-chip {
+    border: 1px solid var(--border-color, #ced4da);
+    background: transparent;
+    color: inherit;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.78rem;
+    line-height: 1.3;
+    min-height: 32px;
+    cursor: pointer;
+}
+
+.reminder-offset-chip.is-selected {
+    background: var(--primary-color, #2563eb);
+    border-color: var(--primary-color, #2563eb);
+    color: #fff;
+}
+
+.quick-reminder-custom-toggle {
+    border: 0;
+    background: none;
+    color: var(--primary-color, #2563eb);
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    min-height: 36px;
+    padding: 0;
+}
+
+.reminder-custom-row:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) auto;
+    gap: 0.35rem;
+    align-items: center;
+    margin-top: 0.15rem;
+}
+
+.reminder-custom-row .form-control,
+.reminder-custom-row .form-select {
+    min-width: 0;
+    min-height: 40px;
+}
+
+.reminder-form-error {
+    color: #b42318;
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+.reminder-empty-people,
+.reminder-people-link {
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.reminder-recipient-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.75rem;
+}
+
+.reminder-recipient-list label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 36px;
+    margin: 0;
+}
+
+.reminder-settings .card {
+    border-radius: 1rem;
+}
+
+.reminder-settings .form-control,
+.reminder-settings .form-select {
+    min-height: 40px;
+}
+
+.reminder-person-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.reminder-person-chat {
+    direction: ltr;
+    unicode-bidi: isolate;
+    font-variant-numeric: tabular-nums;
+}
+
+.reminder-help {
+    font-size: 0.92rem;
+}
+
+.reminder-help ol {
+    padding-inline-start: 1.2rem;
+    margin-bottom: 0;
+}
+
+.reminder-code {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+    margin-top: 0.25rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.4rem;
+    background: var(--bs-tertiary-bg, #f3f4f6);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.85rem;
+}

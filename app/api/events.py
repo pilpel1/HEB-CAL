@@ -16,6 +16,8 @@ from app.database import (
     import_data,
     update_event,
 )
+from app.reminders.repository import people_ids, replace_event_reminders
+from app.reminders.schedule import OffsetError, parse_reminders_payload
 
 
 REQUIRED_EVENT_FIELDS = ("title", "gregorian_date", "hebrew_date")
@@ -69,6 +71,17 @@ def _serialize_rows(rows):
     return [dict(row) for row in rows]
 
 
+def _parsed_reminders(data):
+    """None = המפתח לא נשלח (בעדכון משאירים את הקיים). שגיאה = tuple של תשובה."""
+    if "reminders" not in data:
+        return None, None
+    try:
+        parsed = parse_reminders_payload(data.get("reminders"), people_ids())
+    except OffsetError as exc:
+        return None, (jsonify({"error": str(exc), "success": False}), 400)
+    return parsed, None
+
+
 def _load_import_payload():
     uploaded_file = request.files.get('file')
     if uploaded_file:
@@ -103,7 +116,11 @@ def add_event():
     if validation_error:
         return validation_error
 
-    success = create_event(
+    reminders, reminder_error = _parsed_reminders(data)
+    if reminder_error:
+        return reminder_error
+
+    event_id = create_event(
         title=data['title'],
         gregorian_date=data['gregorian_date'],
         hebrew_date=data['hebrew_date'],
@@ -113,8 +130,9 @@ def add_event():
         color=data.get('color'),
     )
 
-    if success:
-        return jsonify({"success": True})
+    if event_id:
+        replace_event_reminders(event_id, reminders or [])
+        return jsonify({"success": True, "id": event_id})
 
     return jsonify({"error": "Failed to create event", "success": False}), 400
 
@@ -125,6 +143,10 @@ def update_single_event(event_id):
     validation_error = _validate_event_payload(data)
     if validation_error:
         return validation_error
+
+    reminders, reminder_error = _parsed_reminders(data)
+    if reminder_error:
+        return reminder_error
 
     success = update_event(
         event_id,
@@ -138,6 +160,8 @@ def update_single_event(event_id):
     )
 
     if success:
+        if reminders is not None:
+            replace_event_reminders(event_id, reminders)
         return jsonify({"success": True})
 
     return jsonify({"error": "Failed to update event", "success": False}), 400
