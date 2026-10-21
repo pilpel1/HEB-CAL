@@ -111,7 +111,8 @@
     top: 0;
     z-index: 3;
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    /* minmax(0, 1fr) — בלי זה העמודה גדלה לפי המילה ולא מיושרת לתאי הטבלה */
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     background: #f8f9fa;
     border: 1px solid #ddd;
     border-bottom: none;
@@ -123,6 +124,13 @@
     font-weight: 600;
     font-size: 0.9rem;
     border-inline-end: 1px solid #ddd;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.weekday-header .wd-short {
+    display: none;
 }
 
 .infinite-calendar .weekday-header > div:last-child {
@@ -193,6 +201,8 @@
     justify-content: flex-start;
     min-height: 120px;
     height: 100%;
+    width: 100%;
+    min-width: 0;
 }
 
 /* אזור התאריכים - תמיד בראש התא, תופס מקום בזרימה */
@@ -225,6 +235,8 @@
     flex-direction: column;
     align-items: stretch;
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
 }
 
 /* אזור החגים ופרשות */
@@ -234,6 +246,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .jewish-events-container:empty {
@@ -246,6 +260,10 @@
     border-radius: 0.25rem;
     margin: 1px 0;
     text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .holiday {
@@ -269,6 +287,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .multi-day-rail:empty {
@@ -282,6 +302,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .day-content:empty {
@@ -293,11 +315,16 @@
     padding: 2px 4px;
     border-radius: 3px;
     font-size: 0.85em;
-    word-wrap: break-word;
     position: relative;
     box-sizing: border-box;
     min-height: 1.45em;
+    min-width: 0;
+    max-width: 100%;
     line-height: 1.25;
+    /* בלי nowrap התא הצר (~45px בטלפון) שובר את הכותרת אות-אות */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* אירועים בלי צבע — מסגרת עדינה, בלי מילוי */
@@ -395,12 +422,15 @@
     border: 1px solid var(--border-color);
     padding: 0;
     height: auto;
-    overflow: visible;
+    overflow: hidden;
 }
 
 /* גובר על Bootstrap (.table > * > * → middle) כדי שהתאריכים יישארו למעלה */
+/* הספציפיות של Bootstrap (.table > :not(caption) > * > *) גוברת על .calendar-table td.
+   בלי padding: 0 נשארים ~12px לטקסט והכותרת נשברת אות-אות. */
 .table.calendar-table > :not(caption) > * > * {
     vertical-align: top;
+    padding: 0;
 }
 
 .calendar-table td[data-date] {
@@ -521,7 +551,8 @@
     width: 100%;
     border: 0;
     background: transparent;
-    padding: 0.45rem 1rem;
+    padding: 0.55rem 1rem;
+    min-height: 44px;
     text-align: right;
     font: inherit;
     color: #212529;
@@ -547,4 +578,83 @@
     height: 1px;
     margin: 0.35rem 0;
     background: rgba(0, 0, 0, 0.1);
+}
+
+.calendar-table td[data-date] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+}
+
+/* טלפון: 375 / 390 — כפתורים בשתי שורות, ימי השבוע באות אחת, תאריך בעמודה */
+@media (max-width: 480px) {
+    .calendar-container.infinite-calendar {
+        padding: 0.5rem 0.35rem 0.45rem;
+        height: calc(100dvh - 0.75rem);
+    }
+
+    .infinite-calendar .calendar-nav {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+        width: 100%;
+        gap: 0.35rem;
+    }
+
+    .infinite-calendar .calendar-nav > .dropdown {
+        min-width: 0;
+    }
+
+    .infinite-calendar .calendar-nav .btn {
+        min-height: 40px;
+        padding: 0.35rem 0.4rem;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+
+    .infinite-calendar .calendar-nav > .dropdown > .btn,
+    .infinite-calendar .toolbar-month-label {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .infinite-calendar .calendar-nav > .theme-toggle-btn {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+        width: 44px;
+        min-width: 44px;
+        padding: 0;
+    }
+
+    .calendar-events-list-btn {
+        margin-inline-start: 0;
+    }
+
+    .infinite-calendar .weekday-header .wd-full { display: none; }
+    .infinite-calendar .weekday-header .wd-short { display: inline; }
+
+    .dates-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+    }
+
+    .gregorian-date,
+    .hebrew-date,
+    .holiday, .parasha, .fast {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .gregorian-date,
+    .hebrew-date {
+        padding: 0 1px;
+        font-size: 0.68rem;
+        line-height: 1.2;
+    }
+
+    .day-content { padding: 1px 2px; }
+    .day-cell { min-height: 4.25rem; }
 }
