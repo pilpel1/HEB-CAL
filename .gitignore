@@ -83,3 +83,6 @@ notes.txt
 
 # Local UI backup files
 app/static/css/style_before_split.css
+
+# Vendored / local documentation copies
+pyluach_docs/
