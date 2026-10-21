@@ -7,6 +7,15 @@
     --border-color: #e2e8f0;
 }
 
+/* מצב כהה — data-bs-theme נקבע ב-base.html ומשפיע גם על משתני Bootstrap 5.3 */
+[data-bs-theme="dark"] {
+    --primary-color: #3b82f6;
+    --secondary-color: #60a5fa;
+    --background-color: #15181c;
+    --text-color: #dee2e6;
+    --border-color: #495057;
+}
+
 /* סגנונות בסיסיים לכל העמוד - צבע רקע, צבע טקסט ופונט */
 body {
     background-color: var(--background-color);
