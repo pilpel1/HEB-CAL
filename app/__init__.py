@@ -38,3 +38,7 @@ def add_event():
 @app.route('/events_list')
 def events_list():
     return render_template('events_list.html')
+
+@app.route('/settings')
+def settings():
+    return render_template('settings.html')

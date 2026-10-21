@@ -13,6 +13,12 @@
 // אתחול הדף
 document.addEventListener('DOMContentLoaded', async () => {
     initQuickEventModal();
+    if (typeof initReminderNotifications === 'function') {
+        initReminderNotifications();
+    }
+    if (typeof initReminderPeoplePage === 'function') {
+        initReminderPeoplePage();
+    }
 
     if (isInfiniteCalendarPage()) {
         await initInfiniteCalendar();

@@ -289,3 +289,26 @@
 [data-bs-theme="dark"] .edit-search {
     color: var(--bs-link-color);
 }
+
+[data-bs-theme="dark"] .reminder-offset-chip {
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .reminder-offset-chip.is-selected {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+}
+
+[data-bs-theme="dark"] .quick-reminder-custom-toggle {
+    color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .reminder-form-error {
+    color: #ffb4ab;
+}
+
+[data-bs-theme="dark"] .reminder-person-row {
+    border-bottom-color: var(--bs-border-color);
+}
