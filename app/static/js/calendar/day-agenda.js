@@ -4,6 +4,67 @@ function isCompactCalendar() {
     return window.matchMedia('(max-width: 480px)').matches;
 }
 
+function densityDivisor() {
+    try {
+        return localStorage.getItem('heb-cal-density') === 'compact' ? 8 : 6;
+    } catch (error) {
+        return 6;
+    }
+}
+
+function updateDensityToggle() {
+    const button = document.getElementById('density-toggle');
+    if (!button) {
+        return;
+    }
+    const compact = densityDivisor() === 8;
+    button.textContent = compact ? 'רחב' : 'צפוף';
+    button.setAttribute('aria-pressed', compact ? 'true' : 'false');
+    button.title = compact ? 'שורות גבוהות יותר' : 'יותר שבועות על המסך';
+}
+
+/** בטלפון גובה שורה ≈ אזור הגלילה / 6, כדי ש-5–6 שבועות ימלאו את הרשת. */
+function syncWeekRowHeight() {
+    const root = document.documentElement;
+    const stream = infiniteCalendar.stream;
+    if (!isCompactCalendar() || !stream) {
+        if (root.style.getPropertyValue('--week-row-height')) {
+            root.style.removeProperty('--week-row-height');
+        }
+        return;
+    }
+    const header = stream.querySelector('.weekday-header');
+    const headerH = header ? header.offsetHeight : 0;
+    const grid = stream.clientHeight - headerH;
+    if (grid < 120) {
+        return;
+    }
+    const next = `${Math.max(44, Math.floor(grid / densityDivisor()))}px`;
+    if (root.style.getPropertyValue('--week-row-height') === next) {
+        return;
+    }
+    const apply = () => root.style.setProperty('--week-row-height', next);
+    if (infiniteCalendar.ready && infiniteCalendar.body && infiniteCalendar.body.rows.length) {
+        preserveScrollAnchor(apply);
+    } else {
+        apply();
+    }
+}
+
+function toggleCalendarDensity() {
+    const next = densityDivisor() === 8 ? 'comfortable' : 'compact';
+    try {
+        localStorage.setItem('heb-cal-density', next);
+    } catch (error) {
+        /* מצב פרטי — נשאר עד רענון */
+    }
+    updateDensityToggle();
+    syncWeekRowHeight();
+    if (typeof updateVisibleMonthLabel === 'function') {
+        updateVisibleMonthLabel();
+    }
+}
+
 function syncAgendaSelection() {
     document.querySelectorAll('#calendar-weeks td.is-agenda-day').forEach((td) => {
         td.classList.remove('is-agenda-day');
@@ -29,10 +90,18 @@ function ensureAgendaDayVisible(dateStr) {
     const top = contentTopY();
     const bottom = stream.getBoundingClientRect().bottom;
     const rect = row.getBoundingClientRect();
-    if (rect.top >= top - 1 && rect.bottom <= bottom + 1) {
+    if (rect.height < 1) {
+        return;
+    }
+    const visible = Math.min(rect.bottom, bottom) - Math.max(rect.top, top);
+    const need = Math.min(rect.height, bottom - top);
+    if (visible >= need * 0.6) {
         return;
     }
     const delta = rect.top < top ? rect.top - top : rect.bottom - bottom;
+    if (Math.abs(delta) > stream.clientHeight) {
+        return;
+    }
     stream.scrollTop += delta;
 }
 
@@ -106,6 +175,11 @@ function initDayAgenda() {
         return;
     }
     root.dataset.bound = '1';
+
+    updateDensityToggle();
+    document.getElementById('density-toggle')?.addEventListener('click', () => {
+        toggleCalendarDensity();
+    });
 
     document.getElementById('day-agenda-add')?.addEventListener('click', () => {
         const dateStr = infiniteCalendar.agendaDate || getTodayDateStr();

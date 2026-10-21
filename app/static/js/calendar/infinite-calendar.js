@@ -175,6 +175,9 @@ function onStreamScrollEnd() {
 
 /** גובה שורה השתנה בלי שאנחנו ביקשנו (פונט, רוחב חלון) — מחזירים את העוגן לפני paint */
 function onCalendarResize() {
+    if (typeof syncWeekRowHeight === 'function') {
+        syncWeekRowHeight();
+    }
     const cal = infiniteCalendar;
     if (!cal.ready || !cal.anchor) {
         return;
@@ -187,76 +190,71 @@ function onCalendarResize() {
     scheduleMaintain();
 }
 
-function applyMonthLabel(label, cell) {
-    const text = formatToolbarLabel(
-        Number(cell.dataset.year),
-        Number(cell.dataset.month),
-        cell.dataset.hebrewMonth || '',
-        cell.dataset.hebrewYear || ''
-    );
-    if (label.textContent !== text) {
-        label.textContent = text;
+function bestWeightedKey(scores) {
+    let key = '';
+    let score = -1;
+    for (const [candidate, value] of scores) {
+        if (value > score) {
+            score = value;
+            key = candidate;
+        }
     }
-}
-
-/** היום על המסך (לא רסיס בקצה) — אחרת null. */
-function todayCellInView() {
-    const cell = infiniteCalendar.body?.querySelector('td.current-day');
-    const stream = infiniteCalendar.stream;
-    if (!cell || !stream) {
-        return null;
-    }
-    const top = contentTopY();
-    const bottom = stream.getBoundingClientRect().bottom;
-    const rect = cell.getBoundingClientRect();
-    const visible = Math.min(rect.bottom, bottom) - Math.max(rect.top, top);
-    if (visible >= 8 && visible >= rect.height * 0.35) {
-        return cell;
-    }
-    return null;
+    return key;
 }
 
 function updateVisibleMonthLabel() {
     const label = document.getElementById('current-month');
-    if (!label || !infiniteCalendar.body) {
+    const body = infiniteCalendar.body;
+    const stream = infiniteCalendar.stream;
+    if (!label || !body || !stream) {
         return;
     }
-    // כשהיום על המסך הכותרת היא החודש שלו. קודם שבת של השורה העליונה
-    // נשארה בתשרי גם כשי׳ חשון היה באמצע. בלי היום על המסך — השורה העליונה,
-    // כדי שקפיצה ל-1 בחודש תשאיר את שם החודש שאליו קפצנו.
-    const todayCell = todayCellInView();
-    if (todayCell) {
-        applyMonthLabel(label, todayCell);
+    // החודש שתופס הכי הרבה פיקסלים גלויים (לא שבת של השורה העליונה — היא נשארה
+    // בתשרי כשי׳ חשון היה באמצע). הטיה קטנה למרכז שוברת תיקו.
+    const top = contentTopY();
+    const bottom = stream.getBoundingClientRect().bottom;
+    const half = (bottom - top) / 2;
+    if (half <= 0) {
         return;
     }
-    // לא rowAtY(top+1): שורה קודמת שרק 5px שלה מציצים מתחת לכותרת הייתה גונבת את החודש
-    const row = rowNearestContentTop();
-    const cell = row?.cells[6];
-    if (cell) {
-        applyMonthLabel(label, cell);
-    }
-}
-
-/** השורה שה-top שלה הכי קרוב לראש האזור הגלוי */
-function rowNearestContentTop() {
-    const y = contentTopY();
-    const rows = infiniteCalendar.body?.rows;
-    if (!rows || !rows.length) {
-        return null;
-    }
-    let best = null;
-    let bestDist = Infinity;
+    const mid = (top + bottom) / 2;
+    const greg = new Map();
+    const heb = new Map();
+    const rows = body.rows;
     for (let i = 0; i < rows.length; i += 1) {
-        const top = rows[i].getBoundingClientRect().top;
-        const dist = Math.abs(top - y);
-        if (dist < bestDist) {
-            bestDist = dist;
-            best = rows[i];
-        } else if (top > y) {
+        const rect = rows[i].getBoundingClientRect();
+        if (rect.bottom <= top) {
+            continue;
+        }
+        if (rect.top >= bottom) {
             break;
         }
+        const visible = Math.min(rect.bottom, bottom) - Math.max(rect.top, top);
+        if (visible <= 0) {
+            continue;
+        }
+        const rowMid = (rect.top + rect.bottom) / 2;
+        const weight = visible * (1 + Math.max(0, 1 - Math.abs(rowMid - mid) / half) * 0.15);
+        for (const cell of rows[i].cells) {
+            const gKey = `${cell.dataset.year}-${cell.dataset.month}`;
+            greg.set(gKey, (greg.get(gKey) || 0) + weight);
+            if (cell.dataset.hebrewMonth) {
+                const hKey = `${cell.dataset.hebrewYear || ''}\n${cell.dataset.hebrewMonth}`;
+                heb.set(hKey, (heb.get(hKey) || 0) + weight);
+            }
+        }
     }
-    return best;
+    const gKey = bestWeightedKey(greg);
+    if (!gKey) {
+        return;
+    }
+    const [gy, gm] = gKey.split('-');
+    const hKey = bestWeightedKey(heb);
+    const [hYear, hMonth] = hKey ? hKey.split('\n') : ['', ''];
+    const text = formatToolbarLabel(Number(gy), Number(gm), hMonth, hYear);
+    if (label.textContent !== text) {
+        label.textContent = text;
+    }
 }
 
 /** ממתין לפונט Heebo כדי שגובה השורות לא ישתנה אחרי המיקום הראשוני (עם תקרת זמן) */
@@ -386,6 +384,9 @@ async function initInfiniteCalendar() {
     if (typeof renderDayAgenda === 'function') {
         renderDayAgenda(today);
     }
+    if (typeof syncWeekRowHeight === 'function') {
+        syncWeekRowHeight();
+    }
     const ok = await renderAround(today, 'center');
     if (!ok) {
         if (status) {
@@ -394,9 +395,21 @@ async function initInfiniteCalendar() {
         return;
     }
 
+    // שורות כבר על המסך (עדיין מוסתר): מודדים שוב את הכותרת הדביקה, מתקנים גובה,
+    // ומרחיבים את ה-DOM. הכול לפני שמורידים את ה-overlay, כדי שהיום לא יקפוץ.
+    cal.ready = true;
+    if (typeof syncWeekRowHeight === 'function') {
+        syncWeekRowHeight();
+    }
+    maintainInfiniteCalendar();
+    const centered = scrollTargetFor(today, 'center');
+    if (centered !== null) {
+        cal.stream.scrollTop = Math.max(0, centered);
+    }
+    cal.anchor = captureAnchor();
+
     root?.classList.remove('is-booting');
     cal.stream.setAttribute('aria-busy', 'false');
-    cal.ready = true;
 
     cal.stream.addEventListener('scroll', onStreamScroll, { passive: true });
     cal.stream.addEventListener('scrollend', onStreamScrollEnd, { passive: true });

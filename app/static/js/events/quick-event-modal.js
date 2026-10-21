@@ -255,21 +255,19 @@ function initQuickEventModal() {
         // כדי ש-smoke_ui לא ימשוך את האירוע שלוש פעמים.
         let tapTimer = null;
         calendarRoot.addEventListener('click', (event) => {
+            const cell = event.target.closest('td[data-date]');
+            const compact = typeof isCompactCalendar === 'function' && isCompactCalendar();
+            // בטלפון כל לחיצה על היום (כולל צ'יפ ו-"+N") רק בוחרת אותו. הוספה: "הוסף" בפאנל.
+            if (cell && compact) {
+                // בלי גלילה: הזזת השורה בין שני הקליקים של דאבל-קליק מפספסת את הצ'יפ
+                selectAgendaDay(cell.getAttribute('data-date'));
+                return;
+            }
             const eventItem = event.target.closest('.event-item[data-event-id]');
             if (eventItem) {
                 const eventId = eventItem.getAttribute('data-event-id');
-                const hostCell = eventItem.closest('td[data-date]');
-                if (hostCell && typeof isCompactCalendar === 'function' && isCompactCalendar()) {
-                    selectAgendaDay(hostCell.getAttribute('data-date'));
-                }
                 clearTimeout(tapTimer);
                 tapTimer = setTimeout(() => openEditEventModal(eventId), 280);
-                return;
-            }
-            const cell = event.target.closest('td[data-date]');
-            // בטלפון לחיצה על היום פותחת את הפאנל, לא את הטופס. הוספה: כפתור הפאנל / תפריט
-            if (cell && typeof isCompactCalendar === 'function' && isCompactCalendar()) {
-                selectAgendaDay(cell.getAttribute('data-date'), { reveal: true });
                 return;
             }
             if (!window.matchMedia('(pointer: coarse)').matches) {

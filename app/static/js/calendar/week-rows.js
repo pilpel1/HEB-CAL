@@ -1,7 +1,11 @@
 // בניית שורות שבוע ותאי יום, וצביעה מחדש של אירועים בשורות קיימות
 
+/** עברי: תמיד השם המלא. לועזי: גם קיצור ("נוב") — ה-CSS מציג אותו רק בטלפון. */
 function monthMarkHtml(fullName, shortName) {
-    return `<span class="month-mark month-mark-full">${escapeHtml(fullName)}</span><span class="month-mark month-mark-short">${escapeHtml(shortName)}</span>`;
+    const short = shortName
+        ? `<span class="month-mark month-mark-short">${escapeHtml(shortName)}</span>`
+        : '';
+    return `<span class="month-mark month-mark-full">${escapeHtml(fullName)}</span>${short}`;
 }
 
 function buildDayCell(year, month, day) {
@@ -47,7 +51,7 @@ function buildDayCell(year, month, day) {
     const hebrewClass = day.is_hebrew_month_start ? 'hebrew-date month-start' : 'hebrew-date';
     const gregorianClass = isFirstOfMonth ? 'gregorian-date month-start' : 'gregorian-date';
     const hebrewInner = day.is_hebrew_month_start
-        ? `<span class="day-num">${escapeHtml(hebLetter)}</span>${monthMarkHtml(hebMonth, shortHebrewMonthName(hebMonth))}`
+        ? `<span class="day-num">${escapeHtml(hebLetter)}</span>${monthMarkHtml(hebMonth)}`
         : `<span class="day-num">${escapeHtml(hebLetter)}</span>`;
     const gregInner = isFirstOfMonth
         ? `<span class="day-num">${day.gregorian_day}</span>${monthMarkHtml(gregFullMonth, gregShortMonth)}`

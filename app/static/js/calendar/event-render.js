@@ -158,6 +158,8 @@ function trimCellChips(cell) {
         const badge = document.createElement('div');
         badge.className = 'cell-more';
         badge.textContent = `+${hidden}`;
+        badge.title = 'כל האירועים';
+        badge.setAttribute('role', 'button');
         cell.querySelector('.cell-content')?.appendChild(badge);
     }
 }

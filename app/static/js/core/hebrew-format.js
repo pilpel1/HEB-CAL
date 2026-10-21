@@ -10,31 +10,9 @@ function get_hebrew_day(day) {
 }
 
 function getShortMonthName(month) {
-    const shortMonths = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 
+    const shortMonths = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני',
                         'יולי', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'];
     return shortMonths[month];
-}
-
-/** קיצור לחודש עברי בתא צר — "חשון" → "חש׳". השם המלא נשאר ב-title ובפאנל. */
-function shortHebrewMonthName(name) {
-    const shorts = {
-        'תשרי': 'תש׳',
-        'חשון': 'חש׳',
-        'כסלו': 'כס׳',
-        'טבת': 'טב׳',
-        'שבט': 'שב׳',
-        'אדר': 'אד׳',
-        'אדר א׳': 'א״א',
-        'אדר ב': 'א״ב',
-        'אדר ב׳': 'א״ב',
-        'ניסן': 'ני׳',
-        'אייר': 'אי׳',
-        'סיון': 'סי׳',
-        'תמוז': 'תמ׳',
-        'אב': 'אב',
-        'אלול': 'אל׳',
-    };
-    return shorts[name] || name || '';
 }
 
 const GREGORIAN_MONTH_NAMES_HE = [
