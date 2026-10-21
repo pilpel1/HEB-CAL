@@ -16,13 +16,23 @@ def test_pages_include_theme_bootstrap_and_toggle(client, path):
 
 
 def test_theme_assets_are_served(client):
-    assert client.get("/static/js/theme.js").status_code == 200
-    assert client.get("/static/css/components/dark-theme.css").status_code == 200
+    js = client.get("/static/js/theme.js")
+    css = client.get("/static/css/components/dark-theme.css")
+    try:
+        assert js.status_code == 200
+        assert css.status_code == 200
+    finally:
+        js.close()
+        css.close()
 
 
 def test_dark_theme_covers_infinite_calendar_chrome(client):
     """מצב כהה נכתב מול המרקאפ הישן; הלוח האינסופי חייב דריסות משלו."""
-    css = client.get("/static/css/components/dark-theme.css").get_data(as_text=True)
+    response = client.get("/static/css/components/dark-theme.css")
+    try:
+        css = response.get_data(as_text=True)
+    finally:
+        response.close()
     for selector in (
         ".toolbar-month-label",
         ".weekday-header",

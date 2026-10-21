@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import jsonify, make_response, request
 
@@ -19,6 +19,15 @@ from app.database import (
 
 
 REQUIRED_EVENT_FIELDS = ("title", "gregorian_date", "hebrew_date")
+
+
+def _export_timestamp():
+    """UTC stamp in the historical export shape ``YYYY-MM-DDTHH:MM:SSZ``.
+
+    ``utcnow()`` is deprecated and naive. ``isoformat()`` on an aware UTC
+    datetime writes ``+00:00``; existing export files use a trailing ``Z``.
+    """
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def _get_payload():
@@ -227,7 +236,7 @@ def test_events():
 def export_events():
     payload = {
         "version": 1,
-        "exported_at": datetime.utcnow().isoformat(timespec='seconds') + "Z",
+        "exported_at": _export_timestamp(),
         **export_data(),
     }
     response = make_response(json.dumps(payload, ensure_ascii=False, indent=2))

@@ -1,5 +1,7 @@
 """CRUD לאירועים + ייבוא/ייצוא JSON דרך ה-API."""
 import json
+import re
+from datetime import datetime, timezone
 
 SAMPLE_EVENT = {
     "title": "אירוע בדיקה",
@@ -66,6 +68,11 @@ def test_export_import_json_round_trip(client):
     assert export_resp.status_code == 200
     exported = json.loads(export_resp.data.decode("utf-8"))
     assert exported["version"] == 1
+    # הפורמט הישן: utcnow().isoformat(timespec='seconds') + "Z" — בלי "+00:00"
+    stamp = exported["exported_at"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", stamp)
+    parsed = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    assert abs((datetime.now(timezone.utc) - parsed).total_seconds()) < 5
     assert any(e["id"] == event_id and e["title"] == SAMPLE_EVENT["title"] for e in exported["events"])
     assert any(c["color_code"] == "cyan" for c in exported["colors"])
 

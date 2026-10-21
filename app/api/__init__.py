@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from datetime import MAXYEAR, MINYEAR, datetime
-from convertdate import hebrew
+from pyluach.dates import GregorianDate
 import logging
 import calendar
 from app.services.jewish_calendar import JewishCalendarService
@@ -39,6 +39,18 @@ def get_hebrew_day(day):
     }
     return days.get(day, '')
 
+
+def _hebrew_ymd(year, month, day):
+    """Gregorian → (hebrew year, month, day). Month 1 is Nisan, 13 is Adar II.
+
+    Same numbering ``convertdate.hebrew.from_gregorian`` used to return.
+    pyluach matches it day-for-day; convertdate's own ``to_jd`` still calls
+    the deprecated ``month_days`` wrapper (latest 2.5.1).
+    """
+    hebrew = GregorianDate(year, month, day).to_heb()
+    return hebrew.year, hebrew.month, hebrew.day
+
+
 @api.route('/hebrew-date/<date_str>')
 def get_hebrew_date(date_str):
     try:
@@ -46,10 +58,10 @@ def get_hebrew_date(date_str):
         gregorian_date = datetime.strptime(date_str, '%Y-%m-%d')
         
         # המר לתאריך עברי
-        heb_year, heb_month, heb_day = hebrew.from_gregorian(
+        heb_year, heb_month, heb_day = _hebrew_ymd(
             gregorian_date.year,
             gregorian_date.month,
-            gregorian_date.day
+            gregorian_date.day,
         )
         
         # החזר את התאריך העברי כמחרוזת (שנה באותיות)
@@ -84,7 +96,7 @@ def get_calendar(year, month):
     
     # מילוי הימים בחודש
     for day in range(1, num_days + 1):
-        hebrew_date = hebrew.from_gregorian(year, month, day)
+        hebrew_date = _hebrew_ymd(year, month, day)
         hebrew_day = hebrew_date[2]
         hebrew_month_name = get_hebrew_month_name(hebrew_date[1])
         hebrew_months_set.add(hebrew_month_name)
@@ -112,7 +124,7 @@ def get_calendar(year, month):
     }
     
     # קבלת השנה העברית מהיום הראשון של החודש
-    first_day_hebrew = hebrew.from_gregorian(year, month, 1)
+    first_day_hebrew = _hebrew_ymd(year, month, 1)
     hebrew_year = first_day_hebrew[0]
     hebrew_year_str = format_hebrew_year(hebrew_year, with_heh_prefix=True)
     

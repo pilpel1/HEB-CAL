@@ -51,3 +51,13 @@ def test_calendar_month_has_every_day_with_hebrew_data(client):
     # א' אב תשפ"ו = 15.7.2026 (ט' באב = 23.7.2026)
     first_of_av = next(d for d in days if d["is_hebrew_month_start"])
     assert (first_of_av["gregorian_day"], first_of_av["hebrew_month"]) == (15, "אב")
+
+
+def test_calendar_leap_year_keeps_adar_numbering(client):
+    """חודש 12 = אדר, חודש 13 = אדר ב. אותו מיספור כמו convertdate."""
+    feb = [d for d in client.get("/api/calendar/2024/2").get_json()["calendar"] if d["gregorian_day"]]
+    march = [d for d in client.get("/api/calendar/2024/3").get_json()["calendar"] if d["gregorian_day"]]
+    assert next(d for d in feb if d["is_hebrew_month_start"])["hebrew_month"] == "אדר"
+    adar_ii = next(d for d in march if d["gregorian_day"] == 11)
+    assert adar_ii["is_hebrew_month_start"]
+    assert adar_ii["hebrew_month"] == "אדר ב"
