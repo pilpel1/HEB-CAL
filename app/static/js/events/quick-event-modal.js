@@ -47,80 +47,49 @@ function setQuickEventModalMode(isEdit) {
 }
 
 function populateQuickHourOptions() {
-    const hourSelect = document.getElementById('quick_hour');
-    if (!hourSelect || hourSelect.dataset.filled === '1') {
-        return;
-    }
-
-    for (let hour = 0; hour < 24; hour++) {
-        const value = String(hour).padStart(2, '0');
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = value;
-        hourSelect.appendChild(option);
-    }
-    hourSelect.dataset.filled = '1';
+    // נשאר גלובלי: השעה עברה ל-input type=time, אין יותר רשימת שעות
 }
 
 function clearExtraQuickMinuteOptions() {
-    const minuteSelect = document.getElementById('quick_minute');
-    if (!minuteSelect) {
+    // נשאר גלובלי: דקות חופשיות נכנסות ישירות לשדה השעה
+}
+
+function setEndDateOpen(isOpen) {
+    const wrap = document.querySelector('#quickEventModal .quick-end-wrap');
+    const toggle = document.getElementById('quick_end_toggle');
+    if (!wrap || !toggle) {
         return;
     }
-
-    minuteSelect.querySelectorAll('option[data-extra="1"]').forEach((option) => option.remove());
+    wrap.classList.toggle('is-open', Boolean(isOpen));
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggle.textContent = isOpen ? 'הסר תאריך סיום' : '+ תאריך סיום';
 }
 
 function setQuickTime(timeValue) {
-    const hourSelect = document.getElementById('quick_hour');
-    const minuteSelect = document.getElementById('quick_minute');
-    if (!hourSelect || !minuteSelect) {
+    const input = document.getElementById('quick_time');
+    if (!input) {
         return;
     }
-
-    clearExtraQuickMinuteOptions();
-
     if (!timeValue) {
-        hourSelect.value = '';
-        minuteSelect.value = '';
+        input.value = '';
         return;
     }
-
-    const [hour = '', minute = ''] = timeValue.split(':');
-    hourSelect.value = hour;
-
-    const normalizedMinute = String(minute).padStart(2, '0');
-    const allowedMinutes = ['00', '15', '30', '45'];
-    if (!allowedMinutes.includes(normalizedMinute)) {
-        // שומר שעה קיימת שאינה בקפיצות של 15 בלי לאבד אותה
-        const extraOption = document.createElement('option');
-        extraOption.value = normalizedMinute;
-        extraOption.textContent = normalizedMinute;
-        extraOption.dataset.extra = '1';
-        minuteSelect.appendChild(extraOption);
+    const match = String(timeValue).match(/^(\d{1,2}):(\d{2})/);
+    if (!match) {
+        input.value = '';
+        return;
     }
-    minuteSelect.value = normalizedMinute;
+    input.value = `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
 function getQuickTimeValue() {
-    const hourSelect = document.getElementById('quick_hour');
-    const minuteSelect = document.getElementById('quick_minute');
-    const hour = hourSelect?.value || '';
-    let minute = minuteSelect?.value || '';
-
-    if (!hour) {
+    const input = document.getElementById('quick_time');
+    const value = (input?.value || '').trim();
+    const match = value.match(/^(\d{2}):(\d{2})/);
+    if (!match) {
         return null;
     }
-
-    // שעה בלי דקות → 00
-    if (!minute) {
-        minute = '00';
-        if (minuteSelect) {
-            minuteSelect.value = '00';
-        }
-    }
-
-    return `${hour}:${minute}`;
+    return `${match[1]}:${match[2]}`;
 }
 
 function extractTimeFromTitle(titleValue) {
@@ -192,6 +161,7 @@ function fillQuickEventForm(eventData = {}) {
     document.getElementById('quick_hebrew_date').value = eventData.hebrew_date || '';
     setQuickTime(eventData.time || '');
     document.getElementById('quick_end_date').value = eventData.end_date || '';
+    setEndDateOpen(Boolean(eventData.end_date));
     document.getElementById('quick_description').value = eventData.description || '';
     setQuickColor(eventData.color || '');
     syncEndDateMin(
@@ -288,14 +258,23 @@ function initQuickEventModal() {
             const eventItem = event.target.closest('.event-item[data-event-id]');
             if (eventItem) {
                 const eventId = eventItem.getAttribute('data-event-id');
+                const hostCell = eventItem.closest('td[data-date]');
+                if (hostCell && typeof isCompactCalendar === 'function' && isCompactCalendar()) {
+                    selectAgendaDay(hostCell.getAttribute('data-date'));
+                }
                 clearTimeout(tapTimer);
                 tapTimer = setTimeout(() => openEditEventModal(eventId), 280);
+                return;
+            }
+            const cell = event.target.closest('td[data-date]');
+            // בטלפון לחיצה על היום פותחת את הפאנל, לא את הטופס. הוספה: כפתור הפאנל / תפריט
+            if (cell && typeof isCompactCalendar === 'function' && isCompactCalendar()) {
+                selectAgendaDay(cell.getAttribute('data-date'), { reveal: true });
                 return;
             }
             if (!window.matchMedia('(pointer: coarse)').matches) {
                 return;
             }
-            const cell = event.target.closest('td[data-date]');
             if (!cell) {
                 return;
             }
@@ -304,6 +283,11 @@ function initQuickEventModal() {
 
         calendarRoot.addEventListener('dblclick', (event) => {
             clearTimeout(tapTimer);
+            if (typeof isCompactCalendar === 'function'
+                && isCompactCalendar()
+                && !event.target.closest('.event-item')) {
+                return;
+            }
             const eventItem = event.target.closest('.event-item[data-event-id]');
             if (eventItem) {
                 event.stopPropagation();
@@ -328,17 +312,20 @@ function initQuickEventModal() {
         });
     });
 
-    const hourSelect = document.getElementById('quick_hour');
-    const minuteSelect = document.getElementById('quick_minute');
-    if (hourSelect && minuteSelect) {
-        hourSelect.addEventListener('change', () => {
-            if (hourSelect.value && !minuteSelect.value) {
-                minuteSelect.value = '00';
+    const endToggle = document.getElementById('quick_end_toggle');
+    if (endToggle) {
+        endToggle.addEventListener('click', () => {
+            const wrap = endToggle.closest('.quick-end-wrap');
+            const endInput = document.getElementById('quick_end_date');
+            if (wrap?.classList.contains('is-open')) {
+                if (endInput) {
+                    endInput.value = '';
+                }
+                setEndDateOpen(false);
+                return;
             }
-            if (!hourSelect.value) {
-                minuteSelect.value = '';
-                clearExtraQuickMinuteOptions();
-            }
+            setEndDateOpen(true);
+            endInput?.focus();
         });
     }
 
@@ -375,12 +362,6 @@ function initQuickEventModal() {
 
         // ניסיון אחרון לחלץ שעה מהכותרת לפני שמירה
         applyTimeFromTitlePrefix(document.getElementById('quick_title').value);
-
-        // אם נשארו דקות בלי שעה — מתעלמים מהדקות
-        if (!document.getElementById('quick_hour').value) {
-            document.getElementById('quick_minute').value = '';
-            clearExtraQuickMinuteOptions();
-        }
 
         const eventData = getQuickEventFormData();
         const endInput = document.getElementById('quick_end_date');

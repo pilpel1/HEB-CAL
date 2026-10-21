@@ -141,16 +141,37 @@
     margin-bottom: 0;
 }
 
-/* תחילת חודש לועזי / עברי — סימון עדין בתוך התא */
+/* תחילת חודש: טקסט מודגש בלי מסגרת (המסגרת נחתכה בתא צר) + פס דק על התא */
 .dates-container .gregorian-date.month-start,
 .dates-container .hebrew-date.month-start {
     font-weight: 700;
-    font-size: 0.95em;
     color: #1a56a8;
-    border: 1px solid rgba(26, 86, 168, 0.35);
-    border-radius: 3px;
-    padding: 1px 4px;
-    background: rgba(26, 86, 168, 0.06);
+    border: 0;
+    background: none;
+    padding: 0;
+}
+
+.month-mark {
+    font-size: 0.72em;
+    font-weight: 700;
+    line-height: 1;
+    margin-inline-start: 1px;
+}
+
+.month-mark-short {
+    display: none;
+}
+
+.calendar-table td.heb-month-start {
+    box-shadow: inset 0 2px 0 #1a56a8;
+}
+
+.calendar-table td.greg-month-start {
+    box-shadow: inset 0 -2px 0 #94a3b8;
+}
+
+.calendar-table td.heb-month-start.greg-month-start {
+    box-shadow: inset 0 2px 0 #1a56a8, inset 0 -2px 0 #94a3b8;
 }
 
 /* רשת הימים - יוצר רשת של 7 עמודות */
@@ -209,23 +230,29 @@
 .dates-container {
     flex-shrink: 0;
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     justify-content: space-between;
-    align-items: center;
-    min-height: 25px;
+    align-items: baseline;
+    gap: 2px;
+    min-height: 0;
+    padding: 1px 2px;
     background-color: #f8f9fa;
     border-bottom: 1px solid #eee;
 }
 
-.gregorian-date {
-    padding: 4px;
-    font-size: 0.85em;
-    color: #666;
-}
-
+.gregorian-date,
 .hebrew-date {
-    padding: 4px;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+    min-width: 0;
+    padding: 2px 3px;
     font-size: 0.85em;
     color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* אזור התוכן - מתחת לתאריכים, גדל עם האירועים */
@@ -446,6 +473,31 @@
     height: auto;
 }
 
+/* "היום" נשאר outline. בטלפון :hover נתקע אחרי לחיצה וממלא את הכפתור בכחול */
+.btn-today {
+    --bs-btn-hover-color: var(--bs-btn-color);
+    --bs-btn-hover-bg: transparent;
+    --bs-btn-hover-border-color: var(--bs-btn-border-color);
+    --bs-btn-active-color: var(--bs-btn-color);
+    --bs-btn-active-bg: rgba(37, 99, 235, 0.14);
+    --bs-btn-active-border-color: var(--bs-btn-border-color);
+    --bs-btn-focus-box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.2);
+}
+
+.btn-today.btn-outline-primary:hover,
+.btn-today.btn-outline-primary:focus,
+.btn-today.btn-outline-primary:focus-visible {
+    color: var(--bs-btn-color);
+    background-color: transparent;
+    border-color: var(--bs-btn-border-color);
+}
+
+.btn-today.btn-outline-primary:active {
+    color: var(--bs-btn-color);
+    background-color: rgba(37, 99, 235, 0.14);
+    border-color: var(--bs-btn-border-color);
+}
+
 /* כפתור חזרה להיום - עיצוב יחודי בירוק */
 .today-btn {
     background-color: #4CAF50;
@@ -587,11 +639,16 @@
     touch-action: manipulation;
 }
 
-/* טלפון: 375 / 390 — כפתורים בשתי שורות, ימי השבוע באות אחת, תאריך בעמודה */
+.day-agenda {
+    display: none;
+}
+
+/* טלפון: 375 / 390 — כפתורים בשתי שורות, ימי השבוע באות אחת, תאריכים בשורה */
 @media (max-width: 480px) {
     .calendar-container.infinite-calendar {
         padding: 0.5rem 0.35rem 0.45rem;
-        height: calc(100dvh - 0.75rem);
+        /* mt-3 של הקונטיינר כבר אוכל 1rem — בלי זה הפאנל נחתך מתחת למסך */
+        height: calc(100dvh - 1rem);
     }
 
     .infinite-calendar .calendar-nav {
@@ -633,15 +690,19 @@
     .infinite-calendar .weekday-header .wd-full { display: none; }
     .infinite-calendar .weekday-header .wd-short { display: inline; }
 
+    /* עברי ולועזי באותה שורה — העמודה הקודמת אכלה את גובה התא */
     .dates-container {
-        flex-direction: column;
-        align-items: center;
-        gap: 0;
+        flex-direction: row;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1px;
+        padding: 0 1px;
     }
 
     .gregorian-date,
     .hebrew-date,
-    .holiday, .parasha, .fast {
+    .holiday, .parasha, .fast,
+    .event-item {
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -650,11 +711,161 @@
 
     .gregorian-date,
     .hebrew-date {
-        padding: 0 1px;
+        padding: 0;
         font-size: 0.68rem;
-        line-height: 1.2;
+        line-height: 1.15;
     }
 
-    .day-content { padding: 1px 2px; }
-    .day-cell { min-height: 4.25rem; }
+    .month-mark-full { display: none; }
+    .month-mark-short { display: inline; }
+
+    .holiday, .parasha, .fast,
+    .event-item {
+        font-size: 0.65rem;
+        padding: 0 1px;
+        margin: 0;
+        line-height: 1.2;
+        min-height: 0;
+        border-radius: 2px;
+    }
+
+    /* השעה נשארת ב-title, בפאנל ובטופס — בתא נשאר השם */
+    .event-time,
+    .event-sep,
+    .parasha-prefix {
+        display: none;
+    }
+
+    .day-content,
+    .jewish-events-container,
+    .multi-day-rail {
+        padding: 0 1px;
+        gap: 1px;
+    }
+
+    .day-cell { min-height: 2.35rem; }
+
+    .cell-more {
+        font-size: 0.62rem;
+        line-height: 1.1;
+        text-align: center;
+        font-weight: 700;
+        color: #64748b;
+    }
+
+    .day-agenda {
+        display: flex;
+        flex-direction: column;
+        /* לא לכווץ — אחרת הרשימה נמעכת ל-0 והשמות המלאים נעלמים */
+        flex: 0 0 auto;
+        max-height: 34dvh;
+        overflow: hidden;
+        border-top: 1px solid #e5e7eb;
+        margin-top: 0.15rem;
+        background: #fff;
+    }
+}
+
+.is-chip-hidden {
+    display: none !important;
+}
+
+.calendar-table td.is-agenda-day .day-cell {
+    box-shadow: inset 0 0 0 2px #2563eb;
+}
+
+.day-agenda-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0.2rem 0.1rem 0.1rem;
+}
+
+.day-agenda-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    min-width: 0;
+}
+
+.day-agenda #day-agenda-add {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0.15rem 0.7rem;
+}
+
+.day-agenda-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0.1rem 0.2rem;
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+.agenda-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.28rem 0.15rem;
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
+.agenda-event {
+    cursor: pointer;
+    border-radius: 0.35rem;
+}
+
+.agenda-event:active {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.agenda-time {
+    font-weight: 700;
+    direction: ltr;
+    unicode-bidi: isolate;
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.agenda-text {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.agenda-range {
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+.agenda-swatch {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    align-self: center;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.agenda-swatch.is-empty {
+    background: transparent;
+}
+
+.agenda-empty {
+    color: #64748b;
+    font-size: 0.85rem;
+    padding: 0.1rem 0.15rem 0.3rem;
+    list-style: none;
+}
+
+.agenda-holiday .agenda-text { color: #c0392b; font-weight: 700; }
+.agenda-parasha .agenda-text { color: #2980b9; font-weight: 700; }
+.agenda-fast .agenda-text { color: #d35400; font-weight: 700; }
+
+.infinite-calendar.is-booting .day-agenda {
+    visibility: hidden;
 }

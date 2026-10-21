@@ -318,6 +318,7 @@ def main() -> int:
     )
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=800)
+    parser.add_argument("--color-scheme", choices=["light", "dark"], default=None)
     args = parser.parse_args()
 
     artifacts = Path(args.artifacts) if args.artifacts else None
@@ -334,12 +335,15 @@ def main() -> int:
         else:
             browser = p.chromium.launch()
         size = {"width": args.width, "height": args.height}
-        context = browser.new_context(
-            viewport=size,
-            locale="he-IL",
-            record_video_dir=str(artifacts / "video") if artifacts else None,
-            record_video_size=size,
-        )
+        context_kwargs = {
+            "viewport": size,
+            "locale": "he-IL",
+            "record_video_dir": str(artifacts / "video") if artifacts else None,
+            "record_video_size": size,
+        }
+        if args.color_scheme:
+            context_kwargs["color_scheme"] = args.color_scheme
+        context = browser.new_context(**context_kwargs)
         context.add_init_script(SAMPLER_JS)
         page = context.new_page()
         page.on("pageerror", lambda e: errors.append(f"page error: {e}"))

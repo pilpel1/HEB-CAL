@@ -67,21 +67,28 @@
     unicode-bidi: plaintext;
 }
 
-/* בחירת שעה במודל מהיר — LTR כדי שיוצג HH:MM משמאל לימין */
-.quick-time-fields {
-    display: flex;
-    direction: ltr;
-    align-items: center;
-    gap: 0.4rem;
+/* תאריך + שעה + עברי בשורה אחת; בטלפון עברי יורד מתחת */
+.quick-when {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.75fr) minmax(0, 1fr);
+    gap: 0.5rem 0.6rem;
+    margin-bottom: 0.75rem;
 }
 
-.quick-time-fields .form-select {
-    flex: 1;
+.quick-when .form-control {
+    min-width: 0;
 }
 
-.quick-time-separator {
-    font-weight: 600;
-    color: #666;
+.quick-end-wrap {
+    margin-bottom: 0.75rem;
+}
+
+.quick-end-toggle {
+    display: none;
+}
+
+.quick-end-field .form-control {
+    min-width: 0;
 }
 
 /* בחירת צבע במודל מהיר */
@@ -155,15 +162,15 @@
 
     /* בלי min-height:0 הגוף לא מתכווץ והפוטר נחתך מתחת למסך */
     #quickEventModal .modal-dialog {
-        margin: 0.5rem auto;
-        height: calc(100dvh - 1rem);
-        max-height: calc(100dvh - 1rem);
+        margin: 0.75rem auto;
+        height: auto;
+        max-height: calc(100dvh - 1.5rem);
         min-height: 0;
     }
 
     #quickEventModal .modal-content {
-        height: 100%;
-        max-height: 100%;
+        height: auto;
+        max-height: calc(100dvh - 1.5rem);
         overflow: hidden;
     }
 
@@ -184,5 +191,58 @@
 
     #quickEventModal .modal-footer .btn {
         min-height: 40px;
+    }
+
+    #quickEventModal .form-control {
+        padding: 0.4rem 0.5rem;
+        font-size: 16px;
+        min-height: 40px;
+    }
+
+    #quickEventModal .form-label {
+        margin-bottom: 0.15rem;
+        font-size: 0.8rem;
+    }
+
+    .quick-when {
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr);
+        gap: 0.35rem 0.4rem;
+        margin-bottom: 0.45rem;
+    }
+
+    .quick-field-hebrew {
+        grid-column: 1 / -1;
+    }
+
+    #quickEventModal .quick-field-hebrew .form-control {
+        min-height: 0;
+        height: auto;
+        padding: 0.15rem 0.35rem;
+        background: transparent;
+        border-color: transparent;
+        font-size: 0.95rem;
+    }
+
+    .quick-end-toggle {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        margin: 0 0 0.25rem;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--primary-color, #2563eb);
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .quick-end-wrap:not(.is-open) .quick-end-field {
+        display: none;
+    }
+
+    #quickEventModal .modal-body {
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
     }
 }

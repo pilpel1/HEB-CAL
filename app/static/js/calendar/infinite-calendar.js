@@ -112,9 +112,24 @@ function maintainInfiniteCalendar() {
     }
 
     if (!cal.smoothScrolling) {
+        // כל batch מתקן עוגן לבד, ושגיאת עיגול נערמת כשהשורות נמוכות (טלפון).
+        // תיקון אחד מול העוגן המקורי מחזיר את מה שהיה על המסך בלי הסטייה.
+        const anchorBeforePrepend = captureAnchor();
+        let prepended = 0;
         for (let guard = 0; guard < 50; guard += 1) {
             if (stream.scrollTop >= ahead || !prependWeeks(batch)) {
                 break;
+            }
+            prepended += 1;
+        }
+        if (prepended && anchorBeforePrepend && anchorBeforePrepend.row.isConnected) {
+            const slipped = anchorBeforePrepend.row.getBoundingClientRect().top
+                - contentTopY()
+                - anchorBeforePrepend.offset;
+            const rowHeight = anchorBeforePrepend.row.getBoundingClientRect().height || 40;
+            // רק סטיית עיגול. משיכה של שורה שלמה מבטלת גלילה שכבר קרה
+            if (Math.abs(slipped) > 0.5 && Math.abs(slipped) < rowHeight * 0.5) {
+                restoreAnchor(anchorBeforePrepend);
             }
         }
     }
@@ -172,29 +187,76 @@ function onCalendarResize() {
     scheduleMaintain();
 }
 
-function updateVisibleMonthLabel() {
-    const label = document.getElementById('current-month');
-    if (!label || !infiniteCalendar.body) {
-        return;
-    }
-    // שבת של השורה העליונה: ברגע שה-1 לחודש (לועזי או עברי) מגיע לשורה העליונה, הכותרת מתחלפת
-    const row = rowAtY(contentTopY() + 48);
-    const cell = row?.cells[6];
-    if (!cell) {
-        return;
-    }
-
-    const gregYear = Number(cell.dataset.year);
-    const gregMonth = Number(cell.dataset.month);
+function applyMonthLabel(label, cell) {
     const text = formatToolbarLabel(
-        gregYear,
-        gregMonth,
+        Number(cell.dataset.year),
+        Number(cell.dataset.month),
         cell.dataset.hebrewMonth || '',
         cell.dataset.hebrewYear || ''
     );
     if (label.textContent !== text) {
         label.textContent = text;
     }
+}
+
+/** היום על המסך (לא רסיס בקצה) — אחרת null. */
+function todayCellInView() {
+    const cell = infiniteCalendar.body?.querySelector('td.current-day');
+    const stream = infiniteCalendar.stream;
+    if (!cell || !stream) {
+        return null;
+    }
+    const top = contentTopY();
+    const bottom = stream.getBoundingClientRect().bottom;
+    const rect = cell.getBoundingClientRect();
+    const visible = Math.min(rect.bottom, bottom) - Math.max(rect.top, top);
+    if (visible >= 8 && visible >= rect.height * 0.35) {
+        return cell;
+    }
+    return null;
+}
+
+function updateVisibleMonthLabel() {
+    const label = document.getElementById('current-month');
+    if (!label || !infiniteCalendar.body) {
+        return;
+    }
+    // כשהיום על המסך הכותרת היא החודש שלו. קודם שבת של השורה העליונה
+    // נשארה בתשרי גם כשי׳ חשון היה באמצע. בלי היום על המסך — השורה העליונה,
+    // כדי שקפיצה ל-1 בחודש תשאיר את שם החודש שאליו קפצנו.
+    const todayCell = todayCellInView();
+    if (todayCell) {
+        applyMonthLabel(label, todayCell);
+        return;
+    }
+    // לא rowAtY(top+1): שורה קודמת שרק 5px שלה מציצים מתחת לכותרת הייתה גונבת את החודש
+    const row = rowNearestContentTop();
+    const cell = row?.cells[6];
+    if (cell) {
+        applyMonthLabel(label, cell);
+    }
+}
+
+/** השורה שה-top שלה הכי קרוב לראש האזור הגלוי */
+function rowNearestContentTop() {
+    const y = contentTopY();
+    const rows = infiniteCalendar.body?.rows;
+    if (!rows || !rows.length) {
+        return null;
+    }
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < rows.length; i += 1) {
+        const top = rows[i].getBoundingClientRect().top;
+        const dist = Math.abs(top - y);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = rows[i];
+        } else if (top > y) {
+            break;
+        }
+    }
+    return best;
 }
 
 /** ממתין לפונט Heebo כדי שגובה השורות לא ישתנה אחרי המיקום הראשוני (עם תקרת זמן) */
@@ -316,6 +378,14 @@ async function initInfiniteCalendar() {
 
     // הכול מתחת ל-overlay: נתונים + פונט → רינדור → מיקום על היום → חשיפה. אין גלילה אחרי החשיפה.
     await Promise.all([loadMonthsAround(today), waitForFonts()]);
+    // הפאנל תופס גובה לפני המיקום, אחרת חשיפה שלו אחרי center מזיזה את היום
+    cal.agendaDate = today;
+    if (typeof initDayAgenda === 'function') {
+        initDayAgenda();
+    }
+    if (typeof renderDayAgenda === 'function') {
+        renderDayAgenda(today);
+    }
     const ok = await renderAround(today, 'center');
     if (!ok) {
         if (status) {

@@ -124,8 +124,7 @@ def check_calendar(page: Page, base: str, snap: dict) -> None:
     snap["modal_submit_new"] = page.text_content("#quick_submit_btn")
     page.fill("#quick_title", "סמוק 0930")
     page.dispatch_event("#quick_title", "input")
-    assert page.input_value("#quick_hour") == "09", page.input_value("#quick_hour")
-    assert page.input_value("#quick_minute") == "30"
+    assert page.input_value("#quick_time") == "09:30", page.input_value("#quick_time")
     assert page.input_value("#quick_title") == "סמוק"
     page.click('.quick-color-swatch[data-color="green"]')
     submit_modal(page)
@@ -142,6 +141,9 @@ def check_calendar(page: Page, base: str, snap: dict) -> None:
     snap["modal_title_edit"] = page.text_content("#quickEventModalLabel")
     snap["modal_submit_edit"] = page.text_content("#quick_submit_btn")
     page.fill("#quick_title", "סמוק ערוך")
+    end_input = page.locator("#quick_end_date")
+    if not end_input.is_visible():
+        page.click("#quick_end_toggle")
     page.fill("#quick_end_date", in3)
     submit_modal(page)
     expect(page.locator("#success-message")).to_have_text("האירוע עודכן בהצלחה")
@@ -256,6 +258,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:5000")
     parser.add_argument("--snapshot", help="נתיב לכתיבת JSON של מצב ה-UI")
+    parser.add_argument("--width", type=int, default=1280)
+    parser.add_argument("--height", type=int, default=800)
+    parser.add_argument("--color-scheme", choices=["light", "dark"], default=None)
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
@@ -263,7 +268,13 @@ def main() -> int:
     snap: dict = {}
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        context = browser.new_context(viewport={"width": 1280, "height": 800}, accept_downloads=True)
+        context_kwargs = {
+            "viewport": {"width": args.width, "height": args.height},
+            "accept_downloads": True,
+        }
+        if args.color_scheme:
+            context_kwargs["color_scheme"] = args.color_scheme
+        context = browser.new_context(**context_kwargs)
         page = context.new_page()
         page.set_default_timeout(8000)
         page.on("pageerror", lambda e: problems.append(f"pageerror: {e}"))
