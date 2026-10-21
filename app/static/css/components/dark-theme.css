@@ -1,0 +1,182 @@
+/*
+ * מצב כהה — דריסות לצבעים הקשיחים (בהירים) שבקבצי הרכיבים ובתבניות.
+ * בקובץ נפרד כדי לא לגעת ב-calendar.css (שעובר שכתוב במקביל).
+ * הסלקטור [data-bs-theme="dark"] מעלה ספציפיות, אז אין צורך ב-!important (חוץ ממקומות שבמקור יש).
+ */
+
+/* מיכלים */
+[data-bs-theme="dark"] .calendar-container,
+[data-bs-theme="dark"] .event-form-container,
+[data-bs-theme="dark"] .events-table,
+[data-bs-theme="dark"] #advancedSearchPanel,
+[data-bs-theme="dark"] .calendar-day {
+    background: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .calendar-container {
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.45);
+}
+
+/* לוח שנה */
+[data-bs-theme="dark"] .calendar-table th,
+[data-bs-theme="dark"] .table th,
+[data-bs-theme="dark"] .events-list-table th {
+    background-color: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .table td,
+[data-bs-theme="dark"] .events-list-table td {
+    border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .dates-container {
+    background-color: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .gregorian-date,
+[data-bs-theme="dark"] .hebrew-date,
+[data-bs-theme="dark"] .quick-time-separator,
+[data-bs-theme="dark"] .search-input-group #advancedSearchBtn {
+    color: var(--bs-secondary-color);
+}
+
+/* היום הנוכחי — ירוק כהה במקום ירוק פסטל */
+[data-bs-theme="dark"] .calendar-day.today,
+[data-bs-theme="dark"] .current-day,
+[data-bs-theme="dark"] .calendar-table td.current-day {
+    background-color: rgba(76, 175, 80, 0.16) !important;
+}
+
+[data-bs-theme="dark"] .calendar-table td.current-day .dates-container {
+    background-color: rgba(76, 175, 80, 0.35);
+    border-bottom-color: #4caf50;
+}
+
+/* חגים / צומות / פרשות — הצבע מגיע inline מה-backend (jewish_calendar.py), לכן !important */
+[data-bs-theme="dark"] .holiday { background-color: rgba(231, 76, 60, 0.3); color: #ffa8a0 !important; }
+[data-bs-theme="dark"] .fast { background-color: rgba(255, 165, 0, 0.28); color: #ffc078 !important; }
+[data-bs-theme="dark"] .parasha { background-color: rgba(74, 144, 226, 0.3); color: #a5ccff !important; }
+
+/*
+ * אירועים צבועים: הצבע מגיע inline מ-JS (rgba עם שקיפות 0.4) ולכן לא ניתן לדרוס אותו בלי לגעת ב-script.js.
+ * שכבת לבן שקופה (inset box-shadow) מבהירה את הרקע, וטקסט כהה שומר על ניגודיות.
+ */
+[data-bs-theme="dark"] .event-item:not(.event-uncolored),
+[data-bs-theme="dark"] td span[style*="background-color"] {
+    color: #111;
+    box-shadow: inset 0 0 0 100vmax rgba(255, 255, 255, 0.35);
+}
+
+/* תפריט הקשר */
+[data-bs-theme="dark"] .calendar-context-menu {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+[data-bs-theme="dark"] .calendar-context-menu button {
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .calendar-context-menu button:hover,
+[data-bs-theme="dark"] .calendar-context-menu button:focus {
+    background: var(--bs-secondary-bg);
+}
+
+[data-bs-theme="dark"] .calendar-context-menu button.is-danger {
+    color: #ff8787;
+}
+
+[data-bs-theme="dark"] .calendar-context-menu button.is-danger:hover,
+[data-bs-theme="dark"] .calendar-context-menu button.is-danger:focus {
+    background: rgba(255, 135, 135, 0.12);
+}
+
+[data-bs-theme="dark"] .calendar-context-menu .context-menu-separator {
+    background: var(--bs-border-color);
+}
+
+/* טפסים ומודל */
+[data-bs-theme="dark"] .form-control {
+    border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .quick-color-swatch.is-selected {
+    box-shadow: 0 0 0 2px var(--bs-body-bg), 0 0 0 4px var(--primary-color);
+}
+
+[data-bs-theme="dark"] .quick-color-swatch.is-none {
+    background: var(--bs-body-bg);
+    box-shadow: inset 0 0 0 1px var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] #success-message {
+    background-color: var(--bs-success-bg-subtle) !important;
+    border-color: var(--bs-success-border-subtle) !important;
+    color: var(--bs-success-text-emphasis) !important;
+}
+
+/* רשימת אירועים */
+[data-bs-theme="dark"] .edit-form-row,
+[data-bs-theme="dark"] .edit-event-form {
+    background-color: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .edit-event-form .form-control {
+    background-color: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .event-row-past,
+[data-bs-theme="dark"] .event-row-today,
+[data-bs-theme="dark"] .event-row-upcoming {
+    background-color: transparent;
+}
+
+[data-bs-theme="dark"] .event-row-past {
+    color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .event-status-past {
+    color: var(--bs-secondary-color);
+    background: var(--bs-secondary-bg);
+}
+
+[data-bs-theme="dark"] .event-status-today {
+    color: var(--bs-warning-text-emphasis);
+    background: var(--bs-warning-bg-subtle);
+}
+
+[data-bs-theme="dark"] .event-status-upcoming {
+    color: var(--bs-primary-text-emphasis);
+    background: var(--bs-primary-bg-subtle);
+}
+
+[data-bs-theme="dark"] .events-time-separator-label {
+    color: var(--bs-primary-text-emphasis);
+    background: linear-gradient(90deg, transparent, var(--bs-primary-bg-subtle) 20%, var(--bs-primary-bg-subtle) 80%, transparent);
+}
+
+[data-bs-theme="dark"] .events-time-separator-past .events-time-separator-label {
+    color: var(--bs-secondary-color);
+    background: linear-gradient(90deg, transparent, var(--bs-secondary-bg) 20%, var(--bs-secondary-bg) 80%, transparent);
+}
+
+[data-bs-theme="dark"] .events-time-separator-today .events-time-separator-label {
+    color: var(--bs-warning-text-emphasis);
+    background: linear-gradient(90deg, transparent, var(--bs-warning-bg-subtle) 20%, var(--bs-warning-bg-subtle) 80%, transparent);
+}
+
+[data-bs-theme="dark"] .filter-chip {
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .filter-chip .remove-filter {
+    background-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .edit-search {
+    color: var(--bs-link-color);
+}
