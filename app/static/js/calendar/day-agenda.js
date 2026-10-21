@@ -18,9 +18,10 @@ function updateDensityToggle() {
         return;
     }
     const compact = densityDivisor() === 9;
-    button.textContent = compact ? 'רחב' : 'צפוף';
+    const label = compact ? 'צפוף' : 'מרווח';
     button.setAttribute('aria-pressed', compact ? 'true' : 'false');
-    button.title = compact ? 'שורות גבוהות יותר' : 'יותר שבועות על המסך';
+    button.title = label;
+    button.setAttribute('aria-label', label);
 }
 
 function clampAgendaShare(value) {

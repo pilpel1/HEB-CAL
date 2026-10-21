@@ -729,7 +729,7 @@
 
     .infinite-calendar .calendar-nav {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px 44px;
         width: 100%;
         gap: 0.35rem;
     }
@@ -751,12 +751,20 @@
         min-width: 0;
     }
 
-    .infinite-calendar .calendar-nav > .theme-toggle-btn {
-        grid-column: 3;
+    .infinite-calendar .calendar-nav > .theme-toggle-btn,
+    .infinite-calendar .calendar-nav > .density-toggle-btn {
         grid-row: 1 / span 2;
         width: 44px;
         min-width: 44px;
         padding: 0;
+    }
+
+    .infinite-calendar .calendar-nav > .theme-toggle-btn:not(.density-toggle-btn) {
+        grid-column: 4;
+    }
+
+    .infinite-calendar .calendar-nav > .density-toggle-btn {
+        grid-column: 3;
     }
 
     .calendar-events-list-btn {
@@ -972,11 +980,43 @@
     min-width: 0;
 }
 
-.day-agenda #day-agenda-add,
-.day-agenda #density-toggle {
+.day-agenda #day-agenda-add {
     flex: 0 0 auto;
     min-height: 36px;
     padding: 0.15rem 0.7rem;
+}
+
+/* בדסקטופ שני כפתורי האייקון באותה קופסה (הערכה נמדדה 46×42) */
+@media (min-width: 481px) {
+    .calendar-nav > .theme-toggle-btn,
+    .calendar-nav > .density-toggle-btn {
+        width: 46px;
+        height: 42px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* אותו כפתור מרובע כמו מתג הערכה: אייקון בלבד, צפוף = 3 קווים, מרווח = 2 */
+.density-toggle-btn .density-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+}
+
+.density-toggle-btn .density-icon-compact {
+    display: none;
+}
+
+.density-toggle-btn[aria-pressed="true"] .density-icon-spacious {
+    display: none;
+}
+
+.density-toggle-btn[aria-pressed="true"] .density-icon-compact {
+    display: inline-block;
 }
 
 .day-agenda-list {
