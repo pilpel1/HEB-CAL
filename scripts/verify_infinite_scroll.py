@@ -119,12 +119,17 @@ TODAY_GEOMETRY_JS = r"""
   if (!today) return null;
   const box = window.__viewportBox();
   const r = today.getBoundingClientRect();
+  const tall = r.height > box.bottom - box.top;
   return {
     date: today.dataset.date,
     cellCenter: (r.top + r.bottom) / 2,
     viewCenter: (box.top + box.bottom) / 2,
     cellHeight: r.height,
-    inView: r.top >= box.top - 1 && r.bottom <= box.bottom + 1,
+    // תא גבוה מהמסך (הרבה אירועים בטלפון) — אי אפשר למרכז; מצופה שיתחיל בראש התוכן
+    tallerThanView: tall,
+    inView: tall
+      ? Math.abs(r.top - box.top) <= 2
+      : r.top >= box.top - 1 && r.bottom <= box.bottom + 1,
   };
 }
 """
@@ -195,7 +200,9 @@ def check_refresh(page: Page, base_url: str, rounds: int, expected_today: str) -
         if not geo or geo["date"] != expected_today:
             status = "FAIL"
             errors.append(f"refresh {i + 1}: today cell missing ({geo})")
-        elif not geo["inView"] or abs(geo["cellCenter"] - geo["viewCenter"]) > geo["cellHeight"]:
+        elif not geo["inView"] or (
+            not geo["tallerThanView"] and abs(geo["cellCenter"] - geo["viewCenter"]) > geo["cellHeight"]
+        ):
             status = "FAIL"
             errors.append(f"refresh {i + 1}: today not centered ({geo})")
         if moved > 2:
