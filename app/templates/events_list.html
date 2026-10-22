@@ -1139,7 +1139,10 @@ function updateFilterChips(searchParams) {
         }
         
         if (searchParams.color) {
-            const colorText = colorTranslations[searchParams.color] || searchParams.color;
+            const fromPalette = typeof eventColorName === 'function'
+                ? eventColorName(searchParams.color)
+                : '';
+            const colorText = fromPalette || colorTranslations[searchParams.color] || searchParams.color;
             chipsHtml += `
                 <div class="filter-chip" data-filter="color">
                     צבע: ${escapeHtml(colorText)}

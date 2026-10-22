@@ -527,15 +527,7 @@ def import_data(payload, mode="replace"):
                 (1 if flag else 0,),
             )
 
-        if "reminder_people" in payload:
-            from app.reminders.repository import upsert_person_for_import
-
-            people = payload.get("reminder_people")
-            if not isinstance(people, list):
-                raise ValueError("'reminder_people' must be an array")
-            for person in people:
-                upsert_person_for_import(person, replace_ids=(mode == "replace"))
-
+        # צבעים לפני אנשים: צבע של אדם חייב כבר להיות בפלטה.
         existing_colors = {
             (row["name"] or "").strip(): row
             for row in get_all_colors()
@@ -569,6 +561,15 @@ def import_data(payload, mode="replace"):
                 "background_color": background_color,
             }
             imported_colors += 1
+
+        if "reminder_people" in payload:
+            from app.reminders.repository import upsert_person_for_import
+
+            people = payload.get("reminder_people")
+            if not isinstance(people, list):
+                raise ValueError("'reminder_people' must be an array")
+            for person in people:
+                upsert_person_for_import(person, replace_ids=(mode == "replace"))
 
         existing_events = get_all_events() if mode == "merge" else []
         existing_by_id = {event["id"]: event for event in existing_events}

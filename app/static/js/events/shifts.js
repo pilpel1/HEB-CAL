@@ -14,6 +14,7 @@ const shiftUiState = {
     rulesSaving: false,
     rulesAgain: false,
     autoTitle: '',
+    colorIsSuggested: true,
 };
 
 function shiftLabelNames() {
@@ -63,6 +64,16 @@ function ensureShiftSettings() {
 
 function noteShiftPeople(people) {
     shiftUiState.people = people || [];
+    if (!shiftUiState.colorIsSuggested || shiftUiState.rulesDirty) {
+        return;
+    }
+    if (typeof currentShiftEditId === 'function' && currentShiftEditId()) {
+        return;
+    }
+    const next = suggestPersonColor();
+    if (next !== (shiftUiState.personColor || '')) {
+        setPersonColor(next);
+    }
 }
 
 function suggestPersonColor() {
@@ -75,7 +86,10 @@ function suggestPersonColor() {
             used.delete(current.color);
         }
     }
-    return ['cyan', 'yellow', 'orange', 'green'].find((color) => !used.has(color)) || 'cyan';
+    const codes = typeof paletteColorCodes === 'function'
+        ? paletteColorCodes()
+        : ['cyan', 'yellow', 'orange', 'green'];
+    return codes.find((color) => !used.has(color)) || codes[0] || 'cyan';
 }
 
 function setPersonColor(color) {
@@ -85,8 +99,30 @@ function setPersonColor(color) {
         return;
     }
     picker.querySelectorAll('.quick-color-swatch').forEach((button) => {
-        button.classList.toggle('is-selected', (button.dataset.color || '') === (color || ''));
+        const on = (button.dataset.color || '') === (color || '');
+        button.classList.toggle('is-selected', on);
+        button.setAttribute('aria-checked', on ? 'true' : 'false');
     });
+}
+
+function applyShiftColorDot(dot, color) {
+    if (!dot) {
+        return;
+    }
+    dot.className = 'shift-color-dot';
+    const code = String(color || '').trim();
+    if (!code) {
+        dot.hidden = true;
+        dot.style.backgroundColor = '';
+        dot.removeAttribute('title');
+        return;
+    }
+    dot.hidden = false;
+    dot.style.backgroundColor = typeof eventColorSwatchCss === 'function'
+        ? eventColorSwatchCss(code)
+        : code;
+    const name = typeof eventColorName === 'function' ? eventColorName(code) : '';
+    dot.title = name || code;
 }
 
 function readShiftMatrix(root) {
@@ -210,8 +246,7 @@ function appendShiftPersonMeta(container, person) {
     line.className = 'shift-person-meta';
     if (person.color) {
         const dot = document.createElement('span');
-        dot.className = `shift-color-dot color-${person.color}`;
-        dot.title = person.color;
+        applyShiftColorDot(dot, person.color);
         line.append(dot);
     }
     const text = document.createElement('span');
@@ -253,6 +288,7 @@ function peopleByRole(role) {
 function resetPersonShiftFields() {
     shiftUiState.filling = true;
     try {
+        shiftUiState.colorIsSuggested = true;
         setPersonColor(suggestPersonColor());
         writeShiftMatrix(document.getElementById('personShiftMatrix'), defaultShiftAllowed());
     } finally {
@@ -264,6 +300,7 @@ function fillPersonShiftFields(person) {
     shiftUiState.filling = true;
     clearShiftRulesDraft();
     try {
+        shiftUiState.colorIsSuggested = false;
         setPersonColor(person.color || '');
         writeShiftMatrix(
             document.getElementById('personShiftMatrix'),
@@ -521,6 +558,7 @@ async function saveShiftPerson(event) {
         return;
     }
     clearShiftRulesDraft();
+    shiftUiState.colorIsSuggested = false;
     setShiftPersonSaved(true);
     if (typeof showMessage === 'function') {
         showMessage('נשמר');
@@ -585,6 +623,7 @@ function initShiftSettings() {
             return;
         }
         setPersonColor(button.dataset.color || '');
+        shiftUiState.colorIsSuggested = false;
         noteShiftRulesEdited();
     });
     document.getElementById('shiftPersonForm')?.addEventListener('submit', saveShiftPerson);
@@ -684,13 +723,7 @@ function updateShiftPersonDot() {
         return;
     }
     const person = (shiftUiState.people || []).find((item) => String(item.id) === select.value);
-    dot.className = 'shift-color-dot';
-    if (!person || !person.color) {
-        dot.hidden = true;
-        return;
-    }
-    dot.hidden = false;
-    dot.classList.add(`color-${person.color}`);
+    applyShiftColorDot(dot, person && person.color);
 }
 
 function selectedShiftPerson() {

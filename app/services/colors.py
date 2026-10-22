@@ -69,6 +69,23 @@ def get_color(color_id: int) -> dict | None:
     return serialize_color(row) if row else None
 
 
+def canonical_color_code(value) -> str | None:
+    """קוד צבע כפי שהוא בפלטה, או None אם הוא לא שם.
+
+    ברירות המחדל (cyan וכו׳) וצבע מותאם (#ffcc88) עוברים באותה בדיקה.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    row = get_db().execute(
+        "SELECT color_code FROM event_colors WHERE lower(color_code) = lower(?)",
+        (text,),
+    ).fetchone()
+    if row is None:
+        return None
+    return row["color_code"]
+
+
 def _color_in_use(db, color_code: str) -> bool:
     tables = {
         row[0]

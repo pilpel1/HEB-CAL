@@ -21,7 +21,10 @@ def _color_error(exc: ColorError, status=400):
 
 @api.route("/colors", methods=["GET"])
 def get_colors():
-    return jsonify(list_colors())
+    response = jsonify(list_colors())
+    # הבוררים נטענים מחדש אחרי הוספה. בלי זה הדפדפן יכול להחזיר את הרשימה הישנה.
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @api.route("/colors", methods=["POST"])
