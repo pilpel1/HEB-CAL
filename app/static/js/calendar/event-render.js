@@ -191,15 +191,34 @@ function cellContentBottom(cell) {
     return bottom;
 }
 
+function resetChipFit(cell) {
+    cell.querySelectorAll('.cell-more').forEach((el) => el.remove());
+    cellChipNodes(cell).forEach((el) => {
+        el.classList.remove('is-chip-hidden', 'is-one-line');
+    });
+    cell.classList.remove('is-crowded');
+}
+
+/** משאיר את keep הראשונים. אם נשארו מוסתרים — מוסיף "+N". */
+function applyChipPrefix(content, hideable, keep) {
+    content.querySelectorAll('.cell-more').forEach((el) => el.remove());
+    hideable.forEach((el, index) => {
+        el.classList.toggle('is-chip-hidden', index >= keep);
+    });
+    const hidden = hideable.length - keep;
+    if (hidden > 0) {
+        content.appendChild(makeMoreBadge(hidden));
+    }
+}
+
 /**
- * בטלפון הכותרת עד שתי שורות. "+N" רק על מה שבאמת חורג מגובה התא.
+ * בטלפון הכותרת עד שתי שורות, וכמה שיותר צ'יפים כאלה נכנסים לגובה.
+ * "+N" רק על מה שלא נכנס. אם אף צ'יפ בשתי שורות לא נכנס יחד עם שורת "+N",
+ * הצ'יפ הראשון יורד לשורה אחת עם אליפסיס — ואז "+N". אף פעם לא "+N" לבד.
  * פס רב-יומי נשאר שלם כדי שההמשך בתאים השכנים לא יישבר.
  */
 function fitCellChips(cell) {
-    cell.querySelectorAll('.cell-more').forEach((el) => el.remove());
-    const chips = cellChipNodes(cell);
-    chips.forEach((el) => el.classList.remove('is-chip-hidden'));
-    cell.classList.remove('is-crowded');
+    resetChipFit(cell);
 
     if (!cell.isConnected) {
         return;
@@ -213,30 +232,28 @@ function fitCellChips(cell) {
         return;
     }
     const content = cell.querySelector('.cell-content');
-    const hideable = chips.filter((el) => !el.closest('.multi-day-rail'));
+    const hideable = cellChipNodes(cell).filter((el) => !el.closest('.multi-day-rail'));
     if (!content || hideable.length === 0) {
         return;
     }
 
     const overflows = () => cellContentBottom(cell) > limit + 1;
-    if (!overflows()) {
+    if (!overflows() || hideable.length === 1) {
         return;
     }
 
-    let hidden = 0;
-    for (let i = hideable.length - 1; i >= 0; i -= 1) {
-        hideable[i].classList.add('is-chip-hidden');
-        hidden += 1;
-        const badge = makeMoreBadge(hidden);
-        content.appendChild(badge);
+    for (let keep = hideable.length - 1; keep >= 1; keep -= 1) {
+        applyChipPrefix(content, hideable, keep);
         if (!overflows()) {
             return;
         }
-        badge.remove();
     }
-    if (hidden > 0) {
-        content.appendChild(makeMoreBadge(hidden));
+
+    const first = hideable[0];
+    if (first.querySelector('.event-title')) {
+        first.classList.add('is-one-line');
     }
+    applyChipPrefix(content, hideable, 1);
 }
 
 function fitWeekRowChips(row) {
