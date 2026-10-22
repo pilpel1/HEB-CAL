@@ -1,4 +1,5 @@
-// צבעי אירועים: בחירה בטופס, ו-CRUD בעמוד ההגדרות
+// צבעי אירועים ואנשים: פלטה אחת מ-/api/colors (ברירת מחדל + מותאם).
+// כל בורר נצבע מחדש מהתשובה האחרונה. תשובה ישנה שעדיין בדרך לא דורסת אותה.
 
 const NAMED_EVENT_SWATCH = {
     cyan: 'rgb(0, 255, 255)',
@@ -7,19 +8,89 @@ const NAMED_EVENT_SWATCH = {
     green: 'rgb(0, 128, 0)',
 };
 
+let eventColorPalette = [];
+let eventColorLoadSeq = 0;
+
 function eventColorSwatchCss(colorCode) {
     const named = NAMED_EVENT_SWATCH[String(colorCode || '').toLowerCase()];
     return named || String(colorCode || '#888888');
 }
 
+function currentEventColors() {
+    return eventColorPalette;
+}
+
+function eventColorName(colorCode) {
+    const code = String(colorCode || '').trim().toLowerCase();
+    if (!code) {
+        return '';
+    }
+    const row = eventColorPalette.find((color) => (
+        String(color.color_code || '').toLowerCase() === code
+    ));
+    return row && row.name ? row.name : '';
+}
+
+function paletteColorCodes() {
+    const codes = eventColorPalette.map((color) => color.color_code).filter(Boolean);
+    return codes.length ? codes : ['cyan', 'yellow', 'orange', 'green'];
+}
+
+function colorsForPicker(colors, selected) {
+    const list = Array.isArray(colors) ? colors.slice() : [];
+    const code = String(selected || '').trim();
+    if (!code) {
+        return list;
+    }
+    const known = list.some((color) => (
+        String(color.color_code || '').toLowerCase() === code.toLowerCase()
+    ));
+    if (!known) {
+        list.push({ color_code: code, name: eventColorName(code) || code });
+    }
+    return list;
+}
+
 async function loadEventColors() {
+    const seq = ++eventColorLoadSeq;
     try {
-        const response = await fetch('/api/colors');
+        const response = await fetch('/api/colors', { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(String(response.status));
+        }
         const colors = await response.json();
-        return Array.isArray(colors) ? colors : [];
+        const list = Array.isArray(colors) ? colors : [];
+        if (seq !== eventColorLoadSeq) {
+            return null;
+        }
+        eventColorPalette = list;
+        return list;
     } catch (error) {
         console.error('שגיאה בטעינת צבעים:', error);
-        return [];
+        return null;
+    }
+}
+
+function paintColorPicker(picker, colors) {
+    if (!picker) {
+        return;
+    }
+    picker.querySelectorAll('.quick-color-swatch:not(.is-none)').forEach((el) => el.remove());
+    for (const color of colors) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'quick-color-swatch';
+        const code = color.color_code || '';
+        if (NAMED_EVENT_SWATCH[String(code).toLowerCase()]) {
+            button.classList.add(`color-${String(code).toLowerCase()}`);
+        } else {
+            button.style.backgroundColor = eventColorSwatchCss(code);
+        }
+        button.dataset.color = code;
+        const label = color.name || code;
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        picker.appendChild(button);
     }
 }
 
@@ -29,24 +100,33 @@ function paintEventFormSwatches(colors) {
         return;
     }
     const selected = document.getElementById('quick_color')?.value || '';
-    picker.querySelectorAll('.quick-color-swatch:not(.is-none)').forEach((el) => el.remove());
-    for (const color of colors) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'quick-color-swatch';
-        const code = color.color_code || '';
-        if (NAMED_EVENT_SWATCH[code]) {
-            button.classList.add(`color-${code}`);
-        } else {
-            button.style.backgroundColor = eventColorSwatchCss(code);
-        }
-        button.dataset.color = code;
-        button.title = color.name || code;
-        button.setAttribute('aria-label', color.name || code);
-        picker.appendChild(button);
-    }
+    paintColorPicker(picker, colorsForPicker(colors, selected));
     if (typeof setQuickColor === 'function') {
         setQuickColor(selected);
+    }
+}
+
+function paintPersonColorSwatches(colors) {
+    const picker = document.getElementById('personColorPicker');
+    if (!picker) {
+        return;
+    }
+    const state = typeof shiftUiState !== 'undefined' ? shiftUiState : null;
+    const editing = typeof currentShiftEditId === 'function' && currentShiftEditId();
+    const dirty = Boolean(state && state.rulesDirty);
+    if (
+        state
+        && state.colorIsSuggested
+        && !editing
+        && !dirty
+        && typeof suggestPersonColor === 'function'
+    ) {
+        setPersonColor(suggestPersonColor());
+    }
+    const selected = state ? (state.personColor || '') : '';
+    paintColorPicker(picker, colorsForPicker(colors, selected));
+    if (typeof setPersonColor === 'function') {
+        setPersonColor(selected);
     }
 }
 
@@ -80,7 +160,11 @@ function paintColorSearchOptions(colors) {
 
 async function refreshEventColorChoices() {
     const colors = await loadEventColors();
+    if (!colors) {
+        return null;
+    }
     paintEventFormSwatches(colors);
+    paintPersonColorSwatches(colors);
     paintColorSearchOptions(colors);
     return colors;
 }
@@ -162,9 +246,35 @@ function paintSettingsColorsList(colors) {
     }).join('');
 }
 
+function syncOpenPersonColor(colors) {
+    if (typeof shiftUiState === 'undefined' || typeof setPersonColor !== 'function') {
+        return;
+    }
+    if (shiftUiState.rulesDirty) {
+        return;
+    }
+    const editingId = typeof currentShiftEditId === 'function' ? currentShiftEditId() : '';
+    if (!editingId) {
+        return;
+    }
+    const person = (shiftUiState.people || []).find((item) => String(item.id) === String(editingId));
+    if (!person || (person.color || '') === (shiftUiState.personColor || '')) {
+        return;
+    }
+    setPersonColor(person.color || '');
+    paintPersonColorSwatches(colors);
+}
+
 async function reloadSettingsColors() {
     const colors = await refreshEventColorChoices();
+    if (!colors) {
+        return currentEventColors();
+    }
     paintSettingsColorsList(colors);
+    if (typeof loadReminderPeople === 'function') {
+        await loadReminderPeople();
+    }
+    syncOpenPersonColor(colors);
     return colors;
 }
 
@@ -234,7 +344,7 @@ function initSettingsColors() {
     document.getElementById('settingsColorsList')?.addEventListener('click', async (event) => {
         const editBtn = event.target.closest('[data-color-edit]');
         if (editBtn) {
-            const colors = await loadEventColors();
+            const colors = (await loadEventColors()) || currentEventColors();
             const color = colors.find((item) => String(item.id) === String(editBtn.getAttribute('data-color-edit')));
             if (color) {
                 startEditSettingsColor(color);

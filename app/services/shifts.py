@@ -21,7 +21,6 @@ from app.services.recurrence import hebrew_display
 
 SHIFT_LABELS = ("בוקר", "ערב", "לילה")
 SHIFT_LABEL_MAX = 80
-PERSON_COLORS = ("cyan", "yellow", "orange", "green")
 
 # יום ראשון = 0 ... שבת = 6. תואם ל-JS Date.getDay ולכותרת הלוח.
 WEEKDAY_NAMES = ("ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת")
@@ -110,12 +109,18 @@ def dump_shift_allowed(value) -> str | None:
 
 
 def clean_person_color(value) -> str | None:
+    """צבע של אדם הוא קוד מפלטת event_colors — ברירת מחדל או צבע מותאם."""
     if value is None or value == "":
         return None
-    text = str(value).strip().lower()
-    if text not in PERSON_COLORS:
+    text = str(value).strip()
+    if not text:
+        return None
+    from app.services.colors import canonical_color_code
+
+    code = canonical_color_code(text)
+    if code is None:
         raise ShiftError("צבע לא מוכר")
-    return text
+    return code
 
 
 def shift_title(_name: str, label: str) -> str:

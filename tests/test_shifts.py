@@ -161,6 +161,81 @@ def test_person_color_and_rules_round_trip_without_clobber(client):
     assert bad_color.status_code == 400
 
 
+def test_person_custom_color_stays_visible_when_delete_is_blocked(client):
+    created = client.post("/api/colors", json={"name": "כתום בהיר", "color_code": "#ffcc88"})
+    assert created.status_code == 201
+    color = created.get_json()
+    person = _person(client, name="נועה", color="#FFCC88", receives_reminders=False)
+    assert person["color"] == "#ffcc88"
+    assert person["works_shifts"] is True
+
+    unknown = client.post(
+        "/api/reminder-people",
+        json={"name": "זר", "color": "#010203"},
+    )
+    assert unknown.status_code == 400
+    assert "צבע" in unknown.get_json()["error"]
+
+    renamed = client.put(
+        f"/api/reminder-people/{person['id']}",
+        json={"name": "נועה לוי", "telegram_chat_id": None},
+    )
+    assert renamed.status_code == 200
+    assert renamed.get_json()["color"] == "#ffcc88"
+
+    rejected = client.put(
+        f"/api/reminder-people/{person['id']}",
+        json={"name": "נועה לוי", "color": "#123456"},
+    )
+    assert rejected.status_code == 400
+
+    blocked = client.delete(f"/api/colors/{color['id']}")
+    assert blocked.status_code == 400
+    assert "שימוש" in blocked.get_json()["error"]
+
+    week = date(2026, 10, 18)
+    saved = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": week.isoformat(),
+        "cells": [{"date": week.isoformat(), "label": "בוקר"}],
+    })
+    assert saved.status_code == 200, saved.get_json()
+
+    def shown_color():
+        events = client.get("/api/events").get_json()
+        row = next(
+            item for item in events
+            if item.get("is_shift") and item.get("shift_person_id") == person["id"]
+        )
+        return row["color"]
+
+    assert shown_color() == "#ffcc88"
+    still_blocked = client.delete(f"/api/colors/{color['id']}")
+    assert still_blocked.status_code == 400
+    assert shown_color() == "#ffcc88"
+    people = client.get("/api/reminder-people").get_json()
+    stored = next(row for row in people if row["id"] == person["id"])
+    assert stored["color"] == "#ffcc88"
+
+    moved = client.put(
+        f"/api/colors/{color['id']}",
+        json={"name": "כתום בהיר", "color_code": "#ffaa55"},
+    )
+    assert moved.status_code == 200
+    people = client.get("/api/reminder-people").get_json()
+    stored = next(row for row in people if row["id"] == person["id"])
+    assert stored["color"] == "#ffaa55"
+    assert shown_color() == "#ffaa55"
+
+    exported = json.loads(client.get("/api/events/export").data.decode("utf-8"))
+    assert any(row["color_code"] == "#ffaa55" for row in exported["colors"])
+    imported = client.post("/api/events/import?mode=replace", json=exported)
+    assert imported.status_code == 200, imported.get_json()
+    restored = client.get("/api/reminder-people").get_json()
+    assert restored[0]["color"] == "#ffaa55"
+    assert shown_color() == "#ffaa55"
+
+
 def test_week_save_is_idempotent_and_only_removes_shifts(client):
     client.put("/api/shifts/settings", json={"enabled": True})
     avihai = _person(

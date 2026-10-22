@@ -183,6 +183,38 @@ def test_missing_color_is_404(client):
     assert updated.status_code == 404
 
 
+def test_get_colors_is_not_cached(client):
+    response = client.get("/api/colors")
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_color_pickers_share_one_palette_source(client):
+    settings = client.get("/settings").get_data(as_text=True)
+    picker = settings.split('id="personColorPicker"', 1)[1].split("</div>", 1)[0]
+    assert "is-none" in picker
+    assert "color-cyan" not in picker
+    assert 'data-color="orange"' not in picker
+    assert 'data-color="green"' not in picker
+
+    js = (REPO / "app/static/js/events/event-colors.js").read_text(encoding="utf-8")
+    assert "cache: 'no-store'" in js
+    assert "eventColorLoadSeq" in js
+    assert "function paintColorPicker" in js
+    assert "personColorPicker" in js
+    assert "paintPersonColorSwatches" in js
+    assert "colorsForPicker" in js
+
+    shifts = (REPO / "app/static/js/events/shifts.js").read_text(encoding="utf-8")
+    assert "paletteColorCodes()" in shifts
+    assert "function applyShiftColorDot" in shifts
+    assert "eventColorSwatchCss" in shifts
+    assert "color-${" not in shifts
+
+    listing = (REPO / "app/templates/events_list.html").read_text(encoding="utf-8")
+    assert "eventColorName" in listing
+
+
 def test_event_form_gets_colors_from_api_not_hardcoded_swatches(client):
     modal = (REPO / "app/templates/partials/quick_event_modal.html").read_text(
         encoding="utf-8"
