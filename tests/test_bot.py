@@ -150,12 +150,20 @@ def test_start_linked_is_only_the_menu(app):
     _person(app, "דני", chat=42)
     _person(app, "נועה", chat=42)
     reply = _go(app, _msg("/start@HebCalBot"))
-    assert reply["text"] == "מה עושים?"
+    assert reply["text"] == "📅 לוח השנה המשותף — מה להציג?"
     assert "<code>" not in reply["text"]
     assert "דני" not in reply["text"]
     labels = [button["text"] for button in _buttons(reply)]
-    for label in ("היום", "השבוע", "הקרובים", "משמרות", "לפי אדם", "חיפוש", "אירוע חדש", "הגדרות"):
-        assert label in labels
+    assert labels == [
+        "📆 אירועי היום",
+        "🗓 השבוע הקרוב",
+        "⏭ אירועים קרובים",
+        "👷 משמרות",
+        "👤 לפי אדם",
+        "🔍 חיפוש אירוע",
+        "➕ הוספת אירוע",
+        "⚙️ הגדרות",
+    ]
     _has_exit(reply)
     for button in _buttons(reply):
         screen = _go(app, _cb(button["callback_data"]))
@@ -179,13 +187,13 @@ def test_unknown_command_sticker_and_bad_callback(app):
     _person(app, "דני", chat=42)
     reply = _go(app, _msg("/nope"))
     assert "אין פקודה" in reply["text"]
-    assert "היום" in [button["text"] for button in _buttons(reply)]
+    assert "📆 אירועי היום" in [button["text"] for button in _buttons(reply)]
     assert "<code>" not in reply["text"]
     sticker = _go(app, {"update_id": 3, "message": {"chat": {"id": 42}}})
     assert "כפתור" in sticker["text"]
     bad = _go(app, _cb("../x"))
     assert bad["toast"] == "הפתור לא מוכר" or "לא מוכר" in bad["toast"]
-    assert "מה עושים?" in bad["text"]
+    assert "📅 לוח השנה המשותף — מה להציג?" in bad["text"]
     assert handle_update({"update_id": 9})["skip"] is True
 
 
@@ -207,7 +215,7 @@ def test_today_week_soon_and_pagination(app):
     assert hebrew_display(TODAY) in today["text"]
     assert "<code>22.10.2026</code>" in today["text"]
     assert "מחר-אירוע" not in today["text"]
-    assert "לחצו על אירוע" in today["text"]
+    assert "לחצו על אירוע לפרטים, עריכה או מחיקה." in today["text"]
     assert "רצף-0" in today["text"]
     assert "הבא" in [button["text"] for button in _buttons(today)]
     page2 = _press(app, today, "הבא")
@@ -360,7 +368,8 @@ def test_edit_delete_conflict_and_missing(app):
     event_id = _event(app, "ישן", TODAY, time="10:00")
     listed = _go(app, _msg("/today"))
     card = _press(app, listed, "ישן")
-    assert f"<code>{event_id}</code>" in card["text"]
+    assert "מזהה:" not in card["text"]
+    assert f"<code>{event_id}</code>" not in card["text"]
     assert "10:00" in card["text"]
     editor = _press(app, card, "עריכה")
     _press(app, editor, "כותרת")
@@ -454,6 +463,7 @@ def test_html_escape_and_recurring_delete_warning(app):
     assert "<b>xss</b>" not in listed["text"]
     assert "&lt;b&gt;xss&lt;/b&gt;" in listed["text"]
     card = _press(app, listed, "xss")
+    assert "מזהה:" not in card["text"]
     assert "כל הסדרה" in card["text"]
     ask = _press(app, card, "מחיקה")
     assert "סדרה" in ask["text"]
@@ -678,16 +688,20 @@ def test_consume_updates_sends_menu_and_answers_buttons(app):
         return {"ok": True}
 
     assert consume_updates("token", None, api=api) == 9
-    assert calls[1][0] == "sendMessage"
-    assert "<code>42</code>" in calls[1][1]["text"]
+    sent = next(call[1] for call in calls if call[0] == "sendMessage")
+    assert "<code>42</code>" in sent["text"]
     start_labels = [
         button["text"]
-        for row in calls[1][1]["reply_markup"]["inline_keyboard"]
+        for row in sent["reply_markup"]["inline_keyboard"]
         for button in row
     ]
     assert start_labels == ["חיבור כאן"]
     methods = [call[0] for call in calls]
-    assert "answerCallbackQuery" in methods
+    answers = [call for call in calls if call[0] == "answerCallbackQuery"]
+    assert len(answers) == 1
+    assert answers[0][1]["text"] == "פותח…"
+    edit_at = next(index for index, call in enumerate(calls) if call[0] == "editMessageText")
+    assert calls.index(answers[0]) < edit_at
     assert "editMessageText" in methods
     edited = next(call[1] for call in calls if call[0] == "editMessageText")
     assert "סיור" in edited["text"]
@@ -719,3 +733,91 @@ def test_all_day_word_and_shift_disabled_blocks_create(app):
         from app.database import get_all_events
 
         assert get_all_events()[0]["time"] is None
+
+
+def test_callback_ack_is_before_the_screen_and_under_a_second(app, monkeypatch):
+    """שעון החול נעצר לפני בניית המסך, לא אחריה."""
+    import time
+
+    marks = {}
+    payloads = {}
+
+    def slow(update, now=None):
+        marks["handle"] = time.monotonic()
+        time.sleep(0.2)
+        return {
+            "text": "כרטיס",
+            "markup": None,
+            "toast": "נשמר",
+            "chat_id": 42,
+            "callback_id": "c9",
+            "edit_id": 4,
+        }
+
+    monkeypatch.setattr("app.bot.dispatch.handle_update", slow)
+
+    def api(token, method, payload=None, timeout=30):
+        marks[method] = time.monotonic()
+        payloads[method] = payload
+        if method == "getUpdates":
+            return [
+                {
+                    "update_id": 1,
+                    "callback_query": {
+                        "id": "c9",
+                        "data": "ev:1:20261022",
+                        "message": {"message_id": 4, "chat": {"id": 42}},
+                    },
+                }
+            ]
+        return {"ok": True}
+
+    consume_updates("token", None, api=api)
+    ack_delay = marks["answerCallbackQuery"] - marks["getUpdates"]
+    assert ack_delay < 0.05, ack_delay
+    assert marks["answerCallbackQuery"] < marks["handle"]
+    assert payloads["answerCallbackQuery"]["text"] == "פותח…"
+    assert marks["editMessageText"] > marks["handle"]
+
+
+def test_updates_poll_while_reminders_are_still_running():
+    """לחיצה לא מחכה לסבב התזכורות (שהיה בערך 15 שניות)."""
+    import threading
+    import time
+
+    from app.reminders.worker import UPDATE_LONG_POLL_SECONDS, run_loop
+
+    stop = threading.Event()
+    polled = threading.Event()
+    seen = {}
+    started = time.monotonic()
+
+    def process():
+        seen["overlapped"] = polled.wait(0.8)
+        stop.set()
+
+    def consume(token, offset, *, long_poll=0):
+        seen.setdefault("delay", time.monotonic() - started)
+        seen.setdefault("long_poll", long_poll)
+        polled.set()
+        return offset
+
+    thread = threading.Thread(
+        target=run_loop,
+        kwargs={
+            "interval": 30,
+            "stop_event": stop,
+            "consume": consume,
+            "process": process,
+            "token_fn": lambda: "token",
+        },
+        daemon=True,
+    )
+    thread.start()
+    thread.join(2)
+    elapsed = time.monotonic() - started
+    assert not thread.is_alive()
+    assert seen.get("overlapped") is True
+    assert seen.get("long_poll") == UPDATE_LONG_POLL_SECONDS == 25
+    assert seen["delay"] < 1.0, seen["delay"]
+    assert elapsed < 1.0, elapsed

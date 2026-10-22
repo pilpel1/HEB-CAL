@@ -44,6 +44,33 @@ def send_message(token: str, chat_id, text: str, *, reply_markup: dict | None = 
     return True
 
 
+CALLBACK_ACK = "פותח…"
+
+
+def callback_id_of(update: dict) -> str | None:
+    query = update.get("callback_query") if isinstance(update, dict) else None
+    if not isinstance(query, dict):
+        return None
+    callback_id = query.get("id")
+    if not callback_id:
+        return None
+    return str(callback_id)
+
+
+def ack_callback(token: str, api, callback_id: str) -> bool:
+    """עוצר את שעון החול על הכפתור לפני כל עבודה על היומן."""
+    try:
+        api(
+            token,
+            "answerCallbackQuery",
+            {"callback_query_id": callback_id, "text": CALLBACK_ACK},
+        )
+    except TelegramError as exc:
+        print(f"answerCallbackQuery failed: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
 def deliver_outgoing(token: str, api, outgoing: dict) -> None:
     """שולח תשובה אחת. עריכת הודעה נכשלת? נשלחת הודעה חדשה."""
     callback_id = outgoing.get("callback_id")
@@ -116,14 +143,20 @@ def consume_updates(token: str, offset: int | None, *, long_poll: int = 0, api=t
     next_offset = offset
     if not updates:
         return next_offset
+    # התשובה לכפתור יוצאת לפני פתיחת בסיס הנתונים, כדי שהשעון ייעצר מיד.
+    acked: set[str] = set()
+    for update in updates:
+        update_id = update.get("update_id")
+        if isinstance(update_id, int):
+            next_offset = update_id + 1
+        callback_id = callback_id_of(update)
+        if callback_id and ack_callback(token, api, callback_id):
+            acked.add(callback_id)
     from app import app as flask_app
     from app.bot.dispatch import handle_update
 
     with flask_app.app_context():
         for update in updates:
-            update_id = update.get("update_id")
-            if isinstance(update_id, int):
-                next_offset = update_id + 1
             try:
                 outgoing = handle_update(update)
             except Exception as exc:
@@ -131,6 +164,9 @@ def consume_updates(token: str, offset: int | None, *, long_poll: int = 0, api=t
                 continue
             if not outgoing or outgoing.get("skip"):
                 continue
+            if outgoing.get("callback_id") in acked:
+                outgoing = dict(outgoing)
+                outgoing["callback_id"] = None
             try:
                 deliver_outgoing(token, api, outgoing)
             except TelegramError as exc:
