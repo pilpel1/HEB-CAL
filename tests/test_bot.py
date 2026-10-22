@@ -130,11 +130,29 @@ def test_parse_rejects_impossible_dates_and_times():
     assert parse_user_time("כל היום") is None
 
 
-def test_start_menu_is_the_whole_interface(app):
+def test_start_unlinked_is_only_the_chat_id(app):
     reply = _go(app, _msg("/start"))
-    assert "מה עושים?" in reply["text"]
-    assert "<code>42</code>" in reply["text"]
-    assert "לא מחובר" in reply["text"]
+    assert reply["text"] == (
+        "מזהה הצ'אט שלך: <code>42</code>\n"
+        "מעתיקים את המספר להגדרות, תחת תזכורות."
+    )
+    labels = [button["text"] for button in _buttons(reply)]
+    assert labels == ["חיבור כאן"]
+    for label in ("היום", "השבוע", "הקרובים", "משמרות", "לפי אדם", "חיפוש", "אירוע חדש", "הגדרות"):
+        assert label not in labels
+    assert "מה עושים?" not in reply["text"]
+    link = _press(app, reply, "חיבור כאן")
+    assert "לחבר את הצ'אט" in link["text"]
+    _has_exit(link)
+
+
+def test_start_linked_is_only_the_menu(app):
+    _person(app, "דני", chat=42)
+    _person(app, "נועה", chat=42)
+    reply = _go(app, _msg("/start@HebCalBot"))
+    assert reply["text"] == "מה עושים?"
+    assert "<code>" not in reply["text"]
+    assert "דני" not in reply["text"]
     labels = [button["text"] for button in _buttons(reply)]
     for label in ("היום", "השבוע", "הקרובים", "משמרות", "לפי אדם", "חיפוש", "אירוע חדש", "הגדרות"):
         assert label in labels
@@ -144,24 +162,25 @@ def test_start_menu_is_the_whole_interface(app):
         _has_exit(screen)
         assert screen["text"]
         assert "<" not in screen["text"] or "<code>" in screen["text"] or "<b>" in screen["text"]
-
-
-def test_start_at_mention_and_linked_names(app):
-    _person(app, "דני", chat=42)
-    _person(app, "נועה", chat=42)
-    reply = _go(app, _msg("/start@HebCalBot"))
-    assert "דני" in reply["text"]
-    assert "נועה" in reply["text"]
-    assert "<code>42</code>" in reply["text"]
+    settings = _press(app, reply, "הגדרות")
+    assert "<code>42</code>" in settings["text"]
+    assert "דני" in settings["text"]
+    assert "נועה" in settings["text"]
     group = _go(app, _msg("/start", chat=-100))
     assert "<code>-100</code>" in group["text"]
-    assert "לא מחובר" in group["text"]
+    assert [button["text"] for button in _buttons(group)] == ["חיבור כאן"]
 
 
 def test_unknown_command_sticker_and_bad_callback(app):
+    unlinked = _go(app, _msg("/nope"))
+    assert "אין פקודה" in unlinked["text"]
+    assert "<code>42</code>" in unlinked["text"]
+    assert "היום" not in [button["text"] for button in _buttons(unlinked)]
+    _person(app, "דני", chat=42)
     reply = _go(app, _msg("/nope"))
     assert "אין פקודה" in reply["text"]
     assert "היום" in [button["text"] for button in _buttons(reply)]
+    assert "<code>" not in reply["text"]
     sticker = _go(app, {"update_id": 3, "message": {"chat": {"id": 42}}})
     assert "כפתור" in sticker["text"]
     bad = _go(app, _cb("../x"))
@@ -604,7 +623,8 @@ def test_chats_do_not_share_a_draft(app):
     _go(app, _msg("/add", chat=1))
     other = _go(app, _msg("/start", chat=2))
     assert "בוטל" not in other["text"]
-    assert "מה עושים?" in other["text"]
+    assert "<code>2</code>" in other["text"]
+    assert "מה עושים?" not in other["text"]
     still = _go(app, _msg("פגישה", chat=1))
     assert "לשמור" in still["text"]
 
@@ -640,7 +660,12 @@ def test_consume_updates_sends_menu_and_answers_buttons(app):
     assert consume_updates("token", None, api=api) == 9
     assert calls[1][0] == "sendMessage"
     assert "<code>42</code>" in calls[1][1]["text"]
-    assert calls[1][1]["reply_markup"]["inline_keyboard"]
+    start_labels = [
+        button["text"]
+        for row in calls[1][1]["reply_markup"]["inline_keyboard"]
+        for button in row
+    ]
+    assert start_labels == ["חיבור כאן"]
     methods = [call[0] for call in calls]
     assert "answerCallbackQuery" in methods
     assert "editMessageText" in methods

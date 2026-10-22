@@ -84,21 +84,16 @@ def _day_label(prefix: str, day: date) -> str:
 
 
 def home_screen(chat_id, linked: list[dict], *, note: str = "") -> tuple[str, dict]:
+    """צ'אט לא מחובר: רק המזהה. מחובר: רק התפריט."""
     lines = []
     if note:
         lines.append(esc(note).rstrip())
         lines.append("")
     if not linked:
-        lines.append("הצ'אט הזה עוד לא מחובר לאדם ביומן.")
         from app.reminders.telegram import chat_id_reply
 
         lines.append(chat_id_reply(chat_id))
-        lines.append("אפשר לחבר בהגדרות. בינתיים רואים ומוסיפים אירועים.")
-    else:
-        names = ", ".join(esc(person["name"]) for person in linked)
-        lines.append(f"מחוברים: {names}")
-        lines.append(f"מזהה הצ'אט: {code(chat_id)}")
-    lines.append("")
+        return "\n".join(lines), kb([[("חיבור כאן", "set:link")]])
     lines.append("מה עושים?")
     return "\n".join(lines), kb(menu_rows())
 
