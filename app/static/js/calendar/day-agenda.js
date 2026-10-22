@@ -13,15 +13,10 @@ function densityDivisor() {
 }
 
 function updateDensityToggle() {
-    const button = document.getElementById('density-toggle');
-    if (!button) {
-        return;
-    }
     const compact = densityDivisor() === 9;
-    const label = compact ? 'צפוף' : 'מרווח';
-    button.setAttribute('aria-pressed', compact ? 'true' : 'false');
-    button.title = label;
-    button.setAttribute('aria-label', label);
+    document.querySelectorAll('[data-density-switch]').forEach((input) => {
+        input.checked = compact;
+    });
 }
 
 function clampAgendaShare(value) {
@@ -341,16 +336,45 @@ function syncCalendarFrame() {
 }
 
 /**
- * גובה אזור השורות כאילו החלוקה היא 80/20.
- * לא תלוי בידית: גרירה רק חושפת או מסתירה שורות בתוך אותו גובה תא.
+ * גובה הסרגל כששורת הפעולות סגורה: כותרת החודש ופס החץ בלבד.
+ * זה הסרגל הנמוך, ולכן יוצא ממנו גובה התא הגדול יותר.
+ */
+function collapsedToolbarHeight(toolbar) {
+    if (toolbar.classList.contains('is-collapsed')) {
+        return toolbar.offsetHeight;
+    }
+    const month = toolbar.querySelector('.toolbar-month-label');
+    const collapse = document.getElementById('header-collapse');
+    const style = getComputedStyle(toolbar);
+    const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    const gap = parseFloat(style.rowGap || style.gap) || 0;
+    const monthH = month ? month.offsetHeight : 0;
+    const collapseShown = collapse && getComputedStyle(collapse).display !== 'none';
+    const collapseH = collapseShown ? (collapse.offsetHeight || 28) : 0;
+    const between = monthH > 0 && collapseH > 0 ? gap : 0;
+    return monthH + collapseH + pad + between;
+}
+
+/**
+ * גובה אזור השורות כאילו החלוקה היא 80/20 והסרגל העליון סגור.
+ * לא תלוי בידית ולא בפתיחת שורת הפעולות: שתיהן רק חושפות או מסתירות שורות.
  */
 function referenceWeekRowsArea() {
     const stream = infiniteCalendar.stream;
     const header = stream && stream.querySelector('.weekday-header');
     const headerH = header ? header.offsetHeight : 0;
-    const track = splitTrack();
-    if (track && track.available > 0) {
-        const streamPx = track.available - agendaPixels(track, 0.2, false);
+    const cal = document.querySelector('.calendar-container.infinite-calendar');
+    const toolbar = cal && cal.querySelector('.calendar-toolbar');
+    const handle = document.getElementById('agenda-resize');
+    if (cal && toolbar && handle) {
+        const style = getComputedStyle(cal);
+        const padTop = parseFloat(style.paddingTop) || 0;
+        const padBottom = parseFloat(style.paddingBottom) || 0;
+        const inner = cal.clientHeight - padTop - padBottom;
+        const handleH = handle.offsetHeight || 28;
+        const chrome = Math.min(toolbar.offsetHeight, collapsedToolbarHeight(toolbar));
+        const available = Math.max(0, inner - chrome - handleH);
+        const streamPx = available - agendaPixels({ available, handleH }, 0.2, false);
         return streamPx - headerH;
     }
     if (!stream) {
@@ -359,7 +383,7 @@ function referenceWeekRowsArea() {
     return stream.clientHeight - headerH;
 }
 
-/** בטלפון גובה שורה = רשת 80/20 / 6 (או / 9 במצב צפוף). הידית לא משנה את זה. */
+/** בטלפון גובה שורה = רשת 80/20 של הסרגל הסגור / 6 (או / 9 במצב צפוף). */
 function syncWeekRowHeight() {
     const root = document.documentElement;
     const stream = infiniteCalendar.stream;
@@ -405,20 +429,107 @@ function syncWeekRowHeight() {
     }
 }
 
-function toggleCalendarDensity() {
-    const next = densityDivisor() === 9 ? 'comfortable' : 'compact';
-    try {
-        localStorage.setItem('heb-cal-density', next);
-    } catch (error) {
-        /* מצב פרטי — נשאר עד רענון */
+function setCalendarDensity(mode) {
+    const next = mode === 'compact' ? 'compact' : 'comfortable';
+    const already = (densityDivisor() === 9) === (next === 'compact');
+    if (!already) {
+        try {
+            localStorage.setItem('heb-cal-density', next);
+        } catch (error) {
+            /* מצב פרטי — נשאר עד רענון */
+        }
     }
     updateDensityToggle();
+    if (already) {
+        return;
+    }
     syncCalendarFrame();
     syncWeekRowHeight();
     if (typeof updateVisibleMonthLabel === 'function') {
         updateVisibleMonthLabel();
     }
 }
+
+function toggleCalendarDensity() {
+    setCalendarDensity(densityDivisor() === 9 ? 'comfortable' : 'compact');
+}
+
+function readHeaderCollapsed() {
+    try {
+        return localStorage.getItem('heb-cal-header-collapsed') === '1';
+    } catch (error) {
+        return false;
+    }
+}
+
+function applyHeaderCollapsed(collapsed) {
+    const toolbar = document.getElementById('calendar-toolbar');
+    if (!toolbar) {
+        return;
+    }
+    const hide = Boolean(collapsed) && isCompactCalendar();
+    toolbar.classList.toggle('is-collapsed', Boolean(collapsed));
+    const toggle = document.getElementById('header-collapse');
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', hide ? 'false' : 'true');
+        toggle.setAttribute('aria-label', hide ? 'הצג את סרגל הפעולות' : 'כווץ את סרגל הפעולות');
+    }
+    const actions = document.getElementById('toolbar-actions');
+    if (actions) {
+        actions.toggleAttribute('inert', hide);
+    }
+    if (hide) {
+        const jump = document.getElementById('jumpToDateBtn');
+        if (jump && window.bootstrap && bootstrap.Dropdown) {
+            const menu = bootstrap.Dropdown.getInstance(jump);
+            if (menu) {
+                menu.hide();
+            }
+        }
+    }
+}
+
+function setHeaderCollapsed(collapsed) {
+    try {
+        localStorage.setItem('heb-cal-header-collapsed', collapsed ? '1' : '0');
+    } catch (error) {
+        /* מצב פרטי — נשאר עד רענון */
+    }
+    applyHeaderCollapsed(collapsed);
+    syncCalendarFrame();
+    syncWeekRowHeight();
+}
+
+function initCalendarChrome() {
+    const toolbar = document.getElementById('calendar-toolbar');
+    if (!toolbar || toolbar.dataset.chromeBound === '1') {
+        return;
+    }
+    toolbar.dataset.chromeBound = '1';
+    applyHeaderCollapsed(readHeaderCollapsed());
+    updateDensityToggle();
+
+    document.getElementById('header-collapse')?.addEventListener('click', () => {
+        setHeaderCollapsed(!readHeaderCollapsed());
+    });
+}
+
+function initDensitySwitch() {
+    const input = document.querySelector('[data-density-switch]');
+    if (!input || input.dataset.bound === '1') {
+        return;
+    }
+    input.dataset.bound = '1';
+    updateDensityToggle();
+    input.addEventListener('change', () => {
+        setCalendarDensity(input.checked ? 'compact' : 'comfortable');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initCalendarChrome();
+    initDensitySwitch();
+});
 
 function syncAgendaSelection() {
     document.querySelectorAll('#calendar-weeks td.is-agenda-day').forEach((td) => {
@@ -534,15 +645,10 @@ function initDayAgenda() {
     }
     root.dataset.bound = '1';
 
-    updateDensityToggle();
+    initCalendarChrome();
     bindAgendaResize();
-    const densityBtn = document.getElementById('density-toggle');
-    if (densityBtn) {
-        densityBtn.addEventListener('click', () => {
-            toggleCalendarDensity();
-        });
-    }
     const onViewport = () => {
+        applyHeaderCollapsed(readHeaderCollapsed());
         syncCalendarFrame();
         syncWeekRowHeight();
     };
@@ -571,6 +677,7 @@ function initDayAgenda() {
 
     const compactQuery = window.matchMedia('(max-width: 480px)');
     compactQuery.addEventListener('change', () => {
+        applyHeaderCollapsed(readHeaderCollapsed());
         if (!infiniteCalendar.ready || !infiniteCalendar.body) {
             return;
         }

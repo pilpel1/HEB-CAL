@@ -5,53 +5,79 @@
 {% block content %}
 <!-- לוח שנה אינסופי — גלילה רציפה עם טעינה הדרגתית -->
 <div class="calendar-container infinite-calendar is-booting">
-    <div class="calendar-toolbar">
+    <div class="calendar-toolbar" id="calendar-toolbar">
         <h2 id="current-month" class="toolbar-month-label" aria-live="polite"></h2>
-        <div class="calendar-nav">
-            <button type="button" class="btn btn-outline-primary btn-today" id="goToTodayBtn" onclick="goToToday()">היום</button>
-            <div class="dropdown d-inline-block">
-                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false">
-                    דלג לתאריך...
-                </button>
-                <div class="dropdown-menu p-3" aria-labelledby="jumpToDateBtn">
-                    <div class="mb-2">
-                        <select class="form-select" id="monthSelect">
-                            <option value="0">ינואר</option>
-                            <option value="1">פברואר</option>
-                            <option value="2">מרץ</option>
-                            <option value="3">אפריל</option>
-                            <option value="4">מאי</option>
-                            <option value="5">יוני</option>
-                            <option value="6">יולי</option>
-                            <option value="7">אוגוסט</option>
-                            <option value="8">ספטמבר</option>
-                            <option value="9">אוקטובר</option>
-                            <option value="10">נובמבר</option>
-                            <option value="11">דצמבר</option>
-                        </select>
+        <div class="toolbar-actions" id="toolbar-actions">
+            <div class="calendar-nav" id="calendar-nav">
+                <button type="button" class="btn btn-outline-primary btn-today" id="goToTodayBtn" onclick="goToToday()" title="היום" aria-label="היום">היום</button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false" title="דלג לתאריך" aria-label="דלג לתאריך">
+                        <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                    </button>
+                    <div class="dropdown-menu p-3" aria-labelledby="jumpToDateBtn">
+                        <div class="mb-2">
+                            <select class="form-select" id="monthSelect">
+                                <option value="0">ינואר</option>
+                                <option value="1">פברואר</option>
+                                <option value="2">מרץ</option>
+                                <option value="3">אפריל</option>
+                                <option value="4">מאי</option>
+                                <option value="5">יוני</option>
+                                <option value="6">יולי</option>
+                                <option value="7">אוגוסט</option>
+                                <option value="8">ספטמבר</option>
+                                <option value="9">אוקטובר</option>
+                                <option value="10">נובמבר</option>
+                                <option value="11">דצמבר</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <select class="form-select" id="yearSelect">
+                                <!-- יתמלא דינמית ע"י JavaScript -->
+                            </select>
+                        </div>
+                        <button class="btn btn-primary w-100" onclick="jumpToDate()">אישור</button>
                     </div>
-                    <div class="mb-2">
-                        <select class="form-select" id="yearSelect">
-                            <!-- יתמלא דינמית ע"י JavaScript -->
-                        </select>
-                    </div>
-                    <button class="btn btn-primary w-100" onclick="jumpToDate()">אישור</button>
                 </div>
+                <button type="button" class="btn btn-primary" id="addEventFromCalendarBtn" title="הוסף אירוע" aria-label="הוסף אירוע">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                </button>
+                <a href="/events_list" class="btn btn-outline-secondary" id="calendarEventsLink" title="רשימת אירועים" aria-label="רשימת אירועים">
+                    <i class="fa-solid fa-list" aria-hidden="true"></i>
+                </a>
+                <button type="button" class="btn btn-outline-primary" id="enterShiftsBtn" hidden title="הזן משמרות" aria-label="הזן משמרות">
+                    <i class="fa-solid fa-user-clock" aria-hidden="true"></i>
+                </button>
+                <a href="/settings" class="btn btn-outline-secondary settings-gear-btn" title="הגדרות" aria-label="הגדרות">
+                    <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                </a>
             </div>
-            <button type="button" class="btn btn-primary calendar-events-list-btn" id="addEventFromCalendarBtn">הוסף אירוע</button>
-            <a href="/events_list" class="btn btn-outline-secondary">רשימת אירועים</a>
-            <button type="button" class="btn btn-outline-primary" id="enterShiftsBtn" hidden>הזן משמרות</button>
-            <button type="button" class="btn btn-outline-secondary theme-toggle-btn density-toggle-btn" id="density-toggle" title="מרווח" aria-label="מרווח" aria-pressed="false">
-                <svg class="density-icon density-icon-spacious" viewBox="0 0 16 16" width="1em" height="1em" aria-hidden="true" focusable="false">
-                    <path d="M1.5 4.75h13M1.5 11.25h13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-                </svg>
-                <svg class="density-icon density-icon-compact" viewBox="0 0 16 16" width="1em" height="1em" aria-hidden="true" focusable="false">
-                    <path d="M1.5 3.5h13M1.5 8h13M1.5 12.5h13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-                </svg>
-            </button>
-            {% include 'partials/theme_toggle.html' %}
         </div>
+        <button type="button" class="header-collapse" id="header-collapse" aria-expanded="true" aria-controls="toolbar-actions" aria-label="כווץ את סרגל הפעולות">
+            <span class="header-collapse-grip" aria-hidden="true"></span>
+            <span class="header-collapse-arrow" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M3.2 5.8 8 10.6l4.8-4.8-1.1-1.1L8 8.4 4.3 4.7z"/>
+                </svg>
+            </span>
+        </button>
     </div>
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('heb-cal-header-collapsed') === '1'
+                    && window.matchMedia('(max-width: 480px)').matches) {
+                    var bar = document.getElementById('calendar-toolbar');
+                    var toggle = document.getElementById('header-collapse');
+                    if (bar) bar.classList.add('is-collapsed');
+                    if (toggle) {
+                        toggle.setAttribute('aria-expanded', 'false');
+                        toggle.setAttribute('aria-label', 'הצג את סרגל הפעולות');
+                    }
+                }
+            } catch (e) {}
+        })();
+    </script>
 
     <div class="calendar-stream-frame">
         <div id="calendar-stream" class="calendar-stream" tabindex="-1" aria-busy="true">

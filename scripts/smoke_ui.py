@@ -183,7 +183,7 @@ def check_calendar(page: Page, base: str, snap: dict) -> None:
     page.wait_for_timeout(800)
     expect(page.locator("#current-month")).to_contain_text("מרץ 2031")
     snap["toolbar_after_jump"] = page.text_content("#current-month")
-    page.click("text=היום")
+    page.click("#goToTodayBtn")
     page.wait_for_timeout(1500)
     box = cell(page, today).bounding_box()
     stream = page.locator("#calendar-stream").bounding_box()

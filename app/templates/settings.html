@@ -1,20 +1,51 @@
 {% extends "base.html" %}
 
-{% block title %}אנשים לתזכורות{% endblock %}
+{% block title %}הגדרות{% endblock %}
 
 {% block content %}
-<div class="reminder-settings" id="reminderPeopleApp">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-        <h1 class="h4 mb-0">אנשים לתזכורות</h1>
+<div class="reminder-settings settings-page" id="reminderPeopleApp">
+    <div class="settings-top">
+        <h1>הגדרות</h1>
         <div class="d-flex gap-2 align-items-center">
             <a href="/" class="btn btn-outline-secondary btn-sm">חזרה ללוח</a>
             <a href="/events_list" class="btn btn-outline-secondary btn-sm">רשימת אירועים</a>
-            {% with theme_toggle_class='btn-sm' %}{% include 'partials/theme_toggle.html' %}{% endwith %}
         </div>
     </div>
 
+    <section class="card mb-3" aria-labelledby="settings-display-title">
+        <div class="card-body">
+            <h2 class="h5" id="settings-display-title">תצוגה</h2>
+            <div class="settings-switch-row">
+                <label class="settings-switch-label" for="themeSwitch">מצב כהה</label>
+                <div class="form-check form-switch settings-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="themeSwitch" data-theme-switch>
+                </div>
+            </div>
+            <div class="settings-switch-row">
+                <label class="settings-switch-label" for="densitySwitch">תצוגה צפופה</label>
+                <div class="form-check form-switch settings-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="densitySwitch" data-density-switch>
+                </div>
+            </div>
+            <p class="text-muted small mb-0">בטלפון, תצוגה צפופה מקטינה את ימי הלוח כדי להראות יותר שבועות. שני המתגים נשמרים במכשיר.</p>
+        </div>
+    </section>
+    <script>
+        (function () {
+            var themeInput = document.getElementById('themeSwitch');
+            if (themeInput) {
+                themeInput.checked = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            }
+            var density = null;
+            try { density = localStorage.getItem('heb-cal-density'); } catch (e) {}
+            var densityInput = document.getElementById('densitySwitch');
+            if (densityInput) densityInput.checked = density === 'compact';
+        })();
+    </script>
+
     <div class="card mb-3" id="shiftSettings">
         <div class="card-body">
+            <h2 class="h5">משמרות</h2>
             <div class="form-check form-switch mb-2">
                 <input class="form-check-input" type="checkbox" role="switch" id="shiftsEnabled">
                 <label class="form-check-label" for="shiftsEnabled">הפעלת משמרות בבית הזה</label>
@@ -25,6 +56,7 @@
 
     <div class="card mb-3">
         <div class="card-body">
+            <h2 class="h5">אנשים לתזכורות</h2>
             <p class="mb-3">כל אדם כאן יכול לקבל תזכורת בטלגרם. בלי מזהה צ׳אט עדיין אפשר להזכיר בדפדפן כשהלוח פתוח. כשמשמרות דלוקות, לאותו אדם יש גם צבע ומשמרות מותרות.</p>
             <form id="reminderPersonForm" class="row g-2 align-items-end">
                 <input type="hidden" id="reminderPersonId" value="">
