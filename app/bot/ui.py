@@ -25,17 +25,17 @@ SHIFTS_PER_ROW = 3
 
 
 _BUTTON_STYLES = frozenset({"danger", "success", "primary"})
-# שמירה, הוספה ויצירה. אישור מחיקה לא כאן — הוא danger.
-_SUCCESS_ACTIONS = frozenset(
-    {"add", "sh:new", "set:new", "add:ok", "ed:ok", "sh:ok", "ed:force"}
-)
+# רק כפתור השמירה עצמו. כניסה להוספה נשארת רגילה כדי שלא תצבע את התפריט.
+_SUCCESS_ACTIONS = frozenset({"add:ok", "ed:ok", "sh:ok"})
+_SHIFT_ORDER = {"בוקר": 0, "ערב": 1, "לילה": 2}
 
 
 def button_style(callback_data: str) -> str | None:
-    """סגנון Bot API 9.4 לפי הפעולה. לקוח ישן מתעלם מהשדה.
+    """סגנון Bot API 9.4, רק איפה שהוא משנה החלטה.
 
-    danger למחיקה, success להוספה/יצירה/שמירה, primary לפתיחת עריכה.
-    אין כאן צבע של אדם או של יומן.
+    danger על מחיקה (כולל האישור). success רק על «שמירה».
+    primary על פתיחת עריכה בכרטיס. «לשמור בכל זאת» נשאר בלי צבע:
+    ירוק היה מעודד דריסה. צבע של אדם לא נכנס לכאן.
     """
     data = str(callback_data or "")
     if data.startswith("rmy:") or data.startswith("rm:"):
@@ -359,10 +359,39 @@ def _shift_bit(event: dict, people: dict) -> str:
     return f"{_person_name(people, event.get('shift_person_id'))} {_shift_face(event)}"
 
 
+def _shift_sort_key(event: dict, people: dict) -> tuple:
+    face = _shift_face(event)
+    return (
+        _person_name(people, event.get("shift_person_id")),
+        _SHIFT_ORDER.get(face, 9),
+        face,
+        event.get("id") or 0,
+    )
+
+
+def _day_bits(items: list[dict], people: dict) -> str:
+    """אותו אדם עם כמה משמרות נכתב פעם אחת: «שירה בוקר, ערב, לילה»."""
+    groups: list[tuple[str, list[str]]] = []
+    for event in items:
+        name = _person_name(people, event.get("shift_person_id"))
+        face = _shift_face(event)
+        if groups and groups[-1][0] == name:
+            groups[-1][1].append(face)
+        else:
+            groups.append((name, [face]))
+    parts = []
+    for name, faces in groups:
+        if len(faces) == 1:
+            parts.append(f"{name} {faces[0]}")
+        else:
+            parts.append(f"{name} {', '.join(faces)}")
+    return " · ".join(parts)
+
+
 def _week_header(start: date, today: date) -> str:
     this_sunday = today - timedelta(days=weekday_index(today))
     delta = (start - this_sunday).days // 7
-    name = {0: "השבוע", 1: "שבוע הבא", -1: "שבוע קודם"}.get(delta)
+    name = {0: "השבוע", 1: "שבוע הבא", -1: "שבוע שעבר"}.get(delta)
     if name is None:
         end = start + timedelta(days=6)
         name = f"{start.day}.{start.month}–{end.day}.{end.month}"
@@ -393,18 +422,16 @@ def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> t
             if not items:
                 continue
             found = True
-            items.sort(
-                key=lambda event: (
-                    _person_name(people, event.get("shift_person_id")),
-                    _shift_face(event),
-                    event.get("id") or 0,
-                )
+            items.sort(key=lambda event: _shift_sort_key(event, people))
+            lines.append(
+                f"{_day_letter(day)} {day.day}.{day.month} · {esc(_day_bits(items, people))}"
             )
-            bits = " · ".join(_shift_bit(event, people) for event in items)
-            lines.append(f"{_day_letter(day)} {day.day}.{day.month} · {esc(bits)}")
             day_buttons: list[tuple[str, str]] = []
             for event in items:
-                label = f"{_day_letter(day)} {_shift_bit(event, people)}"
+                # היום כבר בשורת הטקסט. תאריך רק כשיש שני כפתורים זהים.
+                label = _shift_bit(event, people)
+                if label in used:
+                    label = f"{day.day}.{day.month} {label}"
                 if label in used:
                     label = f"{label} #{event.get('id')}"
                 used.add(label)
@@ -412,14 +439,14 @@ def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> t
             for index in range(0, len(day_buttons), SHIFTS_PER_ROW):
                 buttons.append(day_buttons[index : index + SHIFTS_PER_ROW])
         if not found:
-            lines.append("אין משמרות עדיין")
+            lines.append("אין משמרות")
         lines.append("")
     previous = anchor - timedelta(days=7)
     following = anchor + timedelta(days=7)
     buttons.append(
         [
-            ("◀ שבוע קודם", f"sw:{ymd(previous)}"),
-            ("שבוע הבא ▶", f"sw:{ymd(following)}"),
+            ("שבוע קודם", f"sw:{ymd(previous)}"),
+            ("שבוע הבא", f"sw:{ymd(following)}"),
         ]
     )
     buttons.append([("➕ משמרת חדשה", "sh:new"), (BTN_MENU, "home")])

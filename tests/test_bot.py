@@ -106,13 +106,13 @@ def test_button_style_is_semantic_and_ignores_colors():
 
     assert button_style("rm:4") == "danger"
     assert button_style("rmy:4") == "danger"
-    assert button_style("add") == "success"
-    assert button_style("sh:new") == "success"
-    assert button_style("set:new") == "success"
+    assert button_style("add") is None
+    assert button_style("sh:new") is None
+    assert button_style("set:new") is None
     assert button_style("add:ok") == "success"
     assert button_style("ed:ok") == "success"
     assert button_style("sh:ok") == "success"
-    assert button_style("ed:force") == "success"
+    assert button_style("ed:force") is None
     assert button_style("ed:12") == "primary"
     assert button_style("today") is None
     assert button_style("ev:3:20261022") is None
@@ -132,7 +132,7 @@ def test_screen_styles_match_the_action(app):
     _person(app, "דני", chat=42)
     menu = _go(app, _msg("/start"))
     styles = {button["text"]: button.get("style") for button in _buttons(menu)}
-    assert styles["➕ הוספת אירוע"] == "success"
+    assert styles["➕ הוספת אירוע"] is None
     assert styles["📆 אירועי היום"] is None
     assert styles["⚙️ הגדרות"] is None
 
@@ -152,7 +152,7 @@ def test_screen_styles_match_the_action(app):
     _person(app, "אביחי", works_shifts=1)
     board = _go(app, _cb("shifts"))
     board_styles = {button["text"]: button.get("style") for button in _buttons(board)}
-    assert board_styles["➕ משמרת חדשה"] == "success"
+    assert board_styles["➕ משמרת חדשה"] is None
     assert board_styles["🏠 תפריט ראשי"] is None
     assert all(
         button.get("style") is None
@@ -818,27 +818,25 @@ def test_shifts_board_is_two_weeks_and_start_stays_the_menu(app):
     listed = _go(app, _cb("shifts"))
     assert "השבוע · פרשת לך לך" in listed["text"]
     assert "שבוע הבא · פרשת וירא" in listed["text"]
-    assert "אין משמרות עדיין" in listed["text"]
+    assert "אין משמרות" in listed["text"]
+    assert "עדיין" not in listed["text"]
     assert "א׳ 25.10 · אביחי בוקר · שירה ערב" in listed["text"]
-    assert "ב׳ 26.10 · אביחי בוקר מוקדם · שירה בוקר · שירה לילה · שירה ערב" in listed["text"]
+    assert "ב׳ 26.10 · אביחי בוקר מוקדם · שירה בוקר, ערב, לילה" in listed["text"]
     assert "כל היום" not in listed["text"]
     assert "משמרת ·" not in listed["text"]
     assert "לפני" not in listed["text"]
     assert "אחר כך" not in listed["text"]
     assert "עמוד " not in listed["text"]
     keyboard = listed["markup"]["inline_keyboard"]
-    sunday_rows = [
-        row
-        for row in keyboard
-        if row and all("א׳" in button["text"] for button in row)
+    assert [[button["text"] for button in row] for row in keyboard] == [
+        ["אביחי בוקר", "שירה ערב"],
+        ["אביחי בוקר מוקדם", "שירה בוקר", "26.10 שירה ערב"],
+        ["שירה לילה"],
+        ["שבוע קודם", "שבוע הבא"],
+        ["➕ משמרת חדשה", "🏠 תפריט ראשי"],
     ]
-    assert len(sunday_rows) == 1 and len(sunday_rows[0]) == 2
-    monday_rows = [row for row in keyboard if row and all("ב׳" in button["text"] for button in row)]
-    assert [len(row) for row in monday_rows] == [3, 1]
-    assert [button["text"] for button in keyboard[-1]] == ["➕ משמרת חדשה", "🏠 תפריט ראשי"]
-    assert [button["text"] for button in keyboard[-2]] == ["◀ שבוע קודם", "שבוע הבא ▶"]
 
-    card = _press(app, listed, "א׳ אביחי בוקר")
+    card = _press(app, listed, "אביחי בוקר")
     assert "<b>בוקר</b>" in card["text"]
     assert "אביחי" in card["text"]
 
