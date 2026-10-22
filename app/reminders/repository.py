@@ -24,43 +24,52 @@ _PEOPLE_COLUMNS = (
 
 
 def ensure_reminder_schema(db) -> None:
-    """יוצר את הטבלאות אם חסרות, ומוסיף עמודות חסרות בלי למחוק שורות."""
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reminder_people (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            telegram_chat_id TEXT
-        )
-        """
-    )
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reminders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_id INTEGER NOT NULL,
-            offset_minutes INTEGER NOT NULL,
-            recipient_ids TEXT NOT NULL DEFAULT '[]',
-            sent_at TEXT,
-            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
-        )
-        """
-    )
-    _add_missing_columns(db, "reminder_people", _PEOPLE_COLUMNS)
-    _add_missing_columns(db, "reminders", _REMINDER_COLUMNS)
-    db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reminders_event ON reminders(event_id)"
-    )
-    db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reminders_unsent ON reminders(sent_at)"
+    """יוצר את הטבלאות אם חסרות, ומוסיף עמודות חסרות בלי למחוק שורות.
+
+    רץ בתוך BEGIN IMMEDIATE. עמודה שכבר נוספה על ידי תהליך אחר לא מפילה.
+    """
+    from app.database import (
+        _add_column_if_missing,
+        _schema_execute,
+        exclusive_schema_transaction,
     )
 
-
-def _add_missing_columns(db, table: str, columns) -> None:
-    existing = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
-    for name, decl in columns:
-        if name not in existing:
-            db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+    with exclusive_schema_transaction(db):
+        _schema_execute(
+            db,
+            """
+            CREATE TABLE IF NOT EXISTS reminder_people (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                telegram_chat_id TEXT
+            )
+            """,
+        )
+        _schema_execute(
+            db,
+            """
+            CREATE TABLE IF NOT EXISTS reminders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL,
+                offset_minutes INTEGER NOT NULL,
+                recipient_ids TEXT NOT NULL DEFAULT '[]',
+                sent_at TEXT,
+                FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+            )
+            """,
+        )
+        for name, decl in _PEOPLE_COLUMNS:
+            _add_column_if_missing(db, "reminder_people", name, decl)
+        for name, decl in _REMINDER_COLUMNS:
+            _add_column_if_missing(db, "reminders", name, decl)
+        _schema_execute(
+            db,
+            "CREATE INDEX IF NOT EXISTS idx_reminders_event ON reminders(event_id)",
+        )
+        _schema_execute(
+            db,
+            "CREATE INDEX IF NOT EXISTS idx_reminders_unsent ON reminders(sent_at)",
+        )
 
 
 def _clean_chat_id(value) -> str | None:
