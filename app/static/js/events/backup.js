@@ -17,17 +17,17 @@ async function exportEvents() {
         link.remove();
         window.URL.revokeObjectURL(url);
         if (typeof showMessage === 'function') {
-            showMessage('קובץ הגיבוי ירד בהצלחה (heb-cal-events.json)');
+            showMessage('הקובץ ירד (heb-cal-events.json)');
         }
     } catch (error) {
         console.error('שגיאה ביצוא האירועים:', error);
-        alert('שגיאה בייצוא האירועים');
+        alert('לא הצלחנו לייצא');
     }
 }
 
 async function importEventsFromFile(file, mode) {
-    const operationText = mode === 'replace' ? 'להחליף את כל הנתונים הקיימים' : 'למזג את הנתונים לתוך הקיימים';
-    if (!confirm(`האם לבצע ייבוא ול${operationText}?`)) {
+    const question = mode === 'replace' ? 'לייבא ולהחליף את כל הנתונים?' : 'לייבא ולמזג עם הקיימים?';
+    if (!confirm(question)) {
         return;
     }
 
@@ -43,7 +43,7 @@ async function importEventsFromFile(file, mode) {
 
         const result = await response.json();
         if (!response.ok || !result.success) {
-            throw new Error(result.error || 'שגיאה בייבוא האירועים');
+            throw new Error(result.error || 'לא הצלחנו לייבא');
         }
 
         if (typeof refreshEventsViews === 'function') {
@@ -53,17 +53,16 @@ async function importEventsFromFile(file, mode) {
         const inserted = result.inserted_events || 0;
         const updated = result.updated_events || 0;
         const colors = result.imported_colors || 0;
-        const modeLabel = mode === 'replace' ? 'החלפה מלאה' : 'מיזוג';
+        const modeLabel = mode === 'replace' ? 'החלפה' : 'מיזוג';
         alert(
-            `הייבוא הושלם (${modeLabel})\n\n` +
-            `אירועים חדשים שנוספו: ${inserted}\n` +
-            `אירועים קיימים שעודכנו: ${updated}\n` +
-            `צבעים חדשים שנוספו: ${colors}\n\n` +
-            `לחץ אישור כדי להמשיך.`
+            `הייבוא הושלם (${modeLabel})\n` +
+            `נוספו: ${inserted}\n` +
+            `עודכנו: ${updated}\n` +
+            `צבעים חדשים: ${colors}`
         );
     } catch (error) {
         console.error('שגיאה ביבוא האירועים:', error);
-        alert(error.message || 'שגיאה בייבוא האירועים');
+        alert(error.message || 'לא הצלחנו לייבא');
     }
 }
 

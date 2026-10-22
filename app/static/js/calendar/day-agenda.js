@@ -166,7 +166,7 @@ function updateAgendaResizeUi(share) {
             ? 'הלוח סגור'
             : `${percent} אחוז לפאנל`);
     if (restore) {
-        const label = collapsedAgenda ? 'הצג את פאנל האירועים' : 'הצג את לוח החודש';
+        const label = collapsedAgenda ? 'הצג אירועים' : 'הצג לוח';
         restore.setAttribute('aria-label', label);
         restore.setAttribute('aria-hidden', collapsedAgenda || collapsedGrid ? 'false' : 'true');
         restore.tabIndex = collapsedAgenda || collapsedGrid ? 0 : -1;
@@ -493,7 +493,7 @@ function applyHeaderCollapsed(collapsed) {
     const toggle = document.getElementById('header-collapse');
     if (toggle) {
         toggle.setAttribute('aria-expanded', hide ? 'false' : 'true');
-        toggle.setAttribute('aria-label', hide ? 'הצג את סרגל הפעולות' : 'כווץ את סרגל הפעולות');
+        toggle.setAttribute('aria-label', hide ? 'הצג פעולות' : 'הסתר פעולות');
     }
     const actions = document.getElementById('toolbar-actions');
     if (actions) {
@@ -648,7 +648,7 @@ function renderDayAgenda(dateStr) {
 
     list.innerHTML = items.length
         ? items.join('')
-        : '<li class="agenda-empty">אין אירועים ביום זה</li>';
+        : '<li class="agenda-empty">אין אירועים</li>';
     syncAgendaSelection();
 }
 

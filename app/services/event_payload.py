@@ -74,7 +74,7 @@ def clean_event_write(data: dict) -> dict:
     if end_raw:
         end_date = parse_real_date(end_raw)
         if end_date < gregorian:
-            raise EventPayloadError("תאריך הסיום חייב להיות זהה או מאוחר מתאריך ההתחלה")
+            raise EventPayloadError("תאריך הסיום לא יכול להיות לפני ההתחלה")
 
     return {
         "title": title,

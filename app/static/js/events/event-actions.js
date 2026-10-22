@@ -35,17 +35,17 @@ async function createEvent(eventData) {
                 quickForm.reset();
             }
             
-            showMessage('האירוע נוסף בהצלחה');
+            showMessage('האירוע נוסף');
             await refreshEventsViews();
             return true;
         }
 
-        const errorMessage = result.error || 'שגיאה בהוספת האירוע';
+        const errorMessage = result.error || 'לא הצלחנו להוסיף';
         alert(errorMessage);
         return false;
     } catch (error) {
         console.error('Error creating event:', error);
-        alert('שגיאה בהוספת האירוע');
+        alert('לא הצלחנו להוסיף');
         return false;
     }
 }
@@ -62,16 +62,16 @@ async function updateEvent(eventId, eventData) {
         
         const result = await response.json();
         if (result.success) {
-            showMessage('האירוע עודכן בהצלחה');
+            showMessage('האירוע עודכן');
             await refreshEventsViews();
             return true;
         }
 
-        alert(result.error || 'שגיאה בעדכון האירוע');
+        alert(result.error || 'לא הצלחנו לעדכן');
         return false;
     } catch (error) {
         console.error('Error updating event:', error);
-        alert('שגיאה בעדכון האירוע');
+        alert('לא הצלחנו לעדכן');
         return false;
     }
 }
@@ -79,8 +79,8 @@ async function updateEvent(eventId, eventData) {
 async function deleteEvent(eventId, options) {
     const series = options && options.series;
     const message = series
-        ? 'למחוק את כל הסדרה, כולל כל המופעים?'
-        : 'האם אתה בטוח שברצונך למחוק אירוע זה?';
+        ? 'למחוק את כל הסדרה?'
+        : 'למחוק את האירוע?';
     if (!confirm(message)) {
         return;
     }
@@ -104,14 +104,14 @@ async function deleteEvent(eventId, options) {
                 filterChips.innerHTML = '';
             }
             
-            showMessage('האירוע נמחק בהצלחה');
+            showMessage('האירוע נמחק');
             await refreshEventsViews();
         } else {
-            alert('שגיאה במחיקת האירוע');
+            alert('לא הצלחנו למחוק');
         }
     } catch (error) {
         console.error('Error deleting event:', error);
-        alert('שגיאה במחיקת האירוע');
+        alert('לא הצלחנו למחוק');
     }
 }
 
@@ -130,10 +130,10 @@ async function deleteEventOccurrence(eventId, occurrenceDate) {
             await refreshEventsViews();
             return;
         }
-        alert(result.error || 'שגיאה במחיקת המופע');
+        alert(result.error || 'לא הצלחנו למחוק');
     } catch (error) {
         console.error('Error deleting occurrence:', error);
-        alert('שגיאה במחיקת המופע');
+        alert('לא הצלחנו למחוק');
     }
 }
 
@@ -157,5 +157,5 @@ async function editEvent(eventId, occurrenceDate) {
         await openEditEventModal(eventId, occurrenceDate || null);
         return;
     }
-    alert('לא ניתן לפתוח את עריכת האירוע');
+    alert('לא ניתן לפתוח את האירוע');
 }

@@ -193,14 +193,14 @@ async function saveSettingsColor(event) {
         });
         const body = await response.json();
         if (!response.ok) {
-            settingsColorError(body.error || 'שגיאה בשמירת הצבע');
+            settingsColorError(body.error || 'לא הצלחנו לשמור');
             return;
         }
         resetSettingsColorForm();
         await reloadSettingsColors();
     } catch (error) {
         console.error(error);
-        settingsColorError('שגיאה בשמירת הצבע');
+        settingsColorError('לא הצלחנו לשמור');
     }
 }
 
@@ -212,14 +212,14 @@ async function deleteSettingsColor(colorId) {
         const response = await fetch(`/api/colors/${colorId}`, { method: 'DELETE' });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
-            settingsColorError(body.error || 'לא ניתן למחוק את הצבע');
+            settingsColorError(body.error || 'אי אפשר למחוק את הצבע');
             return;
         }
         resetSettingsColorForm();
         await reloadSettingsColors();
     } catch (error) {
         console.error(error);
-        settingsColorError('לא ניתן למחוק את הצבע');
+        settingsColorError('אי אפשר למחוק את הצבע');
     }
 }
 

@@ -105,7 +105,14 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
             "shift_label",
         } <= cols
         people = {row[1] for row in conn.execute("PRAGMA table_info(reminder_people)")}
-        assert {"name", "telegram_chat_id", "color", "shift_allowed"} <= people
+        assert {
+            "name",
+            "telegram_chat_id",
+            "color",
+            "shift_allowed",
+            "receives_reminders",
+            "works_shifts",
+        } <= people
         reminders = {row[1] for row in conn.execute("PRAGMA table_info(reminders)")}
         assert {"event_id", "offset_minutes", "recipient_ids", "sent_at"} <= reminders
         sends = {row[1] for row in conn.execute("PRAGMA table_info(reminder_sends)")}
@@ -394,6 +401,69 @@ def test_version_two_rewrites_shift_rows_already_at_version_one(tmp_path):
             "SELECT title FROM events WHERE gregorian_date = '2026-01-01'"
         ).fetchone()
         assert plain["title"] == "יום הולדת"
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    finally:
+        conn.close()
+
+
+def test_version_four_backfills_people_role_flags(tmp_path):
+    """גרסה 4 ממלאת receives_reminders / works_shifts לפי צ׳אט, נמענים, ומשמרות."""
+    path = tmp_path / "v3.sqlite"
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        from app.database import SCHEMA_VERSION, apply_pending_migrations
+
+        assert SCHEMA_VERSION >= 4
+        apply_pending_migrations(conn)
+        conn.execute("PRAGMA user_version = 3")
+        conn.execute(
+            "INSERT INTO reminder_people (name, telegram_chat_id) VALUES ('עם צ׳אט', '99')"
+        )
+        conn.execute("INSERT INTO reminder_people (name) VALUES ('רק שם')")
+        conn.execute(
+            "INSERT INTO reminder_people (name, shift_allowed) VALUES ('עם כללים', '{\"בוקר\":[0]}')"
+        )
+        conn.execute("INSERT INTO reminder_people (name) VALUES ('נמען')")
+        recipient_id = conn.execute(
+            "SELECT id FROM reminder_people WHERE name = 'נמען'"
+        ).fetchone()["id"]
+        conn.execute("INSERT INTO reminder_people (name) VALUES ('שומר')")
+        shifter_id = conn.execute(
+            "SELECT id FROM reminder_people WHERE name = 'שומר'"
+        ).fetchone()["id"]
+        event_id = conn.execute(
+            "INSERT INTO events (title, gregorian_date, hebrew_date) VALUES ('פגישה', '2026-10-18', 'א')"
+        ).lastrowid
+        conn.execute(
+            """
+            INSERT INTO reminders (event_id, offset_minutes, recipient_ids)
+            VALUES (?, 0, ?)
+            """,
+            (event_id, f"[{recipient_id}]"),
+        )
+        conn.execute(
+            """
+            INSERT INTO events (
+                title, gregorian_date, hebrew_date, is_shift, shift_person_id, shift_label
+            ) VALUES ('בוקר', '2026-10-19', 'ב', 1, ?, 'בוקר')
+            """,
+            (shifter_id,),
+        )
+        conn.commit()
+
+        apply_pending_migrations(conn)
+        flags = {
+            row["name"]: (row["receives_reminders"], row["works_shifts"])
+            for row in conn.execute(
+                "SELECT name, receives_reminders, works_shifts FROM reminder_people"
+            )
+        }
+        assert flags["עם צ׳אט"] == (1, 0)
+        assert flags["רק שם"] == (1, 0)
+        assert flags["עם כללים"] == (0, 1)
+        assert flags["נמען"] == (1, 0)
+        assert flags["שומר"] == (0, 1)
         assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     finally:
         conn.close()

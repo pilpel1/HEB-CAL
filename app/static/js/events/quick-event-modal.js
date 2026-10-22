@@ -45,7 +45,7 @@ function setQuickEventModalMode(isEdit) {
         title.textContent = datePart ? `${modeLabel}, ${datePart}` : modeLabel;
     }
     if (submitBtn) {
-        submitBtn.textContent = isEdit ? 'שמור שינויים' : 'הוסף אירוע';
+        submitBtn.textContent = isEdit ? 'שמירה' : 'הוסף אירוע';
     }
 }
 
@@ -363,7 +363,7 @@ async function openEditEventModal(eventId, occurrenceDate) {
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (error) {
         console.error('Error loading event for edit:', error);
-        alert('שגיאה בטעינת האירוע');
+        alert('לא ניתן לטעון את האירוע');
     }
 }
 
@@ -536,12 +536,12 @@ function initQuickEventModal() {
         }
         if (eventData.recurrence_freq && eventData.recurrence_count !== null) {
             if (!Number.isInteger(eventData.recurrence_count) || eventData.recurrence_count < 1) {
-                alert('מספר הפעמים חייב להיות מספר שלם חיובי');
+                alert('מספר הפעמים חייב להיות שלם וחיובי');
                 return;
             }
         }
         if (eventData.recurrence_freq && document.getElementById('quick_recurrence_end_mode')?.value === 'until' && !eventData.recurrence_until) {
-            alert('חסר תאריך סיום לחזרה');
+            alert('חסר תאריך סיום');
             return;
         }
         if (eventData.is_shift && !String(eventData.shift_label || '').trim()) {

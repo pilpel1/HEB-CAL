@@ -49,7 +49,7 @@ def chat_id_reply(chat_id) -> str:
     safe_id = html.escape(str(chat_id), quote=False)
     return (
         f"מזהה הצ'אט שלך: <code>{safe_id}</code>\n"
-        "העתיקו את המספר לעמוד «אנשים לתזכורות» בלוח."
+        "מעתיקים את המספר להגדרות, תחת תזכורות."
     )
 
 

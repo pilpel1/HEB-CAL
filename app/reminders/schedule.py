@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 MAX_OFFSET_MINUTES = 365 * 24 * 60
 
 PRESET_OFFSETS = (
-    (0, "בזמן האירוע"),
+    (0, "בזמן"),
     (5, "5 דקות"),
     (10, "10 דקות"),
     (15, "15 דקות"),
@@ -103,7 +103,7 @@ def custom_offset_minutes(amount, unit) -> int:
     """
     count = _as_int(amount)
     if count <= 0:
-        raise OffsetError("ערך מותאם חייב להיות מספר חיובי")
+        raise OffsetError("המספר חייב להיות חיובי")
     key = (unit or "").strip().lower()
     factor = _UNIT_MINUTES.get(key)
     if factor is None:

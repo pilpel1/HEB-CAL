@@ -132,7 +132,7 @@ def check_calendar(page: Page, base: str, snap: dict) -> None:
     submit_modal(page)
     item = cell(page, today).locator(".event-item", has_text="סמוק")
     expect(item).to_have_text("09:30 - סמוק")
-    expect(page.locator("#success-message")).to_have_text("האירוע נוסף בהצלחה")
+    expect(page.locator("#success-message")).to_have_text("האירוע נוסף")
     snap["event_item_style"] = item.get_attribute("style")
     print("  add event: OK")
 
@@ -148,7 +148,7 @@ def check_calendar(page: Page, base: str, snap: dict) -> None:
         page.click("#quick_end_toggle")
     page.fill("#quick_end_date", in3)
     submit_modal(page)
-    expect(page.locator("#success-message")).to_have_text("האירוע עודכן בהצלחה")
+    expect(page.locator("#success-message")).to_have_text("האירוע עודכן")
     expect(cell(page, today).locator(".event-multi", has_text="סמוק ערוך")).to_be_visible()
     expect(cell(page, in3).locator(".event-item")).to_have_count(1)
     snap["multi_day_classes"] = [
@@ -164,7 +164,7 @@ def check_calendar(page: Page, base: str, snap: dict) -> None:
     snap["context_menu_event"] = context_action(
         page, cell(page, today).locator(".event-item"), "delete-event"
     )
-    expect(page.locator("#success-message")).to_have_text("האירוע נמחק בהצלחה")
+    expect(page.locator("#success-message")).to_have_text("האירוע נמחק")
     expect(cell(page, today).locator(".event-item")).to_have_count(0)
     print("  delete event (context menu): OK")
 

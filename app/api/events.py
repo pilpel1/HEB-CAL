@@ -138,7 +138,7 @@ def _parsed_reminders(data):
     if "reminders" not in data:
         return None, None
     try:
-        parsed = parse_reminders_payload(data.get("reminders"), people_ids())
+        parsed = parse_reminders_payload(data.get("reminders"), people_ids(role="reminders"))
     except OffsetError as exc:
         return None, (jsonify({"error": str(exc), "success": False}), 400)
     return parsed, None
@@ -268,7 +268,7 @@ def add_event():
     if rule == "keep" or (shift != "keep" and shift[0]):
         rule = None
     if shift != "keep" and shift[0] and not shifts_enabled():
-        return jsonify({"error": "המשמרות כבויות בבית הזה", "success": False}), 400
+        return jsonify({"error": "המשמרות כבויות", "success": False}), 400
 
     event_id = create_event(
         title=data['title'],
@@ -318,13 +318,13 @@ def update_single_event(event_id):
         except ValueError:
             return jsonify({"error": "חסר תאריך מופע", "success": False}), 400
         if not is_series_date(existing, original):
-            return jsonify({"error": "התאריך אינו מופע בסדרה", "success": False}), 400
+            return jsonify({"error": "התאריך לא מופיע בסדרה", "success": False}), 400
         end_date = data.get("end_date") or None
         if end_date:
             try:
                 if date.fromisoformat(end_date) < date.fromisoformat(data["gregorian_date"]):
                     return jsonify({
-                        "error": "תאריך הסיום חייב להיות זהה או מאוחר מתאריך ההתחלה",
+                        "error": "תאריך הסיום לא יכול להיות לפני ההתחלה",
                         "success": False,
                     }), 400
             except ValueError:
@@ -359,7 +359,7 @@ def update_single_event(event_id):
     if marking_shift:
         rule = None
     if marking_shift and not shifts_enabled():
-        return jsonify({"error": "המשמרות כבויות בבית הזה", "success": False}), 400
+        return jsonify({"error": "המשמרות כבויות", "success": False}), 400
 
     if (
         (existing.get("gregorian_date") or "") != data["gregorian_date"]
@@ -405,7 +405,7 @@ def delete_single_event(event_id):
         except ValueError:
             return jsonify({"error": "חסר תאריך מופע", "success": False}), 400
         if not is_series_date(existing, original):
-            return jsonify({"error": "התאריך אינו מופע בסדרה", "success": False}), 400
+            return jsonify({"error": "התאריך לא מופיע בסדרה", "success": False}), 400
         upsert_exception(event_id, occurrence_date, "deleted", {"gregorian_date": occurrence_date})
         return jsonify({"success": True, "scope": "occurrence"})
     if scope != "all":
@@ -526,7 +526,7 @@ def test_events():
         events = get_all_events()
         return jsonify({
             "status": "success",
-            "message": "החיבור לדאטהבייס תקין",
+            "message": "החיבור תקין",
             "events_count": len(events),
         })
     except Exception as exc:

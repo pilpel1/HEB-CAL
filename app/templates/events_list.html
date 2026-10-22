@@ -249,7 +249,7 @@
             <div class="d-flex align-items-center gap-2 flex-wrap flex-grow-1 justify-content-end">
                 <div class="search-container events-toolbar-search">
                     <div class="search-input-group">
-                        <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="חיפוש אירועים..." />
+                        <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="חיפוש..." />
                         <button class="btn btn-sm" type="button" id="advancedSearchBtn" title="חיפוש מתקדם">
                             <i class="bi bi-funnel-fill"></i>
                         </button>
@@ -261,14 +261,14 @@
                                 <div class="row mb-2">
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label class="form-label">חיפוש בשם האירוע</label>
-                                            <input type="text" class="form-control" id="titleSearch" placeholder="הזן שם אירוע...">
+                                            <label class="form-label">שם</label>
+                                            <input type="text" class="form-control" id="titleSearch" placeholder="שם האירוע">
                                         </div>
                                     </div>
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label class="form-label">חיפוש בתיאור</label>
-                                            <input type="text" class="form-control" id="descriptionSearch" placeholder="הזן טקסט לחיפוש בתיאור...">
+                                            <label class="form-label">תיאור</label>
+                                            <input type="text" class="form-control" id="descriptionSearch" placeholder="תיאור">
                                         </div>
                                     </div>
                                 </div>
@@ -288,7 +288,7 @@
                                     </div>
                                     <div class="col-md-3">
                                         <div class="form-group">
-                                            <label class="form-label">צבע האירוע</label>
+                                            <label class="form-label">צבע</label>
                                             <select class="form-control" id="colorSearch">
                                                 <option value="">כל הצבעים</option>
                                                 <option value="null">ללא צבע</option>
@@ -298,7 +298,7 @@
                                 </div>
                                 <!-- שורה שלישית: סינון לפי זמן -->
                                 <div class="time-filter-group mb-2">
-                                    <label class="form-label">סינון לפי זמן:</label>
+                                    <label class="form-label">זמן</label>
                                     <div class="radio-group">
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="radio" name="timeFilter" id="allEvents" value="all" checked>
@@ -838,8 +838,8 @@ function updatePaginationControls() {
     const info = document.getElementById('paginationInfo');
     if (info) {
         info.textContent = total === 0
-            ? 'אין אירועים להצגה'
-            : `מציג ${start}-${end} מתוך ${total} · עמוד ${currentPage} מתוך ${totalPages}`;
+            ? 'אין אירועים'
+            : `${start}–${end} מתוך ${total} · עמוד ${currentPage} מתוך ${totalPages}`;
     }
 
     const prevPageBtn = document.getElementById('prevPageBtn');
@@ -934,7 +934,7 @@ function editEvent(eventId) {
         openEditEventModal(eventId);
         return;
     }
-    alert('לא ניתן לפתוח את עריכת האירוע');
+    alert('לא ניתן לפתוח את האירוע');
 }
 
 function cancelEdit(eventId) {
@@ -965,7 +965,7 @@ async function updateHebrewDate(eventId) {
 }
 
 function deleteEvent(eventId) {
-    if (!confirm('האם אתה בטוח שברצונך למחוק אירוע זה?')) {
+    if (!confirm('למחוק את האירוע?')) {
         return;
     }
 
@@ -987,15 +987,15 @@ function deleteEvent(eventId) {
             if (searchInput) {
                 searchInput.value = '';
             }
-            showMessage('האירוע נמחק בהצלחה');
+            showMessage('האירוע נמחק');
             loadAllEvents();
         } else {
-            alert('שגיאה במחיקת האירוע');
+            alert('לא הצלחנו למחוק');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('שגיאה במחיקת האירוע');
+        alert('לא הצלחנו למחוק');
     });
 }
 
@@ -1128,7 +1128,7 @@ function updateFilterChips(searchParams) {
         }
         
         if (searchParams.timeFilter && searchParams.timeFilter !== 'all') {
-            const timeFilterText = searchParams.timeFilter === 'past' ? 'אירועים שעברו' : 'אירועים עתידיים';
+            const timeFilterText = searchParams.timeFilter === 'past' ? 'עבר' : 'עתיד';
             chipsHtml += `
                 <div class="filter-chip" data-filter="timeFilter">
                     ${timeFilterText}
@@ -1152,7 +1152,7 @@ function updateFilterChips(searchParams) {
         chipsHtml += `
             <span class="edit-search" onclick="editAdvancedSearch(event)">
                 <i class="bi bi-pencil"></i>
-                ערוך חיפוש
+                עריכת חיפוש
             </span>`;
     }
     

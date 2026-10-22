@@ -129,6 +129,20 @@ def test_person_color_and_rules_round_trip_without_clobber(client):
     assert person["color"] == "orange"
     assert person["shift_allowed"]["בוקר"] == [0, 1, 2, 3, 4]
     assert person["shift_allowed"]["לילה"] == []
+    assert person["works_shifts"] is True
+    assert person["receives_reminders"] is True
+
+    with client.application.app_context():
+        from app.database import get_db
+
+        stored = get_db().execute(
+            "SELECT shift_allowed, works_shifts, receives_reminders FROM reminder_people WHERE id = ?",
+            (person["id"],),
+        ).fetchone()
+    assert stored["shift_allowed"]
+    assert "לילה" in stored["shift_allowed"]
+    assert stored["works_shifts"] == 1
+    assert stored["receives_reminders"] == 1
 
     renamed = client.put(
         f"/api/reminder-people/{person['id']}",
@@ -690,7 +704,7 @@ def test_free_text_shift_survives_grid_resave(client):
 def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar
-    assert "הזן משמרות" in calendar
+    assert "הזן משמרות" not in calendar
     assert 'class="shift-grid-icon"' in calendar
     assert "fa-user-clock" not in calendar
     plus = calendar.index('id="addEventFromCalendarBtn"')
@@ -705,7 +719,7 @@ def test_calendar_and_settings_markup(client):
     assert 'aria-label="דלג לתאריך"' in calendar
     assert 'aria-label="הוסף אירוע"' in calendar
     assert 'aria-label="רשימת אירועים"' in calendar
-    assert 'aria-label="הזן משמרות"' in calendar
+    assert 'aria-label="משמרות"' in calendar
     assert 'id="header-collapse"' in calendar
     assert 'header-collapse-chevron' in calendar
     assert 'header-collapse-grip' not in calendar
@@ -715,8 +729,20 @@ def test_calendar_and_settings_markup(client):
     assert 'id="quick_shift_enabled"' in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings
-    assert "הפעלת משמרות בבית הזה" in settings
+    assert 'id="settings-shifts-title">משמרות</h2>' in settings
+    assert settings.count(">משמרות</h2>") == 1
+    assert "הפעלת משמרות בבית הזה" not in settings
+    assert "אנשים למשמרות" not in settings
     assert 'id="personShiftMatrix"' in settings
+    assert 'id="shiftPeoplePanel"' in settings
+    assert 'id="shiftPersonSave"' in settings
+    assert 'id="shiftPersonForm"' in settings
+    assert 'id="shiftPersonContext"' in settings
+    reminder_form = settings.split('id="reminderPersonForm"')[1].split('id="shiftSettings"')[0]
+    assert 'id="personShiftMatrix"' not in reminder_form
+    assert 'id="reminderPersonName"' in reminder_form
+    assert 'id="reminderPersonChat"' in reminder_form
+    assert ">שמור<" in settings.split('id="shiftPersonSave"')[1][:80]
     assert 'data-theme-switch' in settings
     assert 'data-density-switch' in settings
     assert "מצב כהה" in settings
@@ -737,12 +763,128 @@ def test_calendar_and_settings_markup(client):
     assert 'id="exportEventsBtn"' not in events_list
     assert 'id="pageSizeSelect"' in events_list
     assert 'id="sortOrderSelect"' in events_list
-    assert "אנשים לתזכורות" in settings
+    assert '<h2 class="h5">תזכורות</h2>' in settings
+    assert "אנשים לתזכורות" not in settings
     assert 'id="chatIdHelpBtn"' in settings
-    assert 'aria-label="איך משיגים מזהה צ׳אט"' in settings
-    label = settings.index("מזהה צ׳אט בטלגרם")
+    assert 'aria-label="איך מקבלים מזהה צ׳אט"' in settings
+    label = settings.index('<label for="reminderPersonChat" class="form-label">מזהה צ׳אט</label>')
     help_btn = settings.index('id="chatIdHelpBtn"')
     help_pop = settings.index('id="chatIdHelp"')
     assert label < help_btn < help_pop
     assert "TELEGRAM_BOT_TOKEN" in settings[help_pop:help_pop + 1200]
-    assert '<h2 class="h5">איך משיגים מזהה צ׳אט</h2>' not in settings
+    assert '<h2 class="h5">איך מקבלים מזהה צ׳אט</h2>' not in settings
+    shifts_js = client.get("/static/js/events/shifts.js").get_data(as_text=True)
+    assert "function persistEditedShiftRules" not in shifts_js
+    assert "function saveShiftPerson" in shifts_js
+    assert "beforeunload" in shifts_js
+    people_js = client.get("/static/js/events/reminder-people.js").get_data(as_text=True)
+    assert "personShiftPayload" not in people_js
+    assert "receives_reminders" in people_js
+
+
+def test_people_role_filters_and_api_validation(client):
+    reminder = _person(client, name="דני", telegram_chat_id="11")
+    shifter = client.post(
+        "/api/reminder-people",
+        json={
+            "name": "אביחי",
+            "color": "cyan",
+            "shift_allowed": _allowed({"בוקר": [0]}),
+            "receives_reminders": False,
+            "works_shifts": True,
+        },
+    ).get_json()
+    both = _person(
+        client,
+        name="נועה",
+        telegram_chat_id="22",
+        color="yellow",
+        shift_allowed=_allowed({"ערב": [1]}),
+    )
+
+    reminder_names = {
+        row["name"] for row in client.get("/api/reminder-people?role=reminders").get_json()
+    }
+    assert reminder_names == {"דני", "נועה"}
+    shift_names = {
+        row["name"] for row in client.get("/api/reminder-people?role=shifts").get_json()
+    }
+    assert shift_names == {"אביחי", "נועה"}
+    assert client.get("/api/reminder-people?role=nope").status_code == 400
+
+    blocked_recipient = client.post(
+        "/api/events",
+        json={
+            "title": "פגישה",
+            "gregorian_date": "2026-10-18",
+            "hebrew_date": "א",
+            "reminders": [{"offset_minutes": 0, "recipient_ids": [shifter["id"]]}],
+        },
+    )
+    assert blocked_recipient.status_code == 400
+
+    ok_event = client.post(
+        "/api/events",
+        json={
+            "title": "פגישה",
+            "gregorian_date": "2026-10-18",
+            "hebrew_date": "א",
+            "reminders": [{"offset_minutes": 0, "recipient_ids": [reminder["id"]]}],
+        },
+    )
+    assert ok_event.status_code == 200, ok_event.get_json()
+
+    blocked_week = client.put("/api/shifts/week", json={
+        "person_id": reminder["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-18", "label": "בוקר"}],
+    })
+    assert blocked_week.status_code == 400
+    assert "רשימת המשמרות" in blocked_week.get_json()["error"]
+
+    ok_week = client.put("/api/shifts/week", json={
+        "person_id": shifter["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-18", "label": "בוקר"}],
+    })
+    assert ok_week.status_code == 200, ok_week.get_json()
+    assert both["id"]
+
+
+def test_put_shift_allowed_persists_and_round_trips(client):
+    person = _person(client, name="אביחי", telegram_chat_id="5")
+    assert person["works_shifts"] is False
+    allowed = _allowed({"בוקר": [0, 1, 2, 3, 4], "ערב": [], "לילה": []})
+    updated = client.put(
+        f"/api/reminder-people/{person['id']}",
+        json={
+            "name": "אביחי",
+            "telegram_chat_id": "5",
+            "color": "green",
+            "shift_allowed": allowed,
+            "works_shifts": True,
+            "receives_reminders": True,
+        },
+    )
+    assert updated.status_code == 200, updated.get_json()
+    body = updated.get_json()
+    assert body["works_shifts"] is True
+    assert body["shift_allowed"]["בוקר"] == [0, 1, 2, 3, 4]
+    assert body["shift_allowed"]["לילה"] == []
+
+    listed = client.get("/api/reminder-people?role=shifts").get_json()
+    match = next(row for row in listed if row["id"] == person["id"])
+    assert match["shift_allowed"]["בוקר"] == [0, 1, 2, 3, 4]
+    assert match["color"] == "green"
+
+    with client.application.app_context():
+        from app.database import get_db
+
+        row = get_db().execute(
+            "SELECT shift_allowed, works_shifts FROM reminder_people WHERE id = ?",
+            (person["id"],),
+        ).fetchone()
+    assert row["works_shifts"] == 1
+    stored = json.loads(row["shift_allowed"])
+    assert stored["בוקר"] == [0, 1, 2, 3, 4]
+    assert stored["לילה"] == []

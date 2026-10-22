@@ -56,9 +56,9 @@ function initCalendarContextMenu(calendarBody) {
         if (menuState.eventId && menuState.recurring) {
             items.push(
                 { label: 'ערוך רק הפעם', action: 'edit-occurrence' },
-                { label: 'ערוך את כל הסדרה', action: 'edit-series' },
+                { label: 'ערוך את הסדרה', action: 'edit-series' },
                 { label: 'מחק רק הפעם', action: 'delete-occurrence', danger: true },
-                { label: 'מחק את כל הסדרה', action: 'delete-series', danger: true },
+                { label: 'מחק את הסדרה', action: 'delete-series', danger: true },
                 { separator: true },
             );
         } else if (menuState.eventId) {

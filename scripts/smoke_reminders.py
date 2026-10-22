@@ -125,7 +125,7 @@ def main() -> int:
         assert cleared["reminders"] == []
 
         page.goto(base + "/settings")
-        expect(page.get_by_role("heading", name="אנשים לתזכורות")).to_be_visible()
+        expect(page.get_by_role("heading", name="תזכורות")).to_be_visible()
         expect(page.locator("#reminderPeopleList")).to_contain_text("דני סמוק")
         expect(page.locator("body")).to_contain_text("/start")
         page.fill("#reminderPersonName", "נועה סמוק")

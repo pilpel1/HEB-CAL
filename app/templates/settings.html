@@ -27,14 +27,14 @@
                     <input class="form-check-input" type="checkbox" role="switch" id="densitySwitch" data-density-switch>
                 </div>
             </div>
-            <p class="text-muted small mb-0">בטלפון, תצוגה צפופה מקטינה את ימי הלוח כדי להראות יותר שבועות. שני המתגים נשמרים במכשיר.</p>
+            <p class="text-muted small mb-0">בטלפון, תצוגה צפופה מציגה יותר שבועות. הבחירה נשמרת במכשיר.</p>
         </div>
     </section>
 
     <section class="card mb-3" id="settingsColors" aria-labelledby="settings-colors-title">
         <div class="card-body">
             <h2 class="h5" id="settings-colors-title">צבעים</h2>
-            <p class="text-muted">צבעי האירועים בלוח. ארבעת ברירת המחדל אי אפשר למחוק.</p>
+            <p class="text-muted">צבעים לאירועים בלוח. את ברירת המחדל אי אפשר למחוק.</p>
             <ul id="settingsColorsList" class="settings-colors-list"></ul>
             <form id="settingsColorForm" class="row g-2 align-items-end mt-2">
                 <input type="hidden" id="settingsColorId" value="">
@@ -58,19 +58,19 @@
     <section class="card mb-3" id="settingsBackup" aria-labelledby="settings-backup-title">
         <div class="card-body">
             <h2 class="h5" id="settings-backup-title">גיבוי וייבוא</h2>
-            <p class="text-muted">ייצוא כל האירועים לקובץ JSON, או ייבוא מקובץ גיבוי.</p>
+            <p class="text-muted">ייצוא כל האירועים לקובץ, או ייבוא מגיבוי.</p>
             <div class="d-flex flex-wrap gap-2 mb-3">
-                <button type="button" class="btn btn-outline-secondary" id="exportEventsBtn">ייצוא רשימה</button>
-                <button type="button" class="btn btn-outline-secondary" id="importEventsBtn">ייבוא רשימה</button>
+                <button type="button" class="btn btn-outline-secondary" id="exportEventsBtn">ייצוא</button>
+                <button type="button" class="btn btn-outline-secondary" id="importEventsBtn">ייבוא</button>
             </div>
             <input type="file" id="importEventsFile" accept=".json,application/json" hidden>
             <label for="importMode" class="form-label">מצב ייבוא</label>
             <select id="importMode" class="form-select">
-                <option value="merge" selected>ייבוא במיזוג (בלי כפילויות)</option>
-                <option value="replace">ייבוא במקום הקיים</option>
+                <option value="merge" selected>מיזוג (בלי כפילויות)</option>
+                <option value="replace">החלפה</option>
             </select>
             <small class="text-muted d-block mt-2">
-                מיזוג מזהה אירוע לפי מזהה, או לפי כותרת+תאריך+שעה, או לפי תאריך+שעה אם יש התאמה יחידה.
+                מיזוג מזהה אירוע לפי מזהה, או לפי כותרת ותאריך ושעה.
             </small>
         </div>
     </section>
@@ -87,21 +87,11 @@
         })();
     </script>
 
-    <div class="card mb-3" id="shiftSettings">
-        <div class="card-body">
-            <h2 class="h5">משמרות</h2>
-            <div class="form-check form-switch mb-2">
-                <input class="form-check-input" type="checkbox" role="switch" id="shiftsEnabled">
-                <label class="form-check-label" for="shiftsEnabled">הפעלת משמרות בבית הזה</label>
-            </div>
-            <p class="text-muted small mb-0">כשזה דלוק, בלוח מופיע כפתור «הזן משמרות». כל משמרת נשמרת כאירוע רגיל של יום שלם — בוקר, ערב או לילה, בלי שעות — בצבע של האדם. אפשר לערוך או למחוק אותו כמו כל אירוע, וגם להוסיף לו תזכורת.</p>
-        </div>
-    </div>
-
     <div class="card mb-3">
         <div class="card-body">
-            <h2 class="h5">אנשים לתזכורות</h2>
-            <p class="mb-3">כל אדם כאן יכול לקבל תזכורת בטלגרם. בלי מזהה צ׳אט עדיין אפשר להזכיר בדפדפן כשהלוח פתוח. כשמשמרות דלוקות, לאותו אדם יש גם צבע ומשמרות מותרות.</p>
+            <h2 class="h5">תזכורות</h2>
+            <p class="mb-3">שם ומזהה צ׳אט בטלגרם. בלי מזהה התזכורת תופיע רק בדפדפן כשהלוח פתוח.</p>
+            <p id="reminderPersonContext" class="person-edit-context">אדם חדש</p>
             <form id="reminderPersonForm" class="row g-2 align-items-end">
                 <input type="hidden" id="reminderPersonId" value="">
                 <div class="col-12 col-md-4">
@@ -110,21 +100,21 @@
                 </div>
                 <div class="col-12 col-md-4 chat-id-field">
                     <div class="chat-id-label-row">
-                        <label for="reminderPersonChat" class="form-label">מזהה צ׳אט בטלגרם</label>
-                        <button type="button" class="chat-id-help-btn" id="chatIdHelpBtn" aria-label="איך משיגים מזהה צ׳אט" aria-expanded="false" aria-controls="chatIdHelp">?</button>
+                        <label for="reminderPersonChat" class="form-label">מזהה צ׳אט</label>
+                        <button type="button" class="chat-id-help-btn" id="chatIdHelpBtn" aria-label="איך מקבלים מזהה צ׳אט" aria-expanded="false" aria-controls="chatIdHelp">?</button>
                     </div>
                     <div id="chatIdHelp" class="chat-id-help-pop" hidden role="dialog" aria-labelledby="chatIdHelpTitle">
-                        <p class="chat-id-help-title" id="chatIdHelpTitle">איך משיגים מזהה צ׳אט</p>
+                        <p class="chat-id-help-title" id="chatIdHelpTitle">איך מקבלים מזהה צ׳אט</p>
                         <ol>
-                            <li>מריצים את ה-worker (הפקודה מופיעה בקובץ ההסבר של הפרויקט) עם טוקן הבוט. שם המשתנה בקובץ ההגדרות:
+                            <li>מריצים את סקריפט השליחה עם טוקן הבוט. שם המשתנה:
                                 <div class="reminder-code" dir="ltr">TELEGRAM_BOT_TOKEN</div>
                             </li>
-                            <li>בטלגרם פותחים את הבוט ושולחים:
+                            <li>בטלגרם שולחים לבוט:
                                 <div class="reminder-code" dir="ltr">/start</div>
                             </li>
-                            <li>הבוט עונה עם המספר. מעתיקים אותו לשדה «מזהה צ׳אט».</li>
+                            <li>מעתיקים את המספר לכאן.</li>
                         </ol>
-                        <p class="text-muted mb-0">אפשר להשאיר את המזהה ריק. בלי מספר לא נשלחת הודעת טלגרם.</p>
+                        <p class="text-muted mb-0">אפשר להשאיר ריק. בלי מספר לא תישלח הודעה בטלגרם.</p>
                     </div>
                     <input type="text" class="form-control" id="reminderPersonChat" inputmode="numeric" dir="ltr" autocomplete="off" placeholder="למשל 123456789">
                 </div>
@@ -132,8 +122,39 @@
                     <button type="submit" class="btn btn-primary" id="reminderPersonSave">הוספה</button>
                     <button type="button" class="btn btn-outline-secondary" id="reminderPersonCancel" hidden>ביטול</button>
                 </div>
-                <div class="col-12" id="personShiftFields" hidden>
-                    <div class="form-label mb-1">צבע בלוח</div>
+            </form>
+            <p id="reminderPersonError" class="reminder-form-error mt-2" hidden></p>
+            <p id="reminderPersonSaved" class="person-saved-flag mt-2" hidden>נשמר</p>
+            <div id="reminderPeopleList" class="mt-3"></div>
+        </div>
+    </div>
+
+    <div class="card mb-3" id="shiftSettings">
+        <div class="card-body">
+            <div class="settings-switch-row mb-2">
+                <h2 class="h5 settings-switch-label mb-0" id="settings-shifts-title">משמרות</h2>
+                <div class="form-check form-switch settings-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="shiftsEnabled" aria-labelledby="settings-shifts-title">
+                </div>
+            </div>
+            <p class="text-muted small">כשזה דלוק מופיע בלוח כפתור משמרות. כל משמרת היא אירוע של יום שלם — בוקר, ערב או לילה — בצבע של האדם.</p>
+            <div id="shiftPeoplePanel" hidden>
+                <p class="text-muted">מי עובד, באיזה צבע, ובאילו ימים. בלי שמירה השינויים לא נשמרים.</p>
+                <div id="shiftPeopleList"></div>
+                <form id="shiftPersonForm" class="shift-person-editor mt-3">
+                    <input type="hidden" id="shiftPersonEditId" value="">
+                    <p id="shiftPersonContext" class="person-edit-context">אדם חדש</p>
+                    <div class="mb-2" id="shiftPersonSourceWrap">
+                        <label for="shiftPersonSource" class="form-label">מהתזכורות</label>
+                        <select id="shiftPersonSource" class="form-select">
+                            <option value="">אדם חדש</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="shiftPersonName" class="form-label">שם</label>
+                        <input type="text" class="form-control" id="shiftPersonName" maxlength="80">
+                    </div>
+                    <div class="form-label mb-1">צבע</div>
                     <div class="quick-color-picker mb-2" id="personColorPicker" role="radiogroup" aria-label="צבע האדם">
                         <button type="button" class="quick-color-swatch is-none is-selected" data-color="" title="ללא צבע" aria-label="ללא צבע"></button>
                         <button type="button" class="quick-color-swatch color-cyan" data-color="cyan" title="ציאן" aria-label="ציאן"></button>
@@ -142,22 +163,26 @@
                         <button type="button" class="quick-color-swatch color-green" data-color="green" title="ירוק" aria-label="ירוק"></button>
                     </div>
                     <div class="form-label mb-1">משמרות מותרות</div>
-                    <p class="text-muted small mb-1">בלי שעות. אפשר לסמן רק חלק מהימים — למשל בלי שישי-שבת, או בלי לילה.</p>
+                    <p class="text-muted small mb-1">אפשר לסמן רק חלק מהימים — למשל בלי שישי־שבת, או בלי לילה.</p>
                     <div id="personShiftMatrix"></div>
-                </div>
-            </form>
-            <p id="reminderPersonError" class="reminder-form-error mt-2" hidden></p>
-            <div id="reminderPeopleList" class="mt-3"></div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                        <button type="submit" class="btn btn-primary" id="shiftPersonSave">שמור</button>
+                        <button type="button" class="btn btn-outline-secondary" id="shiftPersonCancel" hidden>ביטול</button>
+                        <span id="shiftPersonSaved" class="person-saved-flag" hidden>נשמר</span>
+                    </div>
+                    <p id="shiftPersonError" class="reminder-form-error mt-2" hidden></p>
+                </form>
+            </div>
         </div>
     </div>
 
     <div class="card">
         <div class="card-body reminder-help">
             <h2 class="h5">התראות בדפדפן</h2>
-            <p>כשהלוח פתוח (אנדרואיד או מחשב) האפליקציה בודקת כל חצי דקה אם יש תזכורת ומציגה אותה דרך הדפדפן.</p>
-            <button type="button" class="btn btn-outline-primary" data-reminder-notify-enable>אפשר התראות בדפדפן</button>
+            <p>כשהלוח פתוח, תזכורת מופיעה בדפדפן.</p>
+            <button type="button" class="btn btn-outline-primary" data-reminder-notify-enable>אפשר התראות</button>
             <p id="reminderNotifyStatus" class="mt-2 mb-2"></p>
-            <p class="text-muted mb-0">התראה כשהדפדפן סגור דורשת אתר מאובטח והתקנה כאפליקציה (זה נקרא Web Push, ומתוכנן אחר כך). מועד התזכורת והנמענים לא תלויים בערוץ, אז זה יתווסף בלי לשנות את הטופס.</p>
+            <p class="text-muted mb-0">אם הדפדפן סגור לא תגיע התראה. זה יתווסף בהמשך.</p>
         </div>
     </div>
 </div>

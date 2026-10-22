@@ -53,7 +53,8 @@ function noteShiftPeople(people) {
 
 function suggestPersonColor() {
     const used = new Set((shiftUiState.people || []).map((person) => person.color).filter(Boolean));
-    const editingId = document.getElementById('reminderPersonId')?.value;
+    const editingId = document.getElementById('shiftPersonEditId')?.value
+        || document.getElementById('reminderPersonId')?.value;
     if (editingId) {
         const current = (shiftUiState.people || []).find((person) => String(person.id) === editingId);
         if (current && used.has(current.color)) {
@@ -210,6 +211,10 @@ function syncShiftSettingsVisibility() {
     if (fields) {
         fields.hidden = !shiftUiState.enabled;
     }
+    const panel = document.getElementById('shiftPeoplePanel');
+    if (panel) {
+        panel.hidden = !shiftUiState.enabled;
+    }
     const toggle = document.getElementById('shiftsEnabled');
     if (toggle) {
         toggle.checked = !!shiftUiState.enabled;
@@ -218,6 +223,17 @@ function syncShiftSettingsVisibility() {
     if (button) {
         button.hidden = !shiftUiState.enabled;
     }
+}
+
+function peopleByRole(role) {
+    const list = shiftUiState.people || [];
+    if (role === 'reminders') {
+        return list.filter((person) => person.receives_reminders);
+    }
+    if (role === 'shifts') {
+        return list.filter((person) => person.works_shifts);
+    }
+    return list;
 }
 
 function resetPersonShiftFields() {
@@ -268,83 +284,278 @@ function noteShiftRulesEdited() {
         return;
     }
     shiftUiState.rulesDirty = true;
-    const id = document.getElementById('reminderPersonId')?.value;
-    if (!id || !shiftUiState.enabled) {
-        return;
-    }
-    if (shiftUiState.rulesSaving) {
-        shiftUiState.rulesAgain = true;
-        return;
-    }
-    shiftUiState.rulesSave = persistEditedShiftRules(id);
+    setShiftPersonSaved(false);
 }
 
-async function persistEditedShiftRules(personId) {
-    const id = document.getElementById('reminderPersonId')?.value;
-    if (!id || String(id) !== String(personId) || !shiftUiState.enabled) {
-        return;
+function confirmDiscardShiftEdits() {
+    if (!shiftUiState.rulesDirty) {
+        return true;
     }
-    const name = document.getElementById('reminderPersonName')?.value.trim();
-    if (!name) {
-        return;
-    }
-    let chatId = document.getElementById('reminderPersonChat')?.value.trim() || null;
-    if (typeof cleanChatId === 'function') {
-        chatId = cleanChatId(document.getElementById('reminderPersonChat')?.value);
-        if (chatId === null) {
-            return;
-        }
-    }
-    const extra = personShiftPayload();
-    if (!extra.shift_allowed) {
-        return;
-    }
-    shiftUiState.rulesSaving = true;
-    shiftUiState.rulesAgain = false;
-    try {
-        const response = await fetch(`/api/reminder-people/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            keepalive: true,
-            body: JSON.stringify({
-                name,
-                telegram_chat_id: chatId || null,
-                ...extra,
-            }),
-        });
-        const saved = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            if (typeof setReminderPersonError === 'function') {
-                setReminderPersonError(saved.error || 'שמירת המשמרות נכשלה');
-            }
-            return;
-        }
-        const current = (shiftUiState.people || []).find((person) => String(person.id) === String(id));
-        if (current) {
-            Object.assign(current, saved);
-        }
-        if (typeof setReminderPersonError === 'function') {
-            setReminderPersonError('');
-        }
-    } finally {
-        shiftUiState.rulesSaving = false;
-        if (shiftUiState.rulesAgain && document.getElementById('reminderPersonId')?.value) {
-            shiftUiState.rulesSave = persistEditedShiftRules(document.getElementById('reminderPersonId').value);
-        } else if (!shiftUiState.rulesAgain) {
-            shiftUiState.rulesDirty = false;
-        }
-    }
+    return window.confirm('יש שינויים שלא נשמרו. לעזוב בלי לשמור?');
 }
 
 async function flushShiftRulesSave() {
-    if (!shiftUiState.rulesSaving && shiftUiState.rulesDirty) {
-        const id = document.getElementById('reminderPersonId')?.value;
-        if (id) {
-            shiftUiState.rulesSave = persistEditedShiftRules(id);
-        }
+    if (shiftUiState.rulesDirty && !confirmDiscardShiftEdits()) {
+        throw new Error('unsaved-shift-edits');
     }
-    while (shiftUiState.rulesSaving && shiftUiState.rulesSave) {
-        await shiftUiState.rulesSave;
+}
+
+function setShiftPersonError(message) {
+    const node = document.getElementById('shiftPersonError');
+    if (!node) {
+        return;
+    }
+    node.textContent = message || '';
+    node.hidden = !message;
+}
+
+function setShiftPersonSaved(visible) {
+    const node = document.getElementById('shiftPersonSaved');
+    if (!node) {
+        return;
+    }
+    node.hidden = !visible;
+}
+
+function setShiftPersonContext(person) {
+    const node = document.getElementById('shiftPersonContext');
+    if (!node) {
+        return;
+    }
+    if (person && person.id) {
+        node.textContent = `עריכת ${person.name || 'אדם'}`;
+        node.classList.add('is-existing');
+        return;
+    }
+    node.textContent = 'אדם חדש';
+    node.classList.remove('is-existing');
+}
+
+function currentShiftEditId() {
+    return document.getElementById('shiftPersonEditId')?.value || '';
+}
+
+function fillShiftPersonSource(people) {
+    const select = document.getElementById('shiftPersonSource');
+    if (!select) {
+        return;
+    }
+    const editingId = currentShiftEditId();
+    const keep = select.value;
+    const candidates = (people || []).filter((person) => {
+        if (person.works_shifts && String(person.id) !== String(editingId)) {
+            return false;
+        }
+        return true;
+    });
+    select.replaceChildren();
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = 'אדם חדש';
+    select.append(blank);
+    candidates.forEach((person) => {
+        if (person.works_shifts && String(person.id) === String(editingId)) {
+            return;
+        }
+        const option = document.createElement('option');
+        option.value = String(person.id);
+        option.textContent = person.receives_reminders
+            ? `${person.name} (תזכורות)`
+            : person.name;
+        select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === keep)) {
+        select.value = keep;
+    }
+    const wrap = document.getElementById('shiftPersonSourceWrap');
+    if (wrap) {
+        wrap.hidden = Boolean(editingId);
+    }
+}
+
+function renderShiftPeopleList(people) {
+    const list = document.getElementById('shiftPeopleList');
+    if (!list) {
+        return;
+    }
+    const workers = (people || []).filter((person) => person.works_shifts);
+    list.replaceChildren();
+    if (!workers.length) {
+        const empty = document.createElement('p');
+        empty.className = 'text-muted mb-0';
+        empty.textContent = 'עדיין אין אנשים.';
+        list.append(empty);
+        return;
+    }
+    const editingId = currentShiftEditId();
+    workers.forEach((person) => {
+        const row = document.createElement('div');
+        row.className = 'reminder-person-row';
+        row.dataset.personId = String(person.id);
+        if (editingId && String(person.id) === String(editingId)) {
+            row.classList.add('is-editing');
+        }
+        const text = document.createElement('div');
+        text.className = 'reminder-person-text';
+        const name = document.createElement('div');
+        name.textContent = person.name;
+        text.append(name);
+        appendShiftPersonMeta(text, person);
+        const actions = document.createElement('div');
+        actions.className = 'd-flex gap-2';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'btn btn-outline-primary btn-sm';
+        edit.textContent = 'עריכה';
+        edit.addEventListener('click', () => startEditShiftPerson(person));
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-outline-danger btn-sm';
+        remove.textContent = 'הסרה';
+        remove.addEventListener('click', () => removeShiftPerson(person));
+        actions.append(edit, remove);
+        row.append(text, actions);
+        list.append(row);
+    });
+}
+
+function resetShiftPersonForm() {
+    const idInput = document.getElementById('shiftPersonEditId');
+    if (idInput) {
+        idInput.value = '';
+    }
+    const nameInput = document.getElementById('shiftPersonName');
+    if (nameInput) {
+        nameInput.value = '';
+        nameInput.readOnly = false;
+    }
+    const source = document.getElementById('shiftPersonSource');
+    if (source) {
+        source.value = '';
+        source.disabled = false;
+    }
+    const cancel = document.getElementById('shiftPersonCancel');
+    if (cancel) {
+        cancel.hidden = true;
+    }
+    setShiftPersonError('');
+    setShiftPersonSaved(false);
+    setShiftPersonContext(null);
+    resetPersonShiftFields();
+    clearShiftRulesDraft();
+    fillShiftPersonSource(shiftUiState.people);
+    renderShiftPeopleList(shiftUiState.people);
+}
+
+function startEditShiftPerson(person, options) {
+    if (!(options && options.force) && !confirmDiscardShiftEdits()) {
+        return;
+    }
+    document.getElementById('shiftPersonEditId').value = String(person.id);
+    document.getElementById('shiftPersonName').value = person.name || '';
+    document.getElementById('shiftPersonName').readOnly = false;
+    const source = document.getElementById('shiftPersonSource');
+    if (source) {
+        source.value = '';
+        source.disabled = true;
+    }
+    document.getElementById('shiftPersonCancel').hidden = false;
+    setShiftPersonError('');
+    setShiftPersonSaved(false);
+    setShiftPersonContext(person);
+    fillPersonShiftFields(person);
+    fillShiftPersonSource(shiftUiState.people);
+    renderShiftPeopleList(shiftUiState.people);
+    document.getElementById('shiftPersonName').focus();
+}
+
+async function saveShiftPerson(event) {
+    event.preventDefault();
+    const existingId = currentShiftEditId();
+    const sourceId = document.getElementById('shiftPersonSource')?.value || '';
+    const personId = existingId || sourceId;
+    const nameInput = document.getElementById('shiftPersonName');
+    const typedName = (nameInput?.value || '').trim();
+    const existing = (shiftUiState.people || []).find((person) => String(person.id) === String(personId));
+    const name = typedName || (existing && existing.name) || '';
+    if (!name) {
+        setShiftPersonError('חסר שם');
+        return;
+    }
+    const extra = personShiftPayload();
+    const payload = {
+        name,
+        telegram_chat_id: existing ? existing.telegram_chat_id || null : null,
+        color: extra.color || null,
+        shift_allowed: extra.shift_allowed || defaultShiftAllowed(),
+        works_shifts: true,
+    };
+    if (existing && existing.receives_reminders) {
+        payload.receives_reminders = true;
+    } else if (!personId) {
+        payload.receives_reminders = false;
+    }
+    setShiftPersonError('');
+    const response = await fetch(personId ? `/api/reminder-people/${personId}` : '/api/reminder-people', {
+        method: personId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        setShiftPersonError(saved.error || 'השמירה נכשלה');
+        return;
+    }
+    clearShiftRulesDraft();
+    setShiftPersonSaved(true);
+    if (typeof showMessage === 'function') {
+        showMessage('נשמר');
+    }
+    if (typeof loadReminderPeople === 'function') {
+        await loadReminderPeople();
+    }
+    startEditShiftPerson({ ...saved, id: saved.id }, { force: true });
+    clearShiftRulesDraft();
+    setShiftPersonSaved(true);
+}
+
+async function removeShiftPerson(person) {
+    if (!confirmDiscardShiftEdits()) {
+        return;
+    }
+    const alsoReminders = Boolean(person.receives_reminders);
+    const question = alsoReminders
+        ? `להסיר את ${person.name} מהמשמרות? התזכורות יישארו.`
+        : `למחוק את ${person.name}?`;
+    if (!confirm(question)) {
+        return;
+    }
+    let response;
+    if (alsoReminders) {
+        response = await fetch(`/api/reminder-people/${person.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: person.name,
+                telegram_chat_id: person.telegram_chat_id || null,
+                color: person.color,
+                shift_allowed: person.shift_allowed,
+                receives_reminders: true,
+                works_shifts: false,
+            }),
+        });
+    } else {
+        response = await fetch(`/api/reminder-people/${person.id}`, { method: 'DELETE' });
+    }
+    if (!response.ok) {
+        setShiftPersonError('ההסרה נכשלה');
+        return;
+    }
+    if (currentShiftEditId() === String(person.id)) {
+        resetShiftPersonForm();
+    }
+    if (typeof loadReminderPeople === 'function') {
+        await loadReminderPeople();
     }
 }
 
@@ -362,6 +573,42 @@ function initShiftSettings() {
         setPersonColor(button.dataset.color || '');
         noteShiftRulesEdited();
     });
+    document.getElementById('shiftPersonForm')?.addEventListener('submit', saveShiftPerson);
+    document.getElementById('shiftPersonCancel')?.addEventListener('click', () => {
+        if (!confirmDiscardShiftEdits()) {
+            return;
+        }
+        resetShiftPersonForm();
+    });
+    document.getElementById('shiftPersonName')?.addEventListener('input', noteShiftRulesEdited);
+    document.getElementById('shiftPersonSource')?.addEventListener('change', (event) => {
+        const id = event.target.value;
+        if (!id) {
+            document.getElementById('shiftPersonEditId').value = '';
+            setShiftPersonContext(null);
+            fillShiftPersonSource(shiftUiState.people);
+            noteShiftRulesEdited();
+            return;
+        }
+        const person = (shiftUiState.people || []).find((item) => String(item.id) === String(id));
+        if (!person) {
+            return;
+        }
+        document.getElementById('shiftPersonEditId').value = String(person.id);
+        document.getElementById('shiftPersonName').value = person.name || '';
+        document.getElementById('shiftPersonCancel').hidden = false;
+        setShiftPersonContext(person);
+        fillPersonShiftFields(person);
+        fillShiftPersonSource(shiftUiState.people);
+        noteShiftRulesEdited();
+    });
+    window.addEventListener('beforeunload', (event) => {
+        if (!shiftUiState.rulesDirty) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = '';
+    });
     toggle.addEventListener('change', async () => {
         const enabled = toggle.checked;
         const response = await fetch('/api/shifts/settings', {
@@ -376,7 +623,7 @@ function initShiftSettings() {
         shiftUiState.enabled = enabled;
         shiftUiState.promise = Promise.resolve({ enabled });
         syncShiftSettingsVisibility();
-        if (!document.getElementById('reminderPersonId')?.value && !shiftUiState.rulesDirty) {
+        if (!currentShiftEditId() && !shiftUiState.rulesDirty) {
             resetPersonShiftFields();
         }
         if (typeof loadReminderPeople === 'function') {
@@ -385,9 +632,11 @@ function initShiftSettings() {
     });
     ensureShiftSettings().then(() => {
         syncShiftSettingsVisibility();
-        if (!document.getElementById('reminderPersonId')?.value && !shiftUiState.rulesDirty) {
+        if (!currentShiftEditId() && !shiftUiState.rulesDirty) {
             resetPersonShiftFields();
         }
+        renderShiftPeopleList(shiftUiState.people);
+        fillShiftPersonSource(shiftUiState.people);
     });
 }
 
@@ -524,7 +773,7 @@ function renderShiftGrid(payload) {
             if (!allowed && !checked) {
                 wrap.classList.add('is-blocked');
                 wrap.textContent = '–';
-                wrap.title = 'לא מותר לאדם הזה';
+                wrap.title = 'לא מותר';
                 td.append(wrap);
                 tr.append(td);
                 return;
@@ -533,7 +782,7 @@ function renderShiftGrid(payload) {
             input.disabled = !allowed;
             if (!allowed) {
                 wrap.classList.add('is-disabled');
-                input.title = 'המשמרת הזו כבר בלוח, אבל היא לא מותרת יותר';
+                input.title = 'כבר בלוח, אבל כבר לא מותרת';
             }
             input.setAttribute('aria-label', `${personName} ${label} ${letters[day.weekday]} ${day.date}`);
             wrap.append(input);
@@ -559,7 +808,7 @@ async function loadShiftWeek() {
     const response = await fetch(`/api/shifts/week?${params}`);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        setShiftEntryError(data.error || 'לא הצלחנו לטעון את השבוע');
+        setShiftEntryError(data.error || 'לא הצלחנו לטעון');
         return;
     }
     renderShiftGrid(data);
@@ -596,14 +845,18 @@ async function openShiftEntry() {
     if (!modalEl || !window.bootstrap) {
         return;
     }
-    await flushShiftRulesSave();
+    try {
+        await flushShiftRulesSave();
+    } catch (error) {
+        return;
+    }
     setShiftEntryError('');
     window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
     const empty = document.getElementById('shiftEntryEmpty');
     const grid = document.getElementById('shiftGrid');
     const save = document.getElementById('shiftEntrySave');
     shiftUiState.weekStart = defaultShiftWeekStart(getTodayDateStr());
-    const response = await fetch('/api/reminder-people');
+    const response = await fetch('/api/reminder-people?role=shifts');
     const people = response.ok ? await response.json() : [];
     shiftUiState.people = Array.isArray(people) ? people : [];
     const hasPeople = shiftUiState.people.length > 0;
@@ -662,7 +915,7 @@ async function saveShiftWeek() {
         const modalEl = document.getElementById('shiftEntryModal');
         window.bootstrap.Modal.getInstance(modalEl)?.hide();
         if (typeof showMessage === 'function') {
-            showMessage('המשמרות נשמרו');
+            showMessage('נשמר');
         }
         if (typeof refreshEventsViews === 'function') {
             await refreshEventsViews();
@@ -721,7 +974,13 @@ function fillQuickShiftPeople(selectedId) {
     if (!select) {
         return;
     }
-    const people = shiftUiState.people || [];
+    const people = [...peopleByRole('shifts')];
+    if (selectedId && !people.some((person) => String(person.id) === String(selectedId))) {
+        const extra = (shiftUiState.people || []).find((person) => String(person.id) === String(selectedId));
+        if (extra) {
+            people.unshift(extra);
+        }
+    }
     const previous = selectedId ? String(selectedId) : select.value;
     select.replaceChildren();
     if (!people.length) {

@@ -20,6 +20,8 @@ _REMINDER_COLUMNS = (
 _PEOPLE_COLUMNS = (
     ("name", "TEXT NOT NULL DEFAULT ''"),
     ("telegram_chat_id", "TEXT"),
+    ("receives_reminders", "INTEGER NOT NULL DEFAULT 0"),
+    ("works_shifts", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -79,7 +81,7 @@ def _clean_chat_id(value) -> str | None:
     if not text:
         return None
     if not _CHAT_ID.fullmatch(text):
-        raise ValueError("מזהה צ'אט חייב להיות מספר (אפשר עם מינוס לקבוצה)")
+        raise ValueError("מזהה הצ׳אט חייב להיות מספר (עם מינוס לקבוצה)")
     return text
 
 
@@ -90,6 +92,15 @@ def _clean_name(value) -> str:
     if len(name) > 80:
         raise ValueError("השם ארוך מדי")
     return name
+
+
+def _row_flag(row, key: str, default: bool = False) -> bool:
+    if key not in row.keys():
+        return default
+    try:
+        return bool(int(row[key] or 0))
+    except (TypeError, ValueError):
+        return default
 
 
 def person_to_dict(row) -> dict:
@@ -103,6 +114,8 @@ def person_to_dict(row) -> dict:
         "telegram_chat_id": row["telegram_chat_id"],
         "color": row["color"] if "color" in keys else None,
         "shift_allowed": parse_shift_allowed(raw_allowed),
+        "receives_reminders": _row_flag(row, "receives_reminders"),
+        "works_shifts": _row_flag(row, "works_shifts"),
     }
 
 
@@ -129,12 +142,17 @@ def reminder_to_dict(row) -> dict:
     }
 
 
-def list_people() -> list[dict]:
+def list_people(*, role: str | None = None) -> list[dict]:
     db = get_db()
     rows = db.execute(
         "SELECT * FROM reminder_people ORDER BY name, id"
     ).fetchall()
-    return [person_to_dict(row) for row in rows]
+    people = [person_to_dict(row) for row in rows]
+    if role == "reminders":
+        return [person for person in people if person.get("receives_reminders")]
+    if role == "shifts":
+        return [person for person in people if person.get("works_shifts")]
+    return people
 
 
 def get_person(person_id: int) -> dict | None:
@@ -146,11 +164,25 @@ def get_person(person_id: int) -> dict | None:
     return person_to_dict(row) if row else None
 
 
-def people_ids() -> set[int]:
-    return {person["id"] for person in list_people()}
+def people_ids(*, role: str | None = None) -> set[int]:
+    return {person["id"] for person in list_people(role=role)}
 
 
 _MISSING = object()
+
+
+def _clean_flag(value) -> int:
+    if isinstance(value, bool):
+        return 1 if value else 0
+    if value in (1, 0):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("1", "true", "yes", "on"):
+            return 1
+        if text in ("0", "false", "no", "off", ""):
+            return 0
+    raise ValueError("הדגל חייב להיות true או false")
 
 
 def _person_color_and_rules(color, shift_allowed):
@@ -161,6 +193,88 @@ def _person_color_and_rules(color, shift_allowed):
     return color_value, rules_value
 
 
+def _default_role_flags(color, shift_allowed, receives_reminders, works_shifts) -> tuple[int, int]:
+    if receives_reminders is _MISSING:
+        receives = 1
+    else:
+        receives = _clean_flag(receives_reminders)
+    if works_shifts is _MISSING:
+        has_shift_fields = color is not _MISSING or shift_allowed is not _MISSING
+        works = 1 if has_shift_fields else 0
+    else:
+        works = _clean_flag(works_shifts)
+    return receives, works
+
+
+def backfill_people_role_flags(db) -> None:
+    """ממלא דגלי תפקיד לאנשים קיימים. רץ פעם אחת בתוך מיגרציית גרסה 4.
+
+    receives_reminders אם יש מזהה צ׳אט או שהאדם נמען לתזכורת.
+    works_shifts אם יש shift_allowed שמור או אירוע משמרת.
+    שורה בלי אף סימן נשארת איש תזכורות — כך נוצרה הטבלה במקור.
+    """
+    tables = {
+        row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "reminder_people" not in tables:
+        return
+    columns = {row[1] for row in db.execute("PRAGMA table_info(reminder_people)")}
+    if "receives_reminders" not in columns or "works_shifts" not in columns:
+        return
+    recipient_ids: set[int] = set()
+    if "reminders" in tables:
+        for row in db.execute("SELECT recipient_ids FROM reminders"):
+            try:
+                raw = json.loads(row["recipient_ids"] or "[]")
+            except (TypeError, json.JSONDecodeError):
+                raw = []
+            if not isinstance(raw, list):
+                continue
+            for item in raw:
+                try:
+                    recipient_ids.add(int(item))
+                except (TypeError, ValueError):
+                    continue
+    shift_ids: set[int] = set()
+    if "events" in tables:
+        event_cols = {row[1] for row in db.execute("PRAGMA table_info(events)")}
+        if "is_shift" in event_cols and "shift_person_id" in event_cols:
+            for row in db.execute(
+                """
+                SELECT DISTINCT shift_person_id
+                FROM events
+                WHERE is_shift = 1 AND shift_person_id IS NOT NULL
+                """
+            ):
+                try:
+                    shift_ids.add(int(row[0]))
+                except (TypeError, ValueError):
+                    continue
+    people_cols = columns
+    for row in db.execute("SELECT * FROM reminder_people"):
+        keys = row.keys()
+        person_id = row["id"]
+        chat = str(row["telegram_chat_id"] or "").strip() if "telegram_chat_id" in keys else ""
+        allowed = row["shift_allowed"] if "shift_allowed" in keys else None
+        receives = 1 if chat or person_id in recipient_ids else 0
+        works = 1 if (allowed not in (None, "") or person_id in shift_ids) else 0
+        if receives == 0 and works == 0:
+            receives = 1
+        assignments = []
+        params: list = []
+        if "receives_reminders" in people_cols:
+            assignments.append("receives_reminders = ?")
+            params.append(receives)
+        if "works_shifts" in people_cols:
+            assignments.append("works_shifts = ?")
+            params.append(works)
+        params.append(person_id)
+        db.execute(
+            f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
+            params,
+        )
+
+
 def create_person(
     name,
     telegram_chat_id=None,
@@ -168,26 +282,37 @@ def create_person(
     person_id=None,
     color=_MISSING,
     shift_allowed=_MISSING,
+    receives_reminders=_MISSING,
+    works_shifts=_MISSING,
 ) -> dict:
     db = get_db()
     clean_name = _clean_name(name)
     chat_id = _clean_chat_id(telegram_chat_id)
     color_value, rules_value = _person_color_and_rules(color, shift_allowed)
+    receives, works = _default_role_flags(
+        color, shift_allowed, receives_reminders, works_shifts
+    )
     if person_id is None:
         cursor = db.execute(
             """
-            INSERT INTO reminder_people (name, telegram_chat_id, color, shift_allowed)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO reminder_people (
+                name, telegram_chat_id, color, shift_allowed,
+                receives_reminders, works_shifts
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (clean_name, chat_id, color_value, rules_value),
+            (clean_name, chat_id, color_value, rules_value, receives, works),
         )
     else:
         cursor = db.execute(
             """
-            INSERT INTO reminder_people (id, name, telegram_chat_id, color, shift_allowed)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO reminder_people (
+                id, name, telegram_chat_id, color, shift_allowed,
+                receives_reminders, works_shifts
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (int(person_id), clean_name, chat_id, color_value, rules_value),
+            (int(person_id), clean_name, chat_id, color_value, rules_value, receives, works),
         )
     db.commit()
     return get_person(cursor.lastrowid)
@@ -200,6 +325,8 @@ def update_person(
     *,
     color=_MISSING,
     shift_allowed=_MISSING,
+    receives_reminders=_MISSING,
+    works_shifts=_MISSING,
 ) -> dict | None:
     if get_person(person_id) is None:
         return None
@@ -214,6 +341,12 @@ def update_person(
         if shift_allowed is not _MISSING:
             assignments.append("shift_allowed = ?")
             params.append(rules_value)
+    if receives_reminders is not _MISSING:
+        assignments.append("receives_reminders = ?")
+        params.append(_clean_flag(receives_reminders))
+    if works_shifts is not _MISSING:
+        assignments.append("works_shifts = ?")
+        params.append(_clean_flag(works_shifts))
     params.append(person_id)
     db.execute(
         f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
@@ -494,7 +627,7 @@ def load_reminder_rows() -> list[dict]:
 
 
 def _apply_imported_person_extras(db, person_id: int, person: dict) -> None:
-    """צבע וכללי משמרת רק אם המפתח בקובץ — ייבוא ישן לא מוחק אותם."""
+    """צבע, כללי משמרת ודגלים רק אם המפתח בקובץ — ייבוא ישן לא מוחק אותם."""
     assignments = []
     params: list = []
     if "color" in person:
@@ -505,6 +638,20 @@ def _apply_imported_person_extras(db, person_id: int, person: dict) -> None:
         _ignored, rules_value = _person_color_and_rules(_MISSING, person.get("shift_allowed"))
         assignments.append("shift_allowed = ?")
         params.append(rules_value)
+    has_role_keys = "receives_reminders" in person or "works_shifts" in person
+    if has_role_keys:
+        if "receives_reminders" in person:
+            assignments.append("receives_reminders = ?")
+            params.append(_clean_flag(person.get("receives_reminders")))
+        if "works_shifts" in person:
+            assignments.append("works_shifts = ?")
+            params.append(_clean_flag(person.get("works_shifts")))
+    else:
+        works = 1 if ("color" in person or "shift_allowed" in person) else 0
+        assignments.append("receives_reminders = ?")
+        params.append(1)
+        assignments.append("works_shifts = ?")
+        params.append(works)
     if not assignments:
         return
     params.append(person_id)

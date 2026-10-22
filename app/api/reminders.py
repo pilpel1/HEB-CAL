@@ -28,12 +28,19 @@ def _person_extras(data: dict) -> dict:
         extra["color"] = data.get("color")
     if "shift_allowed" in data:
         extra["shift_allowed"] = data.get("shift_allowed")
+    if "receives_reminders" in data:
+        extra["receives_reminders"] = data.get("receives_reminders")
+    if "works_shifts" in data:
+        extra["works_shifts"] = data.get("works_shifts")
     return extra
 
 
 @api.route("/reminder-people", methods=["GET"])
 def get_reminder_people():
-    return jsonify(list_people())
+    role = (request.args.get("role") or "").strip() or None
+    if role not in (None, "reminders", "shifts"):
+        return jsonify({"error": "role חייב להיות reminders או shifts", "success": False}), 400
+    return jsonify(list_people(role=role))
 
 
 @api.route("/reminder-people", methods=["POST"])

@@ -84,7 +84,7 @@ def test_fire_time_default_jerusalem_and_no_recurrence():
     assert is_due(fire, datetime(2026, 4, 2, 18, 10, tzinfo=TZ), None)
     assert not is_due(fire, datetime(2026, 4, 2, 18, 9, tzinfo=TZ), None)
     assert not is_due(fire, datetime(2026, 4, 2, 18, 30, tzinfo=TZ), "2026-04-02T15:10:00Z")
-    assert offset_label(0) == "בזמן האירוע"
+    assert offset_label(0) == "בזמן"
     assert offset_label(90) == "90 דקות"
 
 
@@ -325,16 +325,17 @@ def test_settings_page_and_start_command(client):
     page = client.get("/settings")
     assert page.status_code == 200
     html = page.get_data(as_text=True)
-    assert "אנשים לתזכורות" in html
+    assert '<h2 class="h5">תזכורות</h2>' in html
     assert "/start" in html
-    assert "Web Push" in html
+    assert "התראות בדפדפן" in html
+    assert "Web Push" not in html
 
     assert start_chat_id({"message": {"text": "/start", "chat": {"id": 42}}}) == 42
     assert start_chat_id({"message": {"text": "/start@HebCalBot now", "chat": {"id": -7}}}) == -7
     assert start_chat_id({"message": {"text": "/started", "chat": {"id": 1}}}) is None
     assert chat_id_reply(42) == (
         "מזהה הצ'אט שלך: <code>42</code>\n"
-        "העתיקו את המספר לעמוד «אנשים לתזכורות» בלוח."
+        "מעתיקים את המספר להגדרות, תחת תזכורות."
     )
     assert "<code>-100</code>" in chat_id_reply(-100)
     assert "<code>&lt;id&gt;</code>" in chat_id_reply("<id>")
