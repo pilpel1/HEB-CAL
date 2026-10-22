@@ -147,6 +147,14 @@
     color: #111;
 }
 
+[data-bs-theme="dark"] .agenda-desc {
+    color: #cbd5e1;
+}
+
+[data-bs-theme="dark"] .agenda-event.is-colored .agenda-desc {
+    color: #3f3f46;
+}
+
 [data-bs-theme="dark"] .agenda-holiday .agenda-text { color: #ffa8a0; }
 [data-bs-theme="dark"] .agenda-parasha .agenda-text { color: #a5ccff; }
 [data-bs-theme="dark"] .agenda-fast .agenda-text { color: #ffc078; }
