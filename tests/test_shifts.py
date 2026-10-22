@@ -409,6 +409,9 @@ def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar
     assert "הזן משמרות" in calendar
+    assert 'class="btn btn-outline-secondary settings-gear-btn"' in calendar
+    assert 'href="/settings"' in calendar
+    assert 'aria-label="הגדרות"' in calendar
     assert 'id="shiftEntryModal"' in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings

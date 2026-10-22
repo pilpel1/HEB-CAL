@@ -767,7 +767,8 @@
     }
 
     .infinite-calendar .calendar-nav > .theme-toggle-btn,
-    .infinite-calendar .calendar-nav > .density-toggle-btn {
+    .infinite-calendar .calendar-nav > .density-toggle-btn,
+    .infinite-calendar .calendar-nav > .settings-gear-btn {
         grid-column: 3;
         width: 40px;
         min-width: 40px;
@@ -786,6 +787,12 @@
 
     .infinite-calendar .calendar-nav > .theme-toggle-btn:not(.density-toggle-btn) {
         grid-row: 2;
+    }
+
+    .infinite-calendar .calendar-nav > .settings-gear-btn {
+        grid-row: 3;
+        height: 40px;
+        align-self: start;
     }
 
     /* שורה שלישית, בלי לדחוף את רשת 2×2 של הכפתורים ואת עמודת האייקונים */
@@ -1021,10 +1028,11 @@
     padding: 0.15rem 0.7rem;
 }
 
-/* בדסקטופ שני כפתורי האייקון באותה קופסה (הערכה נמדדה 46×42) */
+/* בדסקטופ כפתורי האייקון באותה קופסה (הערכה נמדדה 46×42) */
 @media (min-width: 481px) {
     .calendar-nav > .theme-toggle-btn,
-    .calendar-nav > .density-toggle-btn {
+    .calendar-nav > .density-toggle-btn,
+    .calendar-nav > .settings-gear-btn {
         width: 46px;
         height: 42px;
         padding: 0;
@@ -1036,7 +1044,8 @@
 
 /* outline כמו מתג הערכה גם כש-aria-pressed דלוק — בלי המילוי האפור של Bootstrap */
 .calendar-nav > .theme-toggle-btn,
-.calendar-nav > .density-toggle-btn {
+.calendar-nav > .density-toggle-btn,
+.calendar-nav > .settings-gear-btn {
     --bs-btn-hover-color: var(--bs-btn-color);
     --bs-btn-hover-bg: transparent;
     --bs-btn-hover-border-color: var(--bs-btn-border-color);
@@ -1054,7 +1063,11 @@
 .calendar-nav > .density-toggle-btn:focus,
 .calendar-nav > .density-toggle-btn:focus-visible,
 .calendar-nav > .density-toggle-btn:active,
-.calendar-nav > .density-toggle-btn[aria-pressed="true"] {
+.calendar-nav > .density-toggle-btn[aria-pressed="true"],
+.calendar-nav > .settings-gear-btn:hover,
+.calendar-nav > .settings-gear-btn:focus,
+.calendar-nav > .settings-gear-btn:focus-visible,
+.calendar-nav > .settings-gear-btn:active {
     color: var(--bs-btn-color);
     background-color: transparent;
     background-image: none;
