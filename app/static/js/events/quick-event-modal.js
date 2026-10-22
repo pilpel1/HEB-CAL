@@ -292,6 +292,12 @@ function fillQuickEventForm(eventData = {}, options = {}) {
         eventData.gregorian_date || '',
         document.getElementById('quick_end_date')
     );
+    if (typeof fillQuickShiftFields === 'function') {
+        const pending = fillQuickShiftFields(eventData);
+        if (typeof shiftUiState !== 'undefined') {
+            shiftUiState.quickShiftFill = pending;
+        }
+    }
 }
 
 function getQuickEventFormData() {
@@ -305,6 +311,7 @@ function getQuickEventFormData() {
         color: document.getElementById('quick_color').value || null,
         reminders: typeof readReminderFields === 'function' ? readReminderFields() : [],
         ...readRecurrenceFields(),
+        ...(typeof readQuickShiftFields === 'function' ? readQuickShiftFields() : {}),
     };
 }
 
@@ -370,6 +377,9 @@ function initQuickEventModal() {
     populateQuickHourOptions();
     if (typeof initReminderFields === 'function') {
         initReminderFields();
+    }
+    if (typeof initQuickShiftFields === 'function') {
+        initQuickShiftFields();
     }
 
     // אחרי סיום הפתיחה של Bootstrap — פוקוס יציב על הכותרת
@@ -519,6 +529,10 @@ function initQuickEventModal() {
     quickForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        if (typeof shiftUiState !== 'undefined' && shiftUiState.quickShiftFill) {
+            await shiftUiState.quickShiftFill;
+        }
+
         // ניסיון אחרון לחלץ שעה מהכותרת לפני שמירה
         applyTimeFromTitlePrefix(document.getElementById('quick_title').value);
 
@@ -536,8 +550,13 @@ function initQuickEventModal() {
             alert('חסר תאריך סיום לחזרה');
             return;
         }
+        if (eventData.is_shift) {
+            eventData.recurrence_freq = '';
+            eventData.recurrence_until = null;
+            eventData.recurrence_count = null;
+        }
         const scope = currentEditScope();
-        if (scope === 'occurrence' && quickOccurrenceSnapshot?.occurrence_date) {
+        if (!eventData.is_shift && scope === 'occurrence' && quickOccurrenceSnapshot?.occurrence_date) {
             eventData.scope = 'occurrence';
             eventData.occurrence_date = quickOccurrenceSnapshot.occurrence_date;
             delete eventData.reminders;

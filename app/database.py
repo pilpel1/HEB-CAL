@@ -748,19 +748,22 @@ def create_event(
     end_date=None,
     color=None,
     recurrence=None,
+    shift=None,
 ):
     db = get_db()
     try:
         end_date = _normalize_end_date(gregorian_date, end_date)
         hebrew_date = normalize_hebrew_date_text(hebrew_date)
         rule = recurrence or {}
+        is_shift, shift_person_id, shift_label = shift or (0, None, None)
         cursor = db.execute(
             '''
             INSERT INTO events (
                 title, gregorian_date, hebrew_date, time, description, end_date, color,
-                recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count
+                recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count,
+                is_shift, shift_person_id, shift_label
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 title,
@@ -774,6 +777,9 @@ def create_event(
                 rule.get("recurrence_calendar"),
                 rule.get("recurrence_until"),
                 rule.get("recurrence_count"),
+                1 if is_shift else 0,
+                shift_person_id,
+                shift_label,
             ),
         )
         db.commit()
@@ -824,30 +830,37 @@ def update_event(
     color=None,
     recurrence="keep",
     clear_exceptions=False,
+    shift="keep",
 ):
     db = get_db()
     try:
         end_date = _normalize_end_date(gregorian_date, end_date)
         hebrew_date = normalize_hebrew_date_text(hebrew_date)
+        shift_sql = ""
+        shift_params = ()
+        if shift != "keep":
+            is_shift, shift_person_id, shift_label = shift
+            shift_sql = ", is_shift = ?, shift_person_id = ?, shift_label = ?"
+            shift_params = (1 if is_shift else 0, shift_person_id, shift_label)
         if recurrence == "keep":
             db.execute(
-                '''
+                f'''
                 UPDATE events
                 SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
-                    description = ?, end_date = ?, color = ?
+                    description = ?, end_date = ?, color = ?{shift_sql}
                 WHERE id = ?
                 ''',
-                (title, gregorian_date, hebrew_date, time, description, end_date, color, event_id),
+                (title, gregorian_date, hebrew_date, time, description, end_date, color, *shift_params, event_id),
             )
         else:
             rule = recurrence or {}
             db.execute(
-                '''
+                f'''
                 UPDATE events
                 SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
                     description = ?, end_date = ?, color = ?,
                     recurrence_freq = ?, recurrence_calendar = ?,
-                    recurrence_until = ?, recurrence_count = ?
+                    recurrence_until = ?, recurrence_count = ?{shift_sql}
                 WHERE id = ?
                 ''',
                 (
@@ -862,6 +875,7 @@ def update_event(
                     rule.get("recurrence_calendar"),
                     rule.get("recurrence_until"),
                     rule.get("recurrence_count"),
+                    *shift_params,
                     event_id,
                 ),
             )

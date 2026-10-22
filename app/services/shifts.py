@@ -6,10 +6,10 @@
 אנשים הם ``reminder_people``. צבע ומשמרות מותרות (בוקר/ערב/לילה, בלי שעות,
 אפשר לפי יום בשבוע) יושבים על אותה שורה.
 
-שמירה יוצרת אירועי יום שלם רגילים עם ``is_shift``. הכותרת היא רק סוג
+שמירה מהרשת יוצרת אירועי יום שלם עם ``is_shift``. הכותרת היא רק סוג
 המשמרת (``בוקר``), והצבע הוא צבע האדם. הרשת מוצאת אותם לפי האדם, התאריך
-והתווית — לא לפי הכותרת. כיבוי תא מוחק רק אירועים שסומנו כמשמרת.
-תא חדש שלא מותר לאדם נדחה.
+והתווית. תא חדש מהרשת שלא מותר לאדם נדחה. חריג ידני נשמר מטופס האירוע
+הרגיל, גם ביום שלא ברשימה.
 """
 from __future__ import annotations
 
@@ -181,6 +181,43 @@ def _rules_for(person: dict) -> dict:
     if not isinstance(allowed, dict):
         allowed = parse_shift_allowed(allowed)
     return allowed
+
+
+def resolve_manual_shift(data: dict):
+    """משמרת מטופס אירוע בודד.
+
+    ``None`` אם הבקשה לא נוגעת במשמרת (עריכה רגילה משאירה את הדגל).
+    אין כאן בדיקה של ``shift_allowed``: חריג ידני מותר בכל יום ובכל משמרת.
+    הרשת המרוכזת היא המקום היחיד שדוחה תא אסור.
+    """
+    keys = ("is_shift", "shift_person_id", "shift_label")
+    if not any(key in data for key in keys):
+        return None
+    if not _truthy_flag(data.get("is_shift")):
+        return {"is_shift": 0, "shift_person_id": None, "shift_label": None}
+
+    label = str(data.get("shift_label") or "").strip()
+    if label not in SHIFT_LABELS:
+        raise ShiftError("בחרו בוקר, ערב או לילה")
+    try:
+        person_id = int(data.get("shift_person_id"))
+    except (TypeError, ValueError) as exc:
+        raise ShiftError("בחרו למי המשמרת") from exc
+
+    from app.reminders.repository import get_person
+
+    person = get_person(person_id)
+    if person is None:
+        raise ShiftError("האדם לא נמצא")
+    return {
+        "is_shift": 1,
+        "shift_person_id": person_id,
+        "shift_label": label,
+        "title": shift_title(person.get("name") or "", label),
+        "color": person.get("color"),
+        "time": None,
+        "end_date": None,
+    }
 
 
 def validate_shift_week(person: dict, week_start: date, cells) -> set[tuple[str, str]]:

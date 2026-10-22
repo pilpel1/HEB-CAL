@@ -720,3 +720,149 @@ function initShiftEntry() {
     });
     ensureShiftSettings().then(syncShiftSettingsVisibility);
 }
+
+function fillQuickShiftPeople(selectedId) {
+    const select = document.getElementById('quick_shift_person');
+    if (!select) {
+        return;
+    }
+    const people = shiftUiState.people || [];
+    const previous = selectedId ? String(selectedId) : select.value;
+    select.replaceChildren();
+    if (!people.length) {
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = 'אין אנשים';
+        select.append(empty);
+        return;
+    }
+    people.forEach((person) => {
+        const option = document.createElement('option');
+        option.value = String(person.id);
+        option.textContent = person.name;
+        select.append(option);
+    });
+    if (previous && [...select.options].some((option) => option.value === previous)) {
+        select.value = previous;
+    }
+}
+
+function applyQuickShiftLook() {
+    const on = Boolean(document.getElementById('quick_shift_enabled')?.checked);
+    const panel = document.getElementById('quick_shift_panel');
+    if (panel) {
+        panel.hidden = !on;
+    }
+    const recurrence = document.getElementById('quick_recurrence');
+    if (recurrence) {
+        recurrence.hidden = on;
+    }
+    document.querySelector('#quickEventModal .quick-color-picker')?.classList.toggle('is-shift-locked', on);
+    if (!on || shiftUiState.filling) {
+        return;
+    }
+    const label = document.getElementById('quick_shift_label')?.value || 'בוקר';
+    const title = document.getElementById('quick_title');
+    if (title) {
+        title.value = label;
+    }
+    const personId = document.getElementById('quick_shift_person')?.value;
+    const person = (shiftUiState.people || []).find((item) => String(item.id) === String(personId));
+    if (typeof setQuickColor === 'function') {
+        setQuickColor(person && person.color ? person.color : '');
+    }
+    if (typeof setQuickTime === 'function') {
+        setQuickTime('');
+    }
+    const end = document.getElementById('quick_end_date');
+    if (end) {
+        end.value = '';
+    }
+    if (typeof setEndDateOpen === 'function') {
+        setEndDateOpen(false);
+    }
+}
+
+function initQuickShiftFields() {
+    const box = document.getElementById('quick_shift_enabled');
+    if (!box || box.dataset.bound === '1') {
+        return;
+    }
+    box.dataset.bound = '1';
+    box.addEventListener('change', applyQuickShiftLook);
+    document.getElementById('quick_shift_person')?.addEventListener('change', applyQuickShiftLook);
+    document.getElementById('quick_shift_label')?.addEventListener('change', applyQuickShiftLook);
+}
+
+async function fillQuickShiftFields(eventData) {
+    const block = document.getElementById('quickShiftBlock');
+    if (!block) {
+        return;
+    }
+    const data = eventData || {};
+    await ensureShiftSettings();
+    const isShift = Boolean(Number(data.is_shift));
+    block.hidden = !shiftUiState.enabled && !isShift;
+    const box = document.getElementById('quick_shift_enabled');
+    const panel = document.getElementById('quick_shift_panel');
+    const recurrence = document.getElementById('quick_recurrence');
+    if (block.hidden) {
+        if (box) {
+            box.checked = false;
+        }
+        if (panel) {
+            panel.hidden = true;
+        }
+        if (recurrence) {
+            recurrence.hidden = false;
+        }
+        document.querySelector('#quickEventModal .quick-color-picker')?.classList.remove('is-shift-locked');
+        return;
+    }
+    const response = await fetch('/api/reminder-people');
+    if (response.ok) {
+        const people = await response.json();
+        shiftUiState.people = Array.isArray(people) ? people : [];
+    }
+    shiftUiState.filling = true;
+    try {
+        fillQuickShiftPeople(data.shift_person_id);
+        if (box) {
+            box.checked = isShift;
+        }
+        const label = document.getElementById('quick_shift_label');
+        if (label) {
+            label.value = data.shift_label || 'בוקר';
+        }
+        if (panel) {
+            panel.hidden = !isShift;
+        }
+        if (recurrence) {
+            recurrence.hidden = isShift;
+        }
+        document.querySelector('#quickEventModal .quick-color-picker')?.classList.toggle('is-shift-locked', isShift);
+        if (isShift && typeof setQuickColor === 'function') {
+            const person = (shiftUiState.people || []).find((item) => String(item.id) === String(data.shift_person_id));
+            setQuickColor(person && person.color ? person.color : (data.color || ''));
+        }
+    } finally {
+        shiftUiState.filling = false;
+    }
+}
+
+function readQuickShiftFields() {
+    const block = document.getElementById('quickShiftBlock');
+    if (!block || block.hidden) {
+        return {};
+    }
+    const enabled = Boolean(document.getElementById('quick_shift_enabled')?.checked);
+    if (!enabled) {
+        return { is_shift: false, shift_person_id: null, shift_label: null };
+    }
+    const personId = document.getElementById('quick_shift_person')?.value;
+    return {
+        is_shift: true,
+        shift_person_id: personId ? Number(personId) : null,
+        shift_label: document.getElementById('quick_shift_label')?.value || '',
+    };
+}

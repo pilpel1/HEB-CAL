@@ -322,6 +322,34 @@
 }
 
 /* תזכורות במודל — סגור כברירת מחדל, נפתח בתוך הגוף שנגלל */
+.quick-shift {
+    margin-top: 0.65rem;
+}
+
+.quick-shift-panel:not([hidden]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.15rem;
+}
+
+.quick-shift-panel .form-select {
+    flex: 1 1 8rem;
+    min-height: 40px;
+}
+
+.quick-shift-note {
+    flex: 1 0 100%;
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+#quickEventModal .quick-color-picker.is-shift-locked {
+    pointer-events: none;
+}
+
 .quick-reminder-wrap {
     margin-top: 0.65rem;
 }

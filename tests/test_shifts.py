@@ -529,6 +529,81 @@ def test_normalize_rewrites_old_shift_title_and_copies_color(client):
     assert shown["color"] == "cyan"
 
 
+def test_manual_shift_is_allowed_outside_the_rules(client):
+    person = _person(client, name="אביחי", color="cyan", shift_allowed=_allowed({
+        "בוקר": [0, 1, 2, 3, 4],
+        "ערב": [0, 1, 2, 3, 4],
+        "לילה": [],
+    }))
+    created = client.post("/api/events", json={
+        "title": "חריג",
+        "gregorian_date": "2026-10-23",
+        "hebrew_date": "ב",
+        "time": "23:00",
+        "end_date": "2026-10-24",
+        "color": "green",
+        "recurrence_freq": "yearly",
+        "recurrence_calendar": "gregorian",
+        "is_shift": True,
+        "shift_person_id": person["id"],
+        "shift_label": "לילה",
+    })
+    assert created.status_code == 200, created.get_json()
+    event = client.get(f"/api/events/{created.get_json()['id']}").get_json()
+    assert event["is_shift"] == 1
+    assert event["shift_person_id"] == person["id"]
+    assert event["shift_label"] == "לילה"
+    assert event["title"] == "לילה"
+    assert event["color"] == "cyan"
+    assert event["time"] is None
+    assert event["end_date"] is None
+    assert event["recurrence_freq"] is None
+
+    blocked = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-23", "label": "בוקר"}],
+    })
+    assert blocked.status_code == 400
+    assert "שישי" in blocked.get_json()["error"]
+
+    view = client.get(
+        f"/api/shifts/week?person_id={person['id']}&week_start=2026-10-18"
+    ).get_json()
+    friday = next(day for day in view["days"] if day["date"] == "2026-10-23")
+    assert "לילה" in friday["checked"]
+    assert "לילה" not in friday["allowed"]
+    kept = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-23", "label": "לילה"}],
+    })
+    assert kept.status_code == 200, kept.get_json()
+    assert event["id"] in kept.get_json()["kept"]
+
+    missing = client.post("/api/events", json={
+        "title": "בוקר",
+        "gregorian_date": "2026-10-20",
+        "hebrew_date": "א",
+        "is_shift": True,
+        "shift_label": "בוקר",
+    })
+    assert missing.status_code == 400
+    assert "בחרו" in missing.get_json()["error"]
+
+    cleared = client.put(f"/api/events/{event['id']}", json={
+        "title": "כבר לא משמרת",
+        "gregorian_date": "2026-10-23",
+        "hebrew_date": event["hebrew_date"],
+        "is_shift": False,
+    })
+    assert cleared.status_code == 200
+    plain = client.get(f"/api/events/{event['id']}").get_json()
+    assert plain["is_shift"] == 0
+    assert plain["shift_label"] is None
+    assert plain["title"] == "כבר לא משמרת"
+
+
 def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar
@@ -546,6 +621,7 @@ def test_calendar_and_settings_markup(client):
     assert 'heb-cal-header-collapsed' in calendar
     assert 'id="current-month"' in calendar
     assert 'id="shiftEntryModal"' in calendar
+    assert 'id="quick_shift_enabled"' in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings
     assert "הפעלת משמרות בבית הזה" in settings
