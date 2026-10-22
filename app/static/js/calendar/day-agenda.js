@@ -1,5 +1,9 @@
 // פאנל יום: בטלפון מתחת ללוח, מ-992px עמודה בצד שמאל (סוף ה-RTL).
 // בין 481 ל-991 אין פאנל.
+// בדסקטופ חץ על התפר מכניס ומוציא את העמודה. המצב נשמר במכשיר.
+// בחירת יום לא פותחת פאנל שכווץ.
+
+let agendaAnimToken = 0;
 
 function isCompactCalendar() {
     return window.matchMedia('(max-width: 480px)').matches;
@@ -180,13 +184,183 @@ function updateAgendaResizeUi(share) {
         restore.setAttribute('aria-hidden', collapsedAgenda || collapsedGrid ? 'false' : 'true');
         restore.tabIndex = collapsedAgenda || collapsedGrid ? 0 : -1;
     }
-    if (agenda) {
-        agenda.toggleAttribute('inert', collapsedAgenda);
-        agenda.setAttribute('aria-hidden', collapsedAgenda ? 'true' : 'false');
+    // הסגירה האנכית היא רק של הטלפון. בדסקטופ הסגירה היא העמודה, ואסור שהמצב
+    // השמור מהטלפון יסתיר אותה או יימחק כשהחלון מתרחב.
+    if (isCompactCalendar()) {
+        if (agenda) {
+            agenda.toggleAttribute('inert', collapsedAgenda);
+            agenda.setAttribute('aria-hidden', collapsedAgenda ? 'true' : 'false');
+        }
+        if (stream) {
+            stream.toggleAttribute('inert', collapsedGrid);
+        }
+    } else if (stream) {
+        stream.removeAttribute('inert');
     }
-    if (stream) {
-        stream.toggleAttribute('inert', collapsedGrid);
+}
+
+function readAgendaCollapsed() {
+    try {
+        return localStorage.getItem('heb-cal-agenda-collapsed') === '1';
+    } catch (error) {
+        return false;
     }
+}
+
+function writeAgendaCollapsed(collapsed) {
+    try {
+        localStorage.setItem('heb-cal-agenda-collapsed', collapsed ? '1' : '0');
+    } catch (error) {
+        /* מצב פרטי */
+    }
+}
+
+/** רוחב העמודה הפתוחה: אותו חשבון כמו clamp(280px, 25%, 380px) על רוחב הכרטיס. */
+function agendaOpenPx(cal) {
+    const style = getComputedStyle(cal);
+    const pad = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    const inner = Math.max(0, cal.clientWidth - pad);
+    return Math.round(Math.min(380, Math.max(280, inner * 0.25)));
+}
+
+function readAgendaPanelPx(cal) {
+    const inline = cal.style.getPropertyValue('--agenda-panel').trim();
+    if (inline) {
+        const value = parseFloat(inline);
+        if (Number.isFinite(value)) {
+            return value;
+        }
+    }
+    const agenda = document.getElementById('day-agenda');
+    return agenda ? agenda.getBoundingClientRect().width : 0;
+}
+
+function settleAgendaLayout() {
+    const run = () => {
+        if (typeof syncWeekRowHeight === 'function') {
+            syncWeekRowHeight();
+        }
+        if (typeof scheduleMaintain === 'function') {
+            scheduleMaintain();
+        }
+    };
+    if (typeof preserveScrollAnchor === 'function'
+        && typeof infiniteCalendar !== 'undefined'
+        && infiniteCalendar.ready
+        && infiniteCalendar.stream
+        && infiniteCalendar.body) {
+        preserveScrollAnchor(run);
+        return;
+    }
+    run();
+}
+
+function animateAgendaPanel(cal, toPx, done) {
+    const token = ++agendaAnimToken;
+    const fromPx = readAgendaPanelPx(cal);
+    if (Math.abs(fromPx - toPx) < 0.5) {
+        cal.style.removeProperty('--agenda-panel');
+        if (done) {
+            done();
+        }
+        return;
+    }
+    const started = performance.now();
+    const duration = 180;
+    cal.style.setProperty('--agenda-panel', `${fromPx}px`);
+    const step = (now) => {
+        if (token !== agendaAnimToken) {
+            return;
+        }
+        const t = Math.min(1, (now - started) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const width = fromPx + (toPx - fromPx) * eased;
+        cal.style.setProperty('--agenda-panel', `${width.toFixed(1)}px`);
+        if (t < 1) {
+            requestAnimationFrame(step);
+            return;
+        }
+        cal.style.removeProperty('--agenda-panel');
+        if (done) {
+            done();
+        }
+    };
+    requestAnimationFrame(step);
+}
+
+function syncAgendaCollapsedChrome(on) {
+    const toggle = document.getElementById('day-agenda-toggle');
+    const agenda = document.getElementById('day-agenda');
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', on ? 'false' : 'true');
+        toggle.setAttribute('aria-label', on ? 'הצג אירועי היום' : 'הסתר אירועי היום');
+    }
+    if (!agenda) {
+        return;
+    }
+    if (on && agenda.contains(document.activeElement) && toggle) {
+        toggle.focus();
+    }
+    agenda.toggleAttribute('inert', on);
+    if (on) {
+        agenda.setAttribute('aria-hidden', 'true');
+    } else {
+        agenda.removeAttribute('aria-hidden');
+    }
+}
+
+/**
+ * collapsed הוא מה שנשמר במכשיר. העמודה נסגרת רק מ-992px.
+ * animate רק בלחיצה — לא בטעינה ולא כשרוחב החלון משתנה.
+ */
+function applyAgendaCollapsed(collapsed, options) {
+    const cal = document.querySelector('.calendar-container.infinite-calendar');
+    if (!cal) {
+        return;
+    }
+    const wantAnim = Boolean(options && options.animate);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const on = Boolean(collapsed) && isDesktopAgenda();
+    syncAgendaCollapsedChrome(on);
+    if (!wantAnim || !isDesktopAgenda() || reduce) {
+        agendaAnimToken += 1;
+        cal.style.removeProperty('--agenda-panel');
+        cal.classList.toggle('is-agenda-collapsed', on);
+        if (wantAnim) {
+            settleAgendaLayout();
+        }
+        return;
+    }
+    if (on) {
+        const from = readAgendaPanelPx(cal);
+        cal.style.setProperty('--agenda-panel', `${from}px`);
+        cal.classList.add('is-agenda-collapsed');
+        animateAgendaPanel(cal, 0, settleAgendaLayout);
+        return;
+    }
+    const to = agendaOpenPx(cal);
+    cal.style.setProperty('--agenda-panel', `${readAgendaPanelPx(cal)}px`);
+    cal.classList.remove('is-agenda-collapsed');
+    animateAgendaPanel(cal, to, settleAgendaLayout);
+}
+
+function setAgendaCollapsed(collapsed) {
+    writeAgendaCollapsed(collapsed);
+    applyAgendaCollapsed(collapsed, { animate: true });
+}
+
+function bindAgendaToggle() {
+    const toggle = document.getElementById('day-agenda-toggle');
+    if (!toggle || toggle.dataset.bound === '1') {
+        return;
+    }
+    toggle.dataset.bound = '1';
+    toggle.addEventListener('click', () => {
+        if (!isDesktopAgenda()) {
+            return;
+        }
+        setAgendaCollapsed(!readAgendaCollapsed());
+    });
 }
 
 /** share הוא החלק של הפאנל מתוך השטח שמתחת לסרגל (0 סגור, 1 הלוח סגור). */
@@ -631,7 +805,15 @@ function renderDayAgenda(dateStr) {
             greg = `${Number(parts[2])} ${monthName} ${parts[0]}`.trim();
         }
     }
-    title.textContent = [heb, greg].filter(Boolean).join(' · ');
+    const hebEl = title.querySelector('.day-agenda-heb');
+    const gregEl = title.querySelector('.day-agenda-greg');
+    if (hebEl && gregEl) {
+        hebEl.textContent = heb || '';
+        gregEl.textContent = greg || '';
+        title.classList.toggle('is-single', !heb || !greg);
+    } else {
+        title.textContent = [heb, greg].filter(Boolean).join(' · ');
+    }
 
     const items = [];
     const jewish = (typeof monthEntryFor === 'function'
@@ -687,6 +869,7 @@ function selectAgendaDay(dateStr, options) {
     if (!document.getElementById('day-agenda') || !dateStr) {
         return;
     }
+    // היום הנבחר מתעדכן גם כשהעמודה סגורה. לא פותחים אותה מכאן.
     infiniteCalendar.agendaDate = dateStr;
     renderDayAgenda(dateStr);
     if (options && options.reveal) {
@@ -703,6 +886,8 @@ function initDayAgenda() {
 
     initCalendarChrome();
     bindAgendaResize();
+    bindAgendaToggle();
+    applyAgendaCollapsed(readAgendaCollapsed());
     syncPageZoomState();
     const onViewport = () => {
         syncPageZoomState();
@@ -738,6 +923,7 @@ function initDayAgenda() {
 
     const onChromeChange = () => {
         applyHeaderCollapsed(readHeaderCollapsed());
+        applyAgendaCollapsed(readAgendaCollapsed());
         if (!infiniteCalendar.ready || !infiniteCalendar.body) {
             return;
         }
