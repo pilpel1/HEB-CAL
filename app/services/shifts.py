@@ -180,46 +180,47 @@ def shift_columns_from_payload(event: dict, *, missing: str):
 
 
 def ensure_shift_schema(db) -> None:
-    """מוסיף עמודות וטבלת מתג. בטוח להרצה חוזרת; לא משנה שורות קיימות."""
-    tables = {
-        row[0]
-        for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    }
-    if "events" in tables:
-        existing = {row[1] for row in db.execute("PRAGMA table_info(events)")}
-        if "is_shift" not in existing:
-            db.execute(
-                "ALTER TABLE events ADD COLUMN is_shift INTEGER NOT NULL DEFAULT 0"
-            )
-        if "shift_person_id" not in existing:
-            db.execute("ALTER TABLE events ADD COLUMN shift_person_id INTEGER")
-        if "shift_label" not in existing:
-            db.execute("ALTER TABLE events ADD COLUMN shift_label TEXT")
-        db.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_events_shift
-            ON events(shift_person_id, gregorian_date)
-            WHERE is_shift = 1
-            """
-        )
-    if "reminder_people" in tables:
-        existing = {row[1] for row in db.execute("PRAGMA table_info(reminder_people)")}
-        if "color" not in existing:
-            db.execute("ALTER TABLE reminder_people ADD COLUMN color TEXT")
-        if "shift_allowed" not in existing:
-            db.execute("ALTER TABLE reminder_people ADD COLUMN shift_allowed TEXT")
+    """מוסיף עמודות וטבלת מתג. בטוח להרצה חוזרת ולעלייה מקבילית; לא משנה שורות."""
+    from app.database import (
+        _add_column_if_missing,
+        _schema_execute,
+        exclusive_schema_transaction,
+    )
 
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS household_settings (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            shifts_enabled INTEGER NOT NULL DEFAULT 0
+    with exclusive_schema_transaction(db):
+        # שמות הטבלאות נקראים מחדש בתוך המנעול, לא לפניו.
+        tables = {
+            row[0]
+            for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "events" in tables:
+            _add_column_if_missing(db, "events", "is_shift", "INTEGER NOT NULL DEFAULT 0")
+            _add_column_if_missing(db, "events", "shift_person_id", "INTEGER")
+            _add_column_if_missing(db, "events", "shift_label", "TEXT")
+            _schema_execute(
+                db,
+                """
+                CREATE INDEX IF NOT EXISTS idx_events_shift
+                ON events(shift_person_id, gregorian_date)
+                WHERE is_shift = 1
+                """,
+            )
+        if "reminder_people" in tables:
+            _add_column_if_missing(db, "reminder_people", "color", "TEXT")
+            _add_column_if_missing(db, "reminder_people", "shift_allowed", "TEXT")
+
+        _schema_execute(
+            db,
+            """
+            CREATE TABLE IF NOT EXISTS household_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                shifts_enabled INTEGER NOT NULL DEFAULT 0
+            )
+            """,
         )
-        """
-    )
-    db.execute(
-        "INSERT OR IGNORE INTO household_settings (id, shifts_enabled) VALUES (1, 0)"
-    )
+        db.execute(
+            "INSERT OR IGNORE INTO household_settings (id, shifts_enabled) VALUES (1, 0)"
+        )
 
 
 def shifts_enabled() -> bool:

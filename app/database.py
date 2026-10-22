@@ -1,5 +1,8 @@
 import os
+import re
 import sqlite3
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 from flask import g
@@ -10,6 +13,17 @@ from app.services.recurrence import clean_recurrence, recurrence_fields
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DATABASE_PATH = Path("data/calendar.db")
+
+# כל הסכמה הנוכחית (טבלאות בסיס, תזכורות, חזרות, משמרות) היא גרסה 1.
+# בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
+# הגוף אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג לא משנה שורות.
+SCHEMA_VERSION = 1
+# מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
+# נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
+SCHEMA_BUSY_TIMEOUT_MS = 15000
+
+_schema_lock_depth: ContextVar[int] = ContextVar("hebcal_schema_lock_depth", default=0)
+_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def get_database_path():
@@ -25,9 +39,13 @@ def get_database_path():
 
 def get_db():
     if 'db' not in g:
-        g.db = sqlite3.connect(str(get_database_path()))
+        g.db = sqlite3.connect(
+            str(get_database_path()),
+            timeout=SCHEMA_BUSY_TIMEOUT_MS / 1000,
+        )
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
+        g.db.execute(f"PRAGMA busy_timeout = {SCHEMA_BUSY_TIMEOUT_MS}")
     return g.db
 
 def close_db(e=None):
@@ -35,11 +53,81 @@ def close_db(e=None):
     if db is not None:
         db.close()
 
-def init_db():
-    db = get_db()
-    
-    # קצירת טבלת אירועים רק אם היא לא קיימת
-    db.execute('''
+
+def _is_benign_schema_error(exc: BaseException) -> bool:
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+    message = str(exc).lower()
+    return "duplicate column name" in message or "already exists" in message
+
+
+def _schema_execute(db, sql: str, params: tuple = ()):
+    """DDL. 'duplicate column name' ו-'already exists' נחשבים הצלחה."""
+    try:
+        return db.execute(sql, params)
+    except sqlite3.OperationalError as exc:
+        if _is_benign_schema_error(exc):
+            return None
+        raise
+
+
+def _add_column_if_missing(db, table: str, name: str, decl: str) -> None:
+    """בודק את העמודה מחדש עכשיו (בתוך המנעול) ורק אז ALTER."""
+    if not _IDENT.fullmatch(table) or not _IDENT.fullmatch(name):
+        raise ValueError(f"illegal schema identifier: {table}.{name}")
+    existing = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+    if name in existing:
+        return
+    _schema_execute(db, f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
+def _read_user_version(db) -> int:
+    row = db.execute("PRAGMA user_version").fetchone()
+    if row is None:
+        return 0
+    return int(row[0])
+
+
+def _write_user_version(db, version: int) -> None:
+    db.execute(f"PRAGMA user_version = {int(version)}")
+
+
+@contextmanager
+def exclusive_schema_transaction(db):
+    """BEGIN IMMEDIATE אחד לכל מיגרציית הסכמה.
+
+    קריאה מקוננת (ensure_* מתוך apply) לא פותחת טרנזקציה שנייה.
+    חיבור שכבר באמצע טרנזקציה של הקורא רץ בתוכה בלי BEGIN נוסף.
+    """
+    db.execute(f"PRAGMA busy_timeout = {SCHEMA_BUSY_TIMEOUT_MS}")
+    if _schema_lock_depth.get() > 0:
+        yield
+        return
+
+    started = False
+    if not db.in_transaction:
+        db.execute("BEGIN IMMEDIATE")
+        started = True
+    token = _schema_lock_depth.set(_schema_lock_depth.get() + 1)
+    try:
+        yield
+        if started:
+            db.commit()
+    except BaseException:
+        if started:
+            try:
+                db.rollback()
+            except sqlite3.Error:
+                pass
+        raise
+    finally:
+        _schema_lock_depth.reset(token)
+
+
+def _ensure_base_schema(db) -> None:
+    _schema_execute(
+        db,
+        """
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -50,45 +138,62 @@ def init_db():
             end_date TEXT,
             color TEXT
         )
-    ''')
-    
-    # טצירת טבלת צבעים רק אם היא לא קיימת
-    db.execute('''
+        """,
+    )
+    _schema_execute(
+        db,
+        """
         CREATE TABLE IF NOT EXISTS event_colors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             color_code TEXT NOT NULL,
             background_color TEXT NOT NULL
         )
-    ''')
-    
-    # בדיקה אם יש כבר צבעים בטבלה
-    colors = db.execute('SELECT * FROM event_colors').fetchall()
-    if not colors:
-        # הכנסת צבעים דיפולטיביים רק אם הטבלה ריקה
-        default_colors = [
-            ('ציאן', 'cyan', 'rgba(0, 255, 255, 0.2)'),
-            ('צהוב', 'yellow', 'rgba(255, 255, 0, 0.2)'),
-            ('כתום', 'orange', 'rgba(255, 165, 0, 0.2)'),
-            ('ירוק', 'green', 'rgba(0, 128, 0, 0.2)')
-        ]
-        
-        db.executemany('''
-            INSERT INTO event_colors (name, color_code, background_color)
-            VALUES (?, ?, ?)
-        ''', default_colors)
-        
-        db.commit()
+        """,
+    )
+    # בדיקה מחדש בתוך המנעול — שני תהליכים לא מכניסים את אותם צבעים פעמיים.
+    if db.execute("SELECT 1 FROM event_colors LIMIT 1").fetchone():
+        return
+    default_colors = [
+        ("ציאן", "cyan", "rgba(0, 255, 255, 0.2)"),
+        ("צהוב", "yellow", "rgba(255, 255, 0, 0.2)"),
+        ("כתום", "orange", "rgba(255, 165, 0, 0.2)"),
+        ("ירוק", "green", "rgba(0, 128, 0, 0.2)"),
+    ]
+    db.executemany(
+        """
+        INSERT INTO event_colors (name, color_code, background_color)
+        VALUES (?, ?, ?)
+        """,
+        default_colors,
+    )
 
+
+def apply_pending_migrations(db) -> None:
+    """כל ה-ensure_* בטרנזקציה בלעדית אחת, ואז PRAGMA user_version.
+
+    קוראים את הגרסה שוב אחרי BEGIN IMMEDIATE. מי שחיכה על המנעול
+    רואה את הגרסה שכבר נכתבה ויוצא בלי ALTER נוסף.
+    """
     from app.reminders.repository import ensure_reminder_schema
-
-    ensure_reminder_schema(db)
-    ensure_recurrence_schema(db)
     from app.services.shifts import ensure_shift_schema
 
-    ensure_shift_schema(db)
-    db.commit()
+    db.execute(f"PRAGMA busy_timeout = {SCHEMA_BUSY_TIMEOUT_MS}")
+    if _read_user_version(db) >= SCHEMA_VERSION:
+        return
+    with exclusive_schema_transaction(db):
+        if _read_user_version(db) >= SCHEMA_VERSION:
+            return
+        _ensure_base_schema(db)
+        ensure_reminder_schema(db)
+        ensure_recurrence_schema(db)
+        ensure_shift_schema(db)
+        _write_user_version(db, SCHEMA_VERSION)
 
+
+def init_db():
+    db = get_db()
+    apply_pending_migrations(db)
     _migrate_hebrew_years_to_letters(db)
 
 
@@ -101,52 +206,55 @@ _RECURRENCE_COLUMNS = (
 
 
 def ensure_recurrence_schema(db) -> None:
-    """מוסיף עמודות חזרה וטבלת חריגות. בטוח להרצה חוזרת; לא משנה שורות קיימות.
+    """מוסיף עמודות חזרה וטבלת חריגות. בטוח להרצה חוזרת ולעלייה מקבילית.
 
     אירוע ישן נשאר בלי recurrence_freq (NULL) — כלומר בלי חזרה.
     """
-    existing = {row[1] for row in db.execute("PRAGMA table_info(events)")}
-    for name, decl in _RECURRENCE_COLUMNS:
-        if name not in existing:
-            db.execute(f"ALTER TABLE events ADD COLUMN {name} {decl}")
+    with exclusive_schema_transaction(db):
+        for name, decl in _RECURRENCE_COLUMNS:
+            _add_column_if_missing(db, "events", name, decl)
 
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS event_exceptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_id INTEGER NOT NULL,
-            original_date TEXT NOT NULL,
-            kind TEXT NOT NULL,
-            title TEXT,
-            gregorian_date TEXT,
-            hebrew_date TEXT,
-            time TEXT,
-            description TEXT,
-            end_date TEXT,
-            color TEXT,
-            UNIQUE (event_id, original_date),
-            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+        _schema_execute(
+            db,
+            """
+            CREATE TABLE IF NOT EXISTS event_exceptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL,
+                original_date TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                title TEXT,
+                gregorian_date TEXT,
+                hebrew_date TEXT,
+                time TEXT,
+                description TEXT,
+                end_date TEXT,
+                color TEXT,
+                UNIQUE (event_id, original_date),
+                FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+            )
+            """,
         )
-        """
-    )
-    db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_event_exceptions_event ON event_exceptions(event_id)"
-    )
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reminder_sends (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            reminder_id INTEGER NOT NULL,
-            occurrence_date TEXT NOT NULL,
-            sent_at TEXT,
-            UNIQUE (reminder_id, occurrence_date),
-            FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE CASCADE
+        _schema_execute(
+            db,
+            "CREATE INDEX IF NOT EXISTS idx_event_exceptions_event ON event_exceptions(event_id)",
         )
-        """
-    )
-    db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reminder_sends_reminder ON reminder_sends(reminder_id)"
-    )
+        _schema_execute(
+            db,
+            """
+            CREATE TABLE IF NOT EXISTS reminder_sends (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reminder_id INTEGER NOT NULL,
+                occurrence_date TEXT NOT NULL,
+                sent_at TEXT,
+                UNIQUE (reminder_id, occurrence_date),
+                FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE CASCADE
+            )
+            """,
+        )
+        _schema_execute(
+            db,
+            "CREATE INDEX IF NOT EXISTS idx_reminder_sends_reminder ON reminder_sends(reminder_id)",
+        )
 
 def _migrate_hebrew_years_to_letters(db):
     """ממיר שנים מספריות בתאריכים עבריים שמורים לאותיות (פעם אחת לנתונים קיימים)."""

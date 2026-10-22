@@ -1,8 +1,8 @@
 """מיגרציה אידמפוטנטית לחזרות אירועים.
 
-מוסיפה עמודות על ``events`` (NULL = בלי חזרה), טבלת ``event_exceptions``
-וטבלת ``reminder_sends``. לא משנה שורות קיימות. בטוח להריץ שוב ושוב,
-גם על בסיס שכבר שודרג.
+רצה את מיגרציית הסכמה המשותפת (תזכורות, חזרות, משמרות) תחת
+``BEGIN IMMEDIATE``. לא משנה שורות קיימות. בטוח להריץ שוב ושוב,
+גם על בסיס שכבר שודרג, וגם במקביל לעליית האפליקציה.
 
     python scripts/migrate_recurrence.py
     python scripts/migrate_recurrence.py --database /path/to/calendar.db
@@ -36,18 +36,14 @@ def database_path(explicit: str | None) -> Path:
 
 
 def migrate(path: Path) -> None:
-    from app.database import ensure_recurrence_schema
-    from app.reminders.repository import ensure_reminder_schema
+    from app.database import SCHEMA_BUSY_TIMEOUT_MS, apply_pending_migrations
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=SCHEMA_BUSY_TIMEOUT_MS / 1000)
     try:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        # טבלת reminders חייבת להיות קיימת לפני reminder_sends
-        ensure_reminder_schema(conn)
-        ensure_recurrence_schema(conn)
-        conn.commit()
+        apply_pending_migrations(conn)
     finally:
         conn.close()
 
