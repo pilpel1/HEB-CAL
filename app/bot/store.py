@@ -33,6 +33,7 @@ def snapshot(event: dict) -> dict:
         "description": event.get("description") or "",
         "end_date": end[:10] if end else None,
         "is_shift": 1 if event.get("is_shift") else 0,
+        "shift_label": event.get("shift_label") or "",
         "recurring": is_recurring(event),
         "base": fingerprint(event),
         "force": False,
@@ -103,7 +104,7 @@ def create_shift(person_id: int, label: str, gregorian_date: str) -> dict:
         raise InputError("לא הצלחתי לשמור את המשמרת.")
     cleaned = clean_event_write(
         {
-            "title": resolved["title"],
+            "title": resolved["shift_label"],
             "gregorian_date": day.isoformat(),
             "hebrew_date": hebrew_display(day),
             "time": None,

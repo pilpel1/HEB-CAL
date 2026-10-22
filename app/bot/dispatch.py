@@ -679,7 +679,7 @@ class Bot:
             return self.out(*ui.missing_event_screen())
         self._clear_flow()
         self.toast = "נמחק"
-        text, markup = ui.deleted_note_screen(event.get("title") or "אירוע")
+        text, markup = ui.deleted_note_screen(ui.visible_name(event))
         return self.out(text, markup)
 
     def _on_edit(self, data: str) -> dict:

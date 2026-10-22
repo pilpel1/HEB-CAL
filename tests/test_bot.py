@@ -505,6 +505,26 @@ def test_shifts_toggle_create_and_date_edit(app):
         shift = get_all_events()[0]
     assert shift["gregorian_date"] == (TODAY + timedelta(days=1)).isoformat()
     assert shift["is_shift"] == 1
+    assert shift["title"] == "בוקר"
+    assert shift["shift_label"] == "בוקר"
+
+
+def test_shift_display_uses_label_when_title_differs(app):
+    person = _person(app, "דני", works_shifts=1)
+    _event(app, "בוקר מוקדם", TODAY, shift=(1, person["id"], "בוקר"))
+    listed = _go(app, _msg("/today"))
+    assert "<b>בוקר</b>" in listed["text"]
+    assert "בוקר מוקדם" not in listed["text"]
+    card = _press(app, listed, "בוקר")
+    assert "<b>בוקר</b>" in card["text"]
+    assert "בוקר מוקדם" not in card["text"]
+    ask = _press(app, card, "מחיקה")
+    assert "«בוקר»" in ask["text"]
+    assert "בוקר מוקדם" not in ask["text"]
+    found = _go(app, _msg("/find בוקר"))
+    assert "<b>בוקר</b>" in found["text"]
+    by_title = _go(app, _msg("/find בוקר מוקדם"))
+    assert "<b>בוקר</b>" in by_title["text"]
 
 
 def test_settings_link_unlink_and_households(app, monkeypatch):

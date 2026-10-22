@@ -118,8 +118,18 @@ def _person_name(people: dict, person_id) -> str:
     return person.get("name") or "בלי שם"
 
 
+def visible_name(event: dict) -> str:
+    """במשמרת מציגים את סוג המשמרת כשהוא שמור. הכותרת החופשית נשארת בבסיס."""
+    if event.get("is_shift"):
+        label = str(event.get("shift_label") or "").strip()
+        if label:
+            return label
+    title = str(event.get("title") or "").strip()
+    return title or "אירוע"
+
+
 def _row_button(event: dict, people: dict, *, with_date: bool) -> str:
-    title = event.get("title") or "אירוע"
+    title = visible_name(event)
     if event.get("is_shift"):
         name = _person_name(people, event.get("shift_person_id"))
         title = f"{title} · {name}"
@@ -272,7 +282,7 @@ def _empty_hint(kind: str, mode: str) -> str:
 
 
 def _event_line(event: dict, people: dict, *, with_date: bool) -> str:
-    title = esc(event.get("title") or "אירוע")
+    title = esc(visible_name(event))
     bits = []
     if with_date and event.get("gregorian_date"):
         bits.append(esc(_safe_greg(event["gregorian_date"])))
@@ -304,7 +314,7 @@ def shifts_off_screen() -> tuple[str, dict]:
 
 
 def event_screen(event: dict, people: dict, focus: date | None = None) -> tuple[str, dict]:
-    title = esc(event.get("title") or "אירוע")
+    title = esc(visible_name(event))
     raw = (event.get("gregorian_date") or "")[:10]
     try:
         anchor = date.fromisoformat(raw)
@@ -360,7 +370,7 @@ def missing_event_screen() -> tuple[str, dict]:
 
 
 def delete_screen(event: dict) -> tuple[str, dict]:
-    title = esc(event.get("title") or "אירוע")
+    title = esc(visible_name(event))
     lines = [f"למחוק את «{title}»?", "אי אפשר לבטל."]
     if event.get("recurrence_freq"):
         lines.append("זו סדרה. יימחק כל מה שחוזר, לא רק יום אחד.")
@@ -617,7 +627,7 @@ def conflict_screen(current: dict, draft: dict) -> tuple[str, dict]:
 
 
 def _plain_event(event: dict) -> str:
-    bits = [esc(event.get("title") or "")]
+    bits = [esc(visible_name(event))]
     if event.get("gregorian_date"):
         bits.append(code(_safe_greg(event["gregorian_date"])))
     bits.append(code(event["time"]) if event.get("time") else "כל היום")

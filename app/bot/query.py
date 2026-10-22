@@ -40,7 +40,9 @@ def _expand(event: dict, start: date, end: date) -> list[dict]:
 
 
 def _blob(row: dict) -> str:
-    return f"{row.get('title') or ''} {row.get('description') or ''}".casefold()
+    return (
+        f"{row.get('title') or ''} {row.get('shift_label') or ''} {row.get('description') or ''}"
+    ).casefold()
 
 
 def _master_row(event: dict) -> dict:
