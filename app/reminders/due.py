@@ -5,7 +5,7 @@ Web Push עתידי צריך לקרוא ל-``browser_due`` (או לחלץ payloa
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.reminders.repository import (
     list_people,
@@ -14,6 +14,7 @@ from app.reminders.repository import (
     sent_chat_keys,
 )
 from app.reminders.schedule import (
+    apply_offset,
     browser_body,
     event_start,
     is_due,
@@ -69,8 +70,10 @@ def _occurrences_for_reminder(event: dict, current: datetime, offset_minutes: in
             "recurring": False,
         }]
     offset = max(0, int(offset_minutes))
-    start_from = (current - RECURRENCE_LOOKBACK).date()
-    start_to = (current + timedelta(minutes=offset) + timedelta(days=2)).date()
+    utc = current.astimezone(timezone.utc)
+    local = current.tzinfo
+    start_from = (utc - RECURRENCE_LOOKBACK).astimezone(local).date()
+    start_to = (utc + timedelta(minutes=offset) + timedelta(days=2)).astimezone(local).date()
     return expand_event(event, event.get("exceptions") or [], start_from, start_to)
 
 
@@ -80,6 +83,8 @@ def _evaluated(now: datetime | None = None):
     current = now or datetime.now(tz)
     if current.tzinfo is None:
         current = current.replace(tzinfo=tz)
+    else:
+        current = current.astimezone(tz)
     people = _people_by_id()
     sent_keys = sent_chat_keys()
     rows = load_reminder_rows()
@@ -106,8 +111,8 @@ def _evaluated(now: datetime | None = None):
                 start = event_start(display, tz=tz, default_time=default_time)
             except (ValueError, TypeError):
                 continue
-            fire = start - timedelta(minutes=int(row["offset_minutes"]))
-            if fire < current - RECURRENCE_LOOKBACK:
+            fire = apply_offset(start, int(row["offset_minutes"]))
+            if fire.astimezone(timezone.utc) < current.astimezone(timezone.utc) - RECURRENCE_LOOKBACK:
                 continue
             occurrence_date = occ.get("occurrence_date") or event.get("gregorian_date")
             if not recurring and row["sent_at"]:
