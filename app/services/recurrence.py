@@ -9,11 +9,18 @@
     היום האחרון של אותו חודש (כ״ט), לא א׳ בחודש הבא.
     זה נוהג נפוץ ליום-השנה כשאין ל׳ בחודש.
 
-אדר (כמו יארצייט):
+אדר (יום-הולדת / בר-מצווה / פורים — hebcal birthday, לא יארצייט):
     - עוגן באדר של שנה פשוטה (חודש 12, השנה לא מעוברת) → בשנה מעוברת: אדר ב׳.
     - עוגן באדר א׳ (חודש 12 בשנה מעוברת) → בשנה פשוטה: אדר; במעוברת נשאר אדר א׳.
     - עוגן באדר ב׳ (חודש 13) → בשנה פשוטה: אדר; במעוברת נשאר אדר ב׳.
-    חודשי (לא שנתי) פשוט מתקדם חודש-חודש, בלי כלל היארצייט.
+    - ל׳ אדר א׳ בשנה פשוטה → א׳ ניסן.
+      זה כלל יום-ההולדת של hebcal (Calendrical Calculations, Reingold & Dershowitz):
+      כשהיום לא קיים, דוחים לא׳ בחודש הבא. pyluach עם ``NEXT_DAY`` נותן אותו יום.
+      לא ל׳ שבט — זה כלל היארצייט של hebcal (היום האחרון בשבט).
+      לא כ״ט אדר — זה מה ש-``PREVIOUS_DAY`` עושה, ולא בחרנו בו לל׳ אדר א׳.
+    ל׳ חשוון/כסלו נשארים כ״ט באותו חודש (הכלל למעלה), ולא א׳ בחודש הבא.
+    יארצייט של hebcal היה שם אדר פשוט על אדר א׳; כאן המנהג הוא אדר ב׳.
+    חודשי (לא שנתי) פשוט מתקדם חודש-חודש, בלי הכללים האלה.
 
 לועזי:
     - 29 בפברואר → 28 בפברואר בשנה לא מעוברת, וחוזר ל-29 במעוברת.
@@ -37,6 +44,7 @@ import calendar
 from datetime import date, timedelta
 
 from pyluach.dates import GregorianDate, HebrewDate, Rounding
+from pyluach.hebrewcal import Year
 
 from app.services.hebrew_format import format_hebrew_date
 
@@ -183,6 +191,20 @@ def _heb_to_date(heb: HebrewDate) -> date:
     return date(greg.year, greg.month, greg.day)
 
 
+def _hebrew_add_years(anchor: HebrewDate, years: int) -> HebrewDate:
+    """שנתי עברי. ל׳ אדר א׳ בשנה פשוטה → א׳ ניסן. פירוט בראש הקובץ."""
+    moved = anchor.add(years=years, rounding=Rounding.PREVIOUS_DAY, adar1=False)
+    if (
+        years
+        and anchor.month == 12
+        and anchor.day == 30
+        and Year(anchor.year).leap
+        and not Year(moved.year).leap
+    ):
+        return HebrewDate(moved.year, 1, 1)
+    return moved
+
+
 def nth_start(anchor: date, freq: str, calendar_name: str, index: int) -> date:
     """המופע ה-index (0 = העוגן עצמו)."""
     if index < 0:
@@ -192,8 +214,7 @@ def nth_start(anchor: date, freq: str, calendar_name: str, index: int) -> date:
     if calendar_name == "hebrew":
         heb = _hebrew_anchor(anchor)
         if freq == "yearly":
-            # adar1=False: אדר פשוט → אדר ב׳. אדר א׳ / אדר ב׳ נשארים החודש שלהם.
-            moved = heb.add(years=index, rounding=Rounding.PREVIOUS_DAY, adar1=False)
+            moved = _hebrew_add_years(heb, index)
         else:
             moved = heb.add(months=index, rounding=Rounding.PREVIOUS_DAY)
         return _heb_to_date(moved)

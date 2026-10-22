@@ -96,6 +96,65 @@ def test_hebrew_years_mark_leap_years(client):
     assert client.get("/api/hebrew-years?from=1&to=900").status_code == 400
 
 
+def test_adar_follows_the_year_when_the_picker_changes_year(client):
+    """אדר פשוט → אדר ב׳ במעבר לשנה מעוברת. אדר א׳/ב׳ → אדר במעבר לשנה פשוטה."""
+    to_leap = client.get("/api/gregorian-from-hebrew?year=5787&month=12&day=14&from_year=5786")
+    assert to_leap.status_code == 200, to_leap.get_json()
+    leap = to_leap.get_json()
+    assert leap["adjusted"] is True
+    assert leap["month"] == 13
+    assert leap["day"] == 14
+    assert leap["leap"] is True
+    assert leap["gregorian_date"] == _gregorian(HebrewDate(5787, 13, 14))
+    leap_names = [item["name"] for item in leap["months"]]
+    assert "אדר א׳" in leap_names
+    assert "אדר ב׳" in leap_names
+    assert "אדר" not in leap_names
+
+    same_leap = client.get("/api/gregorian-from-hebrew?year=5790&month=12&day=14&from_year=5787")
+    assert same_leap.status_code == 200, same_leap.get_json()
+    stayed = same_leap.get_json()
+    assert stayed["adjusted"] is False
+    assert stayed["month"] == 12
+    stayed_names = {item["value"]: item["name"] for item in stayed["months"]}
+    assert stayed_names[12] == "אדר א׳"
+    assert stayed_names[13] == "אדר ב׳"
+
+    plain_numbers = client.get("/api/gregorian-from-hebrew?year=5788&month=12&day=14&from_year=5786")
+    assert plain_numbers.get_json()["month"] == 12
+    assert plain_numbers.get_json()["adjusted"] is False
+    assert plain_numbers.get_json()["leap"] is False
+
+    for month in (12, 13):
+        to_plain = client.get(
+            f"/api/gregorian-from-hebrew?year=5786&month={month}&day=14&from_year=5787"
+        )
+        assert to_plain.status_code == 200, to_plain.get_json()
+        plain = to_plain.get_json()
+        assert plain["month"] == 12
+        assert plain["day"] == 14
+        assert plain["gregorian_date"] == _gregorian(HebrewDate(5786, 12, 14))
+        names = [item["name"] for item in plain["months"]]
+        assert names.count("אדר") == 1
+        assert "אדר א׳" not in names
+        assert "אדר ב׳" not in names
+    # אדר א׳ לא משנה מספר חודש; אדר ב׳ כן
+    assert client.get(
+        "/api/gregorian-from-hebrew?year=5786&month=12&day=14&from_year=5787"
+    ).get_json()["adjusted"] is False
+    assert client.get(
+        "/api/gregorian-from-hebrew?year=5786&month=13&day=14&from_year=5787"
+    ).get_json()["adjusted"] is True
+
+    # בבורר ל׳ אדר א׳ נחתך לכ״ט אדר. א׳ ניסן הוא כלל החזרה, לא בחירת תאריך.
+    clamped = client.get("/api/gregorian-from-hebrew?year=5788&month=12&day=30&from_year=5787")
+    assert clamped.status_code == 200, clamped.get_json()
+    body = clamped.get_json()
+    assert body["adjusted"] is True
+    assert (body["month"], body["day"]) == (12, 29)
+    assert body["gregorian_date"] == _gregorian(HebrewDate(5788, 12, 29))
+
+
 def test_bad_hebrew_parts_are_rejected(client):
     assert client.get("/api/gregorian-from-hebrew").status_code == 400
     assert client.get("/api/gregorian-from-hebrew?year=5786&month=0&day=1").status_code == 400
@@ -103,3 +162,9 @@ def test_bad_hebrew_parts_are_rejected(client):
     assert client.get("/api/gregorian-from-hebrew?year=5786&month=8&day=0").status_code == 400
     assert client.get("/api/hebrew-date/not-a-date").status_code == 400
     assert client.get("/api/hebrew-date/2026-02-31").status_code == 400
+    assert client.get(
+        "/api/gregorian-from-hebrew?year=5786&month=1&day=1&from_year=nope"
+    ).status_code == 400
+    assert client.get(
+        "/api/gregorian-from-hebrew?year=5786&month=1&day=1&from_year=0"
+    ).status_code == 400

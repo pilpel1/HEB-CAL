@@ -128,6 +128,34 @@ def test_adar_yahrzeit_rules():
     assert (adar2_leap.year, adar2_leap.month, adar2_leap.day) == (5790, 13, 14)
 
 
+def test_adar_i_30_in_a_plain_year_is_1_nisan():
+    """ל׳ אדר א׳ בשנה פשוטה → א׳ ניסן (hebcal birthday), לא ל׳ שבט ולא כ״ט אדר.
+
+    בשנה מעוברת חוזרים לל׳ אדר א׳. חודשי לא קופץ לניסן.
+    """
+    assert Year(5787).leap is True
+    assert Year(5788).leap is False
+    assert Year(5789).leap is False
+    assert Year(5790).leap is True
+    greg = HebrewDate(5787, 12, 30).to_greg()
+    anchor = date(greg.year, greg.month, greg.day)
+
+    def landed(steps, freq="yearly"):
+        day = nth_start(anchor, freq, "hebrew", steps)
+        return GregorianDate(day.year, day.month, day.day).to_heb()
+
+    plain = landed(1)
+    assert (plain.year, plain.month, plain.day) == (5788, 1, 1)
+    assert (plain.year, plain.month, plain.day) != (5788, 11, 30)
+    assert (plain.year, plain.month, plain.day) != (5788, 12, 29)
+    again = landed(2)
+    assert (again.year, again.month, again.day) == (5789, 1, 1)
+    leap = landed(3)
+    assert (leap.year, leap.month, leap.day) == (5790, 12, 30)
+    monthly = landed(1, "monthly")
+    assert (monthly.year, monthly.month, monthly.day) == (5787, 13, 29)
+
+
 def test_until_count_and_plain_event_unchanged():
     anchor = date(2026, 5, 10)
     counted = _dates(

@@ -5,6 +5,12 @@ let quickOccurrenceSnapshot = null;
 let hebrewDateToken = 0;
 let hebrewPickerMute = false;
 let hebrewYearsPromise = null;
+// השנה שאליה שייכת רשימת החודשים שעל המסך (אדר פשוט ואדר א׳ שניהם 12)
+let hebrewPickerContextYear = null;
+// הבורר האחרון שהמשתמש נגע בו: 'hebrew' | 'gregorian' | null
+let dateEntrySource = null;
+// true אחרי בחירה מפורשת של לוח החזרה, או כשעורכים אירוע שכבר חוזר
+let recurrenceCalendarTouched = false;
 
 function loadHebrewYearLabels() {
     if (!hebrewYearsPromise) {
@@ -105,9 +111,48 @@ async function applyHebrewDatePayload(data, token) {
                 yearSelect.value = String(data.year);
             }
         }
+        if (Array.isArray(data.months) && data.months.length) {
+            hebrewPickerContextYear = data.year || null;
+        }
     } finally {
         hebrewPickerMute = false;
     }
+}
+
+function gregorianFromHebrewUrl(year, month, day) {
+    const params = new URLSearchParams({
+        year: String(year),
+        month: String(month),
+        day: String(day),
+    });
+    if (hebrewPickerContextYear && String(hebrewPickerContextYear) !== String(year)) {
+        params.set('from_year', String(hebrewPickerContextYear));
+    }
+    return `/api/gregorian-from-hebrew?${params.toString()}`;
+}
+
+function recurrenceCalendarForDateEntry(source, touched) {
+    if (touched || (source !== 'hebrew' && source !== 'gregorian')) {
+        return null;
+    }
+    return source;
+}
+
+function applyRecurrenceCalendarDefault() {
+    const next = recurrenceCalendarForDateEntry(dateEntrySource, recurrenceCalendarTouched);
+    if (!next) {
+        return;
+    }
+    const calendar = document.getElementById('quick_recurrence_calendar');
+    if (!calendar || calendar.disabled) {
+        return;
+    }
+    calendar.value = next;
+}
+
+function noteDateEntry(source) {
+    dateEntrySource = source;
+    applyRecurrenceCalendarDefault();
 }
 
 function refreshQuickModalTitle() {
@@ -143,6 +188,7 @@ async function onHebrewPickerChange() {
     if (hebrewPickerMute) {
         return;
     }
+    noteDateEntry('hebrew');
     const year = document.getElementById('quick_hebrew_year')?.value;
     const month = document.getElementById('quick_hebrew_month')?.value;
     const day = document.getElementById('quick_hebrew_day')?.value;
@@ -151,7 +197,7 @@ async function onHebrewPickerChange() {
     }
     const token = ++hebrewDateToken;
     try {
-        const response = await fetch(`/api/gregorian-from-hebrew?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}`);
+        const response = await fetch(gregorianFromHebrewUrl(year, month, day));
         const data = await response.json();
         if (!response.ok || token !== hebrewDateToken) {
             return;
@@ -281,6 +327,10 @@ function applyRecurrenceFields(eventData) {
     }
     freq.value = eventData.recurrence_freq || '';
     calendar.value = eventData.recurrence_calendar === 'hebrew' ? 'hebrew' : 'gregorian';
+    recurrenceCalendarTouched = Boolean(eventData.recurrence_freq);
+    if (!eventData.recurrence_freq) {
+        dateEntrySource = null;
+    }
     mode.value = recurrenceEndMode(eventData);
     until.value = eventData.recurrence_until || '';
     count.value = eventData.recurrence_count ? String(eventData.recurrence_count) : '';
@@ -642,6 +692,7 @@ function initQuickEventModal() {
     const quickGregorianDate = document.getElementById('quick_gregorian_date');
     if (quickGregorianDate) {
         quickGregorianDate.addEventListener('change', async () => {
+            noteDateEntry('gregorian');
             const startDate = quickGregorianDate.value;
             syncEndDateMin(startDate, document.getElementById('quick_end_date'));
             await fillHebrewDateFromGregorian(startDate, 'quick_hebrew_date');
@@ -655,6 +706,9 @@ function initQuickEventModal() {
     if (recurrenceFreq) {
         recurrenceFreq.addEventListener('change', syncRecurrenceControls);
     }
+    document.getElementById('quick_recurrence_calendar')?.addEventListener('change', () => {
+        recurrenceCalendarTouched = true;
+    });
     if (recurrenceMode) {
         recurrenceMode.addEventListener('change', syncRecurrenceControls);
     }
