@@ -409,9 +409,16 @@ def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar
     assert "הזן משמרות" in calendar
+    assert 'id="quick-settings-open"' in calendar
     assert 'class="btn btn-outline-secondary settings-gear-btn"' in calendar
-    assert 'href="/settings"' in calendar
     assert 'aria-label="הגדרות"' in calendar
+    assert 'id="header-collapse"' in calendar
+    assert 'heb-cal-header-collapsed' in calendar
+    assert 'id="quick-settings"' in calendar
+    assert 'data-theme-choice="dark"' in calendar
+    assert 'data-density-choice="compact"' in calendar
+    assert 'אנשים, תזכורות ומשמרות' in calendar
+    assert 'href="/settings"' in calendar
     assert 'id="shiftEntryModal"' in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings

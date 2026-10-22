@@ -92,7 +92,7 @@ def main() -> int:
         assert modal_box and modal_box["x"] >= -1
         assert modal_box["x"] + modal_box["width"] <= args.width + 1
 
-        page.evaluate("document.querySelector('[data-theme-toggle]').click()")
+        page.evaluate("document.querySelector('[data-theme-choice=\"dark\"]').click()")
         theme = page.evaluate("() => document.documentElement.getAttribute('data-bs-theme')")
         assert theme == "dark", theme
         expect(panel).to_be_visible()

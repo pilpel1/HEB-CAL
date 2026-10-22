@@ -119,6 +119,43 @@
     outline-color: #93c5fd;
 }
 
+[data-bs-theme="dark"] .header-collapse {
+    color: #cbd5e1;
+}
+
+[data-bs-theme="dark"] .header-collapse-grip {
+    background: #64748b;
+}
+
+[data-bs-theme="dark"] .header-collapse-arrow {
+    background: #1e293b;
+    color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .header-collapse:focus-visible,
+[data-bs-theme="dark"] .quick-settings-close:focus-visible,
+[data-bs-theme="dark"] .quick-settings-choice:focus-visible,
+[data-bs-theme="dark"] .quick-settings-more:focus-visible {
+    outline-color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .quick-settings-sheet {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+}
+
+[data-bs-theme="dark"] .quick-settings-choice[aria-pressed="true"] {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+}
+
+[data-bs-theme="dark"] .quick-settings-more:hover,
+[data-bs-theme="dark"] .quick-settings-more:focus-visible {
+    background: rgba(147, 197, 253, 0.12);
+}
+
 [data-bs-theme="dark"] .day-agenda-title,
 [data-bs-theme="dark"] .agenda-text,
 [data-bs-theme="dark"] .agenda-time {

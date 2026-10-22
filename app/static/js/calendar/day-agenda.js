@@ -13,15 +13,11 @@ function densityDivisor() {
 }
 
 function updateDensityToggle() {
-    const button = document.getElementById('density-toggle');
-    if (!button) {
-        return;
-    }
     const compact = densityDivisor() === 9;
-    const label = compact ? 'צפוף' : 'מרווח';
-    button.setAttribute('aria-pressed', compact ? 'true' : 'false');
-    button.title = label;
-    button.setAttribute('aria-label', label);
+    document.querySelectorAll('[data-density-choice]').forEach((button) => {
+        const on = (button.getAttribute('data-density-choice') === 'compact') === compact;
+        button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
 }
 
 function clampAgendaShare(value) {
@@ -405,20 +401,181 @@ function syncWeekRowHeight() {
     }
 }
 
-function toggleCalendarDensity() {
-    const next = densityDivisor() === 9 ? 'comfortable' : 'compact';
-    try {
-        localStorage.setItem('heb-cal-density', next);
-    } catch (error) {
-        /* מצב פרטי — נשאר עד רענון */
+function setCalendarDensity(mode) {
+    const next = mode === 'compact' ? 'compact' : 'comfortable';
+    const already = (densityDivisor() === 9) === (next === 'compact');
+    if (!already) {
+        try {
+            localStorage.setItem('heb-cal-density', next);
+        } catch (error) {
+            /* מצב פרטי — נשאר עד רענון */
+        }
     }
     updateDensityToggle();
+    if (already) {
+        return;
+    }
     syncCalendarFrame();
     syncWeekRowHeight();
     if (typeof updateVisibleMonthLabel === 'function') {
         updateVisibleMonthLabel();
     }
 }
+
+function toggleCalendarDensity() {
+    setCalendarDensity(densityDivisor() === 9 ? 'comfortable' : 'compact');
+}
+
+function readHeaderCollapsed() {
+    try {
+        return localStorage.getItem('heb-cal-header-collapsed') === '1';
+    } catch (error) {
+        return false;
+    }
+}
+
+function closeQuickSettings(options) {
+    const root = document.getElementById('quick-settings');
+    const opener = document.getElementById('quick-settings-open');
+    if (!root || root.hidden) {
+        return;
+    }
+    root.hidden = true;
+    if (opener) {
+        opener.setAttribute('aria-expanded', 'false');
+    }
+    if (options && options.restoreFocus === false) {
+        return;
+    }
+    if (opener && opener.offsetParent !== null) {
+        opener.focus();
+    }
+}
+
+function placeQuickSettings() {
+    const sheet = document.querySelector('#quick-settings .quick-settings-sheet');
+    const opener = document.getElementById('quick-settings-open');
+    if (!sheet || !opener) {
+        return;
+    }
+    sheet.classList.remove('is-popover');
+    sheet.style.top = '';
+    sheet.style.left = '';
+    sheet.style.width = '';
+    if (isCompactCalendar()) {
+        return;
+    }
+    const rect = opener.getBoundingClientRect();
+    const width = 300;
+    let left = rect.left + rect.width / 2 - width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+    const estimated = 280;
+    let top = rect.bottom + 8;
+    if (top + estimated > window.innerHeight - 8) {
+        top = Math.max(8, rect.top - estimated - 8);
+    }
+    sheet.classList.add('is-popover');
+    sheet.style.top = `${Math.round(top)}px`;
+    sheet.style.left = `${Math.round(left)}px`;
+    sheet.style.width = `${width}px`;
+}
+
+function openQuickSettings() {
+    const root = document.getElementById('quick-settings');
+    const opener = document.getElementById('quick-settings-open');
+    if (!root) {
+        return;
+    }
+    updateDensityToggle();
+    root.hidden = false;
+    if (opener) {
+        opener.setAttribute('aria-expanded', 'true');
+    }
+    placeQuickSettings();
+    document.getElementById('quick-settings-close')?.focus();
+}
+
+function applyHeaderCollapsed(collapsed) {
+    const toolbar = document.getElementById('calendar-toolbar');
+    if (!toolbar) {
+        return;
+    }
+    const hide = Boolean(collapsed) && isCompactCalendar();
+    toolbar.classList.toggle('is-collapsed', Boolean(collapsed));
+    const toggle = document.getElementById('header-collapse');
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', hide ? 'false' : 'true');
+        toggle.setAttribute('aria-label', hide ? 'הצג את סרגל הפעולות' : 'כווץ את סרגל הפעולות');
+    }
+    const expanded = document.getElementById('toolbar-expanded');
+    if (expanded) {
+        expanded.toggleAttribute('inert', hide);
+    }
+    if (hide) {
+        const jump = document.getElementById('jumpToDateBtn');
+        if (jump && window.bootstrap && bootstrap.Dropdown) {
+            const menu = bootstrap.Dropdown.getInstance(jump);
+            if (menu) {
+                menu.hide();
+            }
+        }
+        closeQuickSettings({ restoreFocus: false });
+    }
+}
+
+function setHeaderCollapsed(collapsed) {
+    try {
+        localStorage.setItem('heb-cal-header-collapsed', collapsed ? '1' : '0');
+    } catch (error) {
+        /* מצב פרטי — נשאר עד רענון */
+    }
+    applyHeaderCollapsed(collapsed);
+    syncCalendarFrame();
+    syncWeekRowHeight();
+}
+
+function initCalendarChrome() {
+    const toolbar = document.getElementById('calendar-toolbar');
+    if (!toolbar || toolbar.dataset.chromeBound === '1') {
+        return;
+    }
+    toolbar.dataset.chromeBound = '1';
+    applyHeaderCollapsed(readHeaderCollapsed());
+    updateDensityToggle();
+
+    document.getElementById('header-collapse')?.addEventListener('click', () => {
+        setHeaderCollapsed(!readHeaderCollapsed());
+    });
+
+    document.getElementById('quick-settings-open')?.addEventListener('click', () => {
+        const root = document.getElementById('quick-settings');
+        if (!root || !root.hidden) {
+            closeQuickSettings();
+            return;
+        }
+        openQuickSettings();
+    });
+    document.getElementById('quick-settings-close')?.addEventListener('click', () => {
+        closeQuickSettings();
+    });
+    document.getElementById('quick-settings-backdrop')?.addEventListener('click', () => {
+        closeQuickSettings();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeQuickSettings();
+        }
+    });
+    document.querySelectorAll('[data-density-choice]').forEach((button) => {
+        button.addEventListener('click', () => {
+            setCalendarDensity(button.getAttribute('data-density-choice'));
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initCalendarChrome();
+});
 
 function syncAgendaSelection() {
     document.querySelectorAll('#calendar-weeks td.is-agenda-day').forEach((td) => {
@@ -534,17 +691,16 @@ function initDayAgenda() {
     }
     root.dataset.bound = '1';
 
-    updateDensityToggle();
+    initCalendarChrome();
     bindAgendaResize();
-    const densityBtn = document.getElementById('density-toggle');
-    if (densityBtn) {
-        densityBtn.addEventListener('click', () => {
-            toggleCalendarDensity();
-        });
-    }
     const onViewport = () => {
+        applyHeaderCollapsed(readHeaderCollapsed());
         syncCalendarFrame();
         syncWeekRowHeight();
+        const sheet = document.getElementById('quick-settings');
+        if (sheet && !sheet.hidden) {
+            placeQuickSettings();
+        }
     };
     window.addEventListener('resize', onViewport);
     window.addEventListener('orientationchange', onViewport);
@@ -571,6 +727,11 @@ function initDayAgenda() {
 
     const compactQuery = window.matchMedia('(max-width: 480px)');
     compactQuery.addEventListener('change', () => {
+        applyHeaderCollapsed(readHeaderCollapsed());
+        const sheet = document.getElementById('quick-settings');
+        if (sheet && !sheet.hidden) {
+            placeQuickSettings();
+        }
         if (!infiniteCalendar.ready || !infiniteCalendar.body) {
             return;
         }

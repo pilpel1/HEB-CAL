@@ -17,6 +17,11 @@
         const isDark = theme === 'dark';
         const label = isDark ? 'מצב בהיר' : 'מצב כהה';
         document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+            const choice = btn.getAttribute('data-theme-choice');
+            if (choice === 'light' || choice === 'dark') {
+                btn.setAttribute('aria-pressed', String(choice === theme));
+                return;
+            }
             btn.title = label;
             btn.setAttribute('aria-label', label);
             btn.setAttribute('aria-pressed', String(isDark));
@@ -37,7 +42,13 @@
         if (!btn) {
             return;
         }
-        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        const choice = btn.getAttribute('data-theme-choice');
+        const next = choice === 'light' || choice === 'dark'
+            ? choice
+            : (root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark');
+        if (choice && next === root.getAttribute('data-bs-theme')) {
+            return;
+        }
         try {
             localStorage.setItem(STORAGE_KEY, next);
         } catch (err) {
