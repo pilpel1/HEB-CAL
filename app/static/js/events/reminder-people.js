@@ -102,11 +102,11 @@ function setReminderPersonContext(person) {
         return;
     }
     if (person && person.id) {
-        node.textContent = `עריכת ${person.name || 'אדם'} לתזכורות`;
+        node.textContent = `עריכת ${person.name || 'אדם'}`;
         node.classList.add('is-existing');
         return;
     }
-    node.textContent = 'אדם חדש לתזכורות';
+    node.textContent = 'אדם חדש';
     node.classList.remove('is-existing');
 }
 
@@ -161,7 +161,7 @@ function renderReminderPeople(people) {
     if (!reminderPeople.length) {
         const empty = document.createElement('p');
         empty.className = 'text-muted mb-0';
-        empty.textContent = 'עדיין אין אנשים לתזכורות.';
+        empty.textContent = 'עדיין אין אנשים.';
         list.append(empty);
         return;
     }
@@ -179,7 +179,7 @@ function renderReminderPeople(people) {
         name.textContent = person.name;
         const chat = document.createElement('div');
         chat.className = 'reminder-person-chat text-muted small';
-        chat.textContent = person.telegram_chat_id || 'בלי מזהה צ׳אט';
+        chat.textContent = person.telegram_chat_id || 'בלי מזהה';
         text.append(name, chat);
         const actions = document.createElement('div');
         actions.className = 'd-flex gap-2';
@@ -205,7 +205,7 @@ async function loadReminderPeople() {
     }
     const response = await fetch('/api/reminder-people');
     if (!response.ok) {
-        setReminderPersonError('לא הצלחנו לטעון את האנשים');
+        setReminderPersonError('לא הצלחנו לטעון');
         return;
     }
     const people = await response.json();
@@ -242,7 +242,7 @@ async function saveReminderPerson(event) {
         return;
     }
     if (chatId === null) {
-        setReminderPersonError('מזהה צ׳אט חייב להיות מספר');
+        setReminderPersonError('מזהה הצ׳אט חייב להיות מספר');
         return;
     }
     const id = document.getElementById('reminderPersonId').value;
@@ -280,7 +280,7 @@ async function saveReminderPerson(event) {
 async function deleteReminderPerson(person) {
     const alsoShifts = Boolean(person.works_shifts);
     const question = alsoShifts
-        ? `להסיר את ${person.name} מאנשי התזכורות? המשמרות יישארו.`
+        ? `להסיר את ${person.name} מתזכורות? המשמרות יישארו.`
         : `למחוק את ${person.name}?`;
     if (!confirm(question)) {
         return;

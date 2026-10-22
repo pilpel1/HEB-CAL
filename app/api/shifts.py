@@ -58,7 +58,7 @@ def _person_or_404(person_id):
         return None, (jsonify({"error": "האדם לא נמצא", "success": False}), 404)
     if not person.get("works_shifts"):
         return None, (
-            jsonify({"error": "האדם לא משובץ למשמרות", "success": False}),
+            jsonify({"error": "האדם לא ברשימת המשמרות", "success": False}),
             400,
         )
     return person, None
@@ -84,7 +84,7 @@ def put_shift_week():
     if error:
         return error
     if not shifts_enabled():
-        return jsonify({"error": "המשמרות כבויות בבית הזה", "success": False}), 400
+        return jsonify({"error": "המשמרות כבויות", "success": False}), 400
     try:
         start = parse_week_start(data.get("week_start"))
         validate_shift_week(person, start, data.get("cells"))

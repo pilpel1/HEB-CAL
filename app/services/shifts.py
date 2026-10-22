@@ -209,7 +209,7 @@ def resolve_manual_shift(data: dict):
     if person is None:
         raise ShiftError("האדם לא נמצא")
     if not person.get("works_shifts"):
-        raise ShiftError("האדם לא משובץ למשמרות")
+        raise ShiftError("האדם לא ברשימת המשמרות")
     return {
         "is_shift": 1,
         "shift_person_id": person_id,
@@ -247,7 +247,7 @@ def validate_shift_week(person: dict, week_start: date, cells) -> set[tuple[str,
         index = weekday_index(day)
         if index not in _allowed_day_set(allowed, label):
             raise ShiftError(
-                f"אי אפשר לשמור משמרת {label} ביום {WEEKDAY_NAMES[index]} — היא לא מותרת ל{name}"
+                f"אי אפשר לשמור {label} ב{WEEKDAY_NAMES[index]} — לא מותר ל{name}"
             )
     return wanted
 

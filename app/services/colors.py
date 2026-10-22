@@ -28,7 +28,7 @@ def parse_hex_rgb(value) -> tuple[int, int, int]:
             int(raw[2:4], 16),
             int(raw[4:6], 16),
         )
-    raise ColorError("קוד צבע לא תקין. השתמשו ב-HEX כמו #ff8800")
+    raise ColorError("קוד צבע לא תקין. צריך HEX כמו #ff8800")
 
 
 def normalize_hex(value) -> str:
@@ -45,7 +45,7 @@ def light_background_from_hex(value) -> str:
 def clean_color_name(name) -> str:
     text = str(name or "").strip()
     if not text:
-        raise ColorError("יש למלא שם לצבע")
+        raise ColorError("חסר שם")
     if len(text) > 40:
         raise ColorError("שם הצבע ארוך מדי")
     return text
@@ -143,10 +143,10 @@ def create_color(name, color_code) -> dict:
         )
         db.commit()
     except sqlite3.Error as exc:
-        raise ColorError("לא ניתן להוסיף את הצבע") from exc
+        raise ColorError("אי אפשר להוסיף את הצבע") from exc
     created = get_color(cursor.lastrowid)
     if created is None:
-        raise ColorError("לא ניתן להוסיף את הצבע")
+        raise ColorError("אי אפשר להוסיף את הצבע")
     return created
 
 
@@ -160,7 +160,7 @@ def update_color(color_id: int, name, color_code) -> dict:
         if color_code not in (None, "", existing["color_code"]):
             hex_attempt = str(color_code).strip()
             if hex_attempt.lower() != str(existing["color_code"]).lower():
-                raise ColorError("לא ניתן לשנות את קוד צבע ברירת המחדל")
+                raise ColorError("אי אפשר לשנות צבע ברירת מחדל")
         color_code_value = existing["color_code"]
         background = existing["background_color"]
     else:
@@ -179,7 +179,7 @@ def update_color(color_id: int, name, color_code) -> dict:
         _retarget_color_code(db, existing["color_code"], color_code_value)
         db.commit()
     except sqlite3.Error as exc:
-        raise ColorError("לא ניתן לעדכן את הצבע") from exc
+        raise ColorError("אי אפשר לעדכן את הצבע") from exc
     updated = get_color(color_id)
     if updated is None:
         raise ColorError("הצבע לא נמצא")
@@ -191,9 +191,9 @@ def delete_color(color_id: int) -> None:
     if existing is None:
         raise ColorError("הצבע לא נמצא")
     if existing["is_default"]:
-        raise ColorError("לא ניתן למחוק צבע ברירת מחדל")
+        raise ColorError("אי אפשר למחוק צבע ברירת מחדל")
     db = get_db()
     if _color_in_use(db, existing["color_code"]):
-        raise ColorError("הצבע בשימוש ולא ניתן למחוק אותו")
+        raise ColorError("הצבע בשימוש, אי אפשר למחוק")
     db.execute("DELETE FROM event_colors WHERE id = ?", (color_id,))
     db.commit()

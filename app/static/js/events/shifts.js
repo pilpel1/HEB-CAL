@@ -323,11 +323,11 @@ function setShiftPersonContext(person) {
         return;
     }
     if (person && person.id) {
-        node.textContent = `עריכת משמרות של ${person.name || 'אדם'}`;
+        node.textContent = `עריכת ${person.name || 'אדם'}`;
         node.classList.add('is-existing');
         return;
     }
-    node.textContent = 'אדם חדש למשמרות';
+    node.textContent = 'אדם חדש';
     node.classList.remove('is-existing');
 }
 
@@ -351,7 +351,7 @@ function fillShiftPersonSource(people) {
     select.replaceChildren();
     const blank = document.createElement('option');
     blank.value = '';
-    blank.textContent = 'אדם חדש למשמרות';
+    blank.textContent = 'אדם חדש';
     select.append(blank);
     candidates.forEach((person) => {
         if (person.works_shifts && String(person.id) === String(editingId)) {
@@ -383,7 +383,7 @@ function renderShiftPeopleList(people) {
     if (!workers.length) {
         const empty = document.createElement('p');
         empty.className = 'text-muted mb-0';
-        empty.textContent = 'עדיין אין מי שעובד משמרות.';
+        empty.textContent = 'עדיין אין אנשים.';
         list.append(empty);
         return;
     }
@@ -503,7 +503,7 @@ async function saveShiftPerson(event) {
     });
     const saved = await response.json().catch(() => ({}));
     if (!response.ok) {
-        setShiftPersonError(saved.error || 'שמירת המשמרות נכשלה');
+        setShiftPersonError(saved.error || 'השמירה נכשלה');
         return;
     }
     clearShiftRulesDraft();
@@ -773,7 +773,7 @@ function renderShiftGrid(payload) {
             if (!allowed && !checked) {
                 wrap.classList.add('is-blocked');
                 wrap.textContent = '–';
-                wrap.title = 'לא מותר לאדם הזה';
+                wrap.title = 'לא מותר';
                 td.append(wrap);
                 tr.append(td);
                 return;
@@ -782,7 +782,7 @@ function renderShiftGrid(payload) {
             input.disabled = !allowed;
             if (!allowed) {
                 wrap.classList.add('is-disabled');
-                input.title = 'המשמרת הזו כבר בלוח, אבל היא לא מותרת יותר';
+                input.title = 'כבר בלוח, אבל כבר לא מותרת';
             }
             input.setAttribute('aria-label', `${personName} ${label} ${letters[day.weekday]} ${day.date}`);
             wrap.append(input);
@@ -808,7 +808,7 @@ async function loadShiftWeek() {
     const response = await fetch(`/api/shifts/week?${params}`);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        setShiftEntryError(data.error || 'לא הצלחנו לטעון את השבוע');
+        setShiftEntryError(data.error || 'לא הצלחנו לטעון');
         return;
     }
     renderShiftGrid(data);
@@ -915,7 +915,7 @@ async function saveShiftWeek() {
         const modalEl = document.getElementById('shiftEntryModal');
         window.bootstrap.Modal.getInstance(modalEl)?.hide();
         if (typeof showMessage === 'function') {
-            showMessage('המשמרות נשמרו');
+            showMessage('נשמר');
         }
         if (typeof refreshEventsViews === 'function') {
             await refreshEventsViews();

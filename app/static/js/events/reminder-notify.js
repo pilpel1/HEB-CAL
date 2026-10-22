@@ -12,15 +12,15 @@ const REMINDER_SHOWN_KEY = 'heb-cal-reminder-shown';
 
 function reminderPermissionLabel() {
     if (!('Notification' in window)) {
-        return 'הדפדפן הזה לא תומך בהתראות';
+        return 'הדפדפן לא תומך בהתראות';
     }
     if (Notification.permission === 'granted') {
-        return 'התראות הדפדפן פעילות כשהלוח פתוח';
+        return 'התראות פעילות כשהלוח פתוח';
     }
     if (Notification.permission === 'denied') {
-        return 'ההתראות חסומות בדפדפן. אפשר לאפשר אותן בהגדרות האתר';
+        return 'ההתראות חסומות. אפשר לאפשר אותן בהגדרות האתר';
     }
-    return 'התראות הדפדפן עדיין לא אושרו';
+    return 'התראות עדיין לא אושרו';
 }
 
 function setReminderNotifyStatus(message) {

@@ -1,6 +1,6 @@
 // תאריך סיום לא לפני תאריך התחלה — משותף למודל ולטבלת האירועים
 
-const END_DATE_BEFORE_START_MSG = 'תאריך הסיום חייב להיות זהה או מאוחר מתאריך ההתחלה';
+const END_DATE_BEFORE_START_MSG = 'תאריך הסיום לא יכול להיות לפני ההתחלה';
 
 function isEndDateBeforeStart(startDate, endDate) {
     if (!startDate || !endDate) {

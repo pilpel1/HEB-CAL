@@ -442,7 +442,7 @@ async function initInfiniteCalendar() {
     const ok = await renderAround(today, 'center');
     if (!ok) {
         if (status) {
-            status.textContent = 'שגיאה בטעינת הלוח. נסה לרענן את הדף.';
+            status.textContent = 'שגיאה בטעינת הלוח. נסו לרענן.';
         }
         return;
     }

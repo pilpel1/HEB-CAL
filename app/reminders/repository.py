@@ -81,7 +81,7 @@ def _clean_chat_id(value) -> str | None:
     if not text:
         return None
     if not _CHAT_ID.fullmatch(text):
-        raise ValueError("מזהה צ'אט חייב להיות מספר (אפשר עם מינוס לקבוצה)")
+        raise ValueError("מזהה הצ׳אט חייב להיות מספר (עם מינוס לקבוצה)")
     return text
 
 

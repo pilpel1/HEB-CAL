@@ -704,7 +704,7 @@ def test_free_text_shift_survives_grid_resave(client):
 def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar
-    assert "הזן משמרות" in calendar
+    assert "הזן משמרות" not in calendar
     assert 'class="shift-grid-icon"' in calendar
     assert "fa-user-clock" not in calendar
     plus = calendar.index('id="addEventFromCalendarBtn"')
@@ -719,7 +719,7 @@ def test_calendar_and_settings_markup(client):
     assert 'aria-label="דלג לתאריך"' in calendar
     assert 'aria-label="הוסף אירוע"' in calendar
     assert 'aria-label="רשימת אירועים"' in calendar
-    assert 'aria-label="הזן משמרות"' in calendar
+    assert 'aria-label="משמרות"' in calendar
     assert 'id="header-collapse"' in calendar
     assert 'header-collapse-chevron' in calendar
     assert 'header-collapse-grip' not in calendar
@@ -729,7 +729,10 @@ def test_calendar_and_settings_markup(client):
     assert 'id="quick_shift_enabled"' in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings
-    assert "הפעלת משמרות בבית הזה" in settings
+    assert 'id="settings-shifts-title">משמרות</h2>' in settings
+    assert settings.count(">משמרות</h2>") == 1
+    assert "הפעלת משמרות בבית הזה" not in settings
+    assert "אנשים למשמרות" not in settings
     assert 'id="personShiftMatrix"' in settings
     assert 'id="shiftPeoplePanel"' in settings
     assert 'id="shiftPersonSave"' in settings
@@ -760,15 +763,16 @@ def test_calendar_and_settings_markup(client):
     assert 'id="exportEventsBtn"' not in events_list
     assert 'id="pageSizeSelect"' in events_list
     assert 'id="sortOrderSelect"' in events_list
-    assert "אנשים לתזכורות" in settings
+    assert '<h2 class="h5">תזכורות</h2>' in settings
+    assert "אנשים לתזכורות" not in settings
     assert 'id="chatIdHelpBtn"' in settings
-    assert 'aria-label="איך משיגים מזהה צ׳אט"' in settings
-    label = settings.index("מזהה צ׳אט בטלגרם")
+    assert 'aria-label="איך מקבלים מזהה צ׳אט"' in settings
+    label = settings.index('<label for="reminderPersonChat" class="form-label">מזהה צ׳אט</label>')
     help_btn = settings.index('id="chatIdHelpBtn"')
     help_pop = settings.index('id="chatIdHelp"')
     assert label < help_btn < help_pop
     assert "TELEGRAM_BOT_TOKEN" in settings[help_pop:help_pop + 1200]
-    assert '<h2 class="h5">איך משיגים מזהה צ׳אט</h2>' not in settings
+    assert '<h2 class="h5">איך מקבלים מזהה צ׳אט</h2>' not in settings
     shifts_js = client.get("/static/js/events/shifts.js").get_data(as_text=True)
     assert "function persistEditedShiftRules" not in shifts_js
     assert "function saveShiftPerson" in shifts_js
@@ -836,7 +840,7 @@ def test_people_role_filters_and_api_validation(client):
         "cells": [{"date": "2026-10-18", "label": "בוקר"}],
     })
     assert blocked_week.status_code == 400
-    assert "משובץ" in blocked_week.get_json()["error"]
+    assert "רשימת המשמרות" in blocked_week.get_json()["error"]
 
     ok_week = client.put("/api/shifts/week", json={
         "person_id": shifter["id"],

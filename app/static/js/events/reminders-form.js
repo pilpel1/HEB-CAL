@@ -109,7 +109,7 @@ function renderReminderRecipients(people, selected) {
     if (!people.length) {
         const empty = document.createElement('p');
         empty.className = 'reminder-empty-people';
-        empty.textContent = 'עדיין אין אנשים. בלי נמען התזכורת תופיע בדפדפן כשהלוח פתוח, ובטלגרם אחרי שמוסיפים מזהה צ׳אט.';
+        empty.textContent = 'עדיין אין אנשים. בלי נמען התזכורת תופיע בדפדפן כשהלוח פתוח.';
         root.append(empty);
         return;
     }
@@ -144,7 +144,7 @@ function addCustomReminder() {
     const unitInput = document.getElementById('quick_reminder_custom_unit');
     const minutes = customOffsetMinutes(amountInput?.value, unitInput?.value);
     if (minutes === null) {
-        setReminderError('הזינו מספר חיובי של דקות, שעות או ימים (עד שנה)');
+        setReminderError('מספר חיובי של דקות, שעות או ימים (עד שנה)');
         return;
     }
     if (selectPreset(minutes)) {
