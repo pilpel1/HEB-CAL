@@ -367,7 +367,7 @@ class Bot:
             if flow == "edit_title":
                 self.session["draft"]["title"] = _take_title(text)
                 self.session["flow"] = "edit"
-                return self._edit_menu()
+                return self._edit_menu(saved=ui.field_saved("title"))
             if flow == "edit_date_text":
                 day = parse_user_date(text, self.today)
                 self.session["draft"]["gregorian_date"] = day.isoformat()
@@ -375,11 +375,11 @@ class Bot:
             if flow == "edit_time":
                 self.session["draft"]["time"] = parse_user_time(text)
                 self.session["flow"] = "edit"
-                return self._edit_menu()
+                return self._edit_menu(saved=ui.field_saved("time"))
             if flow == "edit_desc":
                 self.session["draft"]["description"] = _take_description(text)
                 self.session["flow"] = "edit"
-                return self._edit_menu()
+                return self._edit_menu(saved=ui.field_saved("desc"))
             if flow == "edit_end":
                 if clean_line(text) == "בלי":
                     self.session["draft"]["end_date"] = None
@@ -392,7 +392,7 @@ class Bot:
                         self.session["flow"] = "edit"
                         return self._edit_menu(note)
                 self.session["flow"] = "edit"
-                return self._edit_menu()
+                return self._edit_menu(saved=ui.field_saved("end"))
             if flow == "find":
                 return self._run_find(text)
             if flow == "link_name":
@@ -744,7 +744,7 @@ class Bot:
         if data == "ed:all":
             self.session["draft"]["time"] = None
             self.session["flow"] = "edit"
-            return self._edit_menu()
+            return self._edit_menu(saved=ui.field_saved("time"))
         if data == "ed:hm:x":
             self.session["flow"] = "edit_time"
             return self.out(*ui.edit_time_text_screen())
@@ -753,22 +753,22 @@ class Bot:
             if len(stamp) == 4 and stamp.isdigit():
                 self.session["draft"]["time"] = f"{stamp[:2]}:{stamp[2:]}"
                 self.session["flow"] = "edit"
-                return self._edit_menu()
+                return self._edit_menu(saved=ui.field_saved("time"))
         if data == "ed:desc0":
             self.session["draft"]["description"] = ""
             self.session["flow"] = "edit"
-            return self._edit_menu()
+            return self._edit_menu(saved=ui.field_saved("desc"))
         if data == "ed:end0":
             self.session["draft"]["end_date"] = None
             self.session["flow"] = "edit"
-            return self._edit_menu()
+            return self._edit_menu(saved=ui.field_saved("end"))
         if data == "ed:end1":
             start = date.fromisoformat(
                 (self.session["draft"].get("gregorian_date") or self.today.isoformat())[:10]
             )
             self.session["draft"]["end_date"] = (start + timedelta(days=1)).isoformat()
             self.session["flow"] = "edit"
-            return self._edit_menu()
+            return self._edit_menu(saved=ui.field_saved("end"))
         match = _ED_ID.fullmatch(data)
         if match:
             return self._begin_edit(int(match.group(1)))
@@ -790,16 +790,16 @@ class Bot:
         self.session["flow"] = "edit"
         return self._edit_menu()
 
-    def _edit_menu(self, error: str = "") -> dict:
+    def _edit_menu(self, error: str = "", saved: str = "") -> dict:
         draft = self.session.get("draft") or {}
         if not draft.get("event_id"):
             return self._reopen()
         if draft.get("is_shift"):
             self.session["flow"] = "edit_date"
             text, markup = ui.edit_date_screen(draft, self.today, shift=True)
-            return self.out(_with_error(text, error), markup)
+            return self.out(_with_error(text, error or saved), markup)
         self.session["flow"] = "edit"
-        return self.out(*ui.edit_menu_screen(draft, error=error))
+        return self.out(*ui.edit_menu_screen(draft, error=error, saved=saved))
 
     def _after_edit_date(self) -> dict:
         draft = self.session.get("draft") or {}
@@ -807,7 +807,7 @@ class Bot:
             self.session["flow"] = "edit_date"
             return self.out(*ui.edit_date_screen(draft, self.today, shift=True))
         self.session["flow"] = "edit"
-        return self._edit_menu()
+        return self._edit_menu(saved=ui.field_saved("date"))
 
     def _save_edit(self, *, force: bool) -> dict:
         draft = self.session.get("draft") or {}

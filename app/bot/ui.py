@@ -22,6 +22,22 @@ BTN_ADD = "➕ הוספת אירוע"
 LIST_HINT = "לחצו על אירוע לפרטים, עריכה או מחיקה."
 DAY_LETTERS = ("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳")
 SHIFTS_PER_ROW = 3
+# בטלגרם הכפתור הראשון בשורה יושב משמאל. חץ ← על «הבא» משמאל, → על «הקודם» מימין.
+BTN_NEXT = "הבא ←"
+BTN_PREV = "→ הקודם"
+BTN_NEXT_WEEK = "שבוע הבא ←"
+BTN_PREV_WEEK = "→ שבוע קודם"
+DATE_HINT = (
+    'כתבו תאריך בפורמט DD.MM.YYYY (או 6 ספרות, למשל 251026), '
+    'או תאריך עברי כמו י"ג חשון.'
+)
+_FIELD_SAVED = {
+    "title": "הכותרת עודכנה ✅ — לשנות עוד משהו?",
+    "date": "התאריך עודכן ✅ — לשנות עוד משהו?",
+    "time": "השעה עודכנה ✅ — לשנות עוד משהו?",
+    "desc": "התיאור עודכן ✅ — לשנות עוד משהו?",
+    "end": "תאריך הסיום עודכן ✅ — לשנות עוד משהו?",
+}
 
 
 _BUTTON_STYLES = frozenset({"danger", "success", "primary"})
@@ -82,10 +98,24 @@ def _pairs(items: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
     return rows
 
 
+def field_saved(kind: str) -> str:
+    return _FIELD_SAVED[kind]
+
+
+def _pager(previous: str | None, following: str | None) -> list[tuple[str, str]]:
+    """הבא משמאל, הקודם מימין. כפתור ראשון במערך = שמאל בטלגרם."""
+    row = []
+    if following:
+        row.append((BTN_NEXT, following))
+    if previous:
+        row.append((BTN_PREV, previous))
+    return row
+
+
 def menu_rows() -> list[list[tuple[str, str]]]:
     return [
-        [("📆 אירועי היום", "today"), ("🗓 השבוע הקרוב", "week")],
-        [("⏭ אירועים קרובים", "soon"), ("👷 משמרות", "shifts")],
+        [("🗓 אירועי השבוע", "week"), ("📆 אירועי היום", "today")],
+        [("👷 משמרות", "shifts"), ("⏭ אירועים קרובים", "soon")],
         [("👤 לפי אדם", "who"), ("🔍 חיפוש אירוע", "find")],
         [(BTN_ADD, "add"), ("⚙️ הגדרות", "set")],
     ]
@@ -242,11 +272,10 @@ def list_screen(
         lines.append("")
         lines.append(LIST_HINT)
     buttons = [[item] for item in _unique_buttons(chunk, people, with_date=with_date)]
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"pg:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"pg:{page + 1}"))
+    nav = _pager(
+        f"pg:{page - 1}" if page > 0 else None,
+        f"pg:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         buttons.append(nav)
     if kind != "shifts":
@@ -437,10 +466,10 @@ def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> t
     previous = anchor - timedelta(days=7)
     following = anchor + timedelta(days=7)
     this_sunday = today - timedelta(days=weekday_index(today))
-    nav = [("שבוע קודם", f"sw:{ymd(previous)}")]
+    nav = [(BTN_NEXT_WEEK, f"sw:{ymd(following)}")]
     if anchor != this_sunday:
         nav.append(("השבוע", f"sw:{ymd(this_sunday)}"))
-    nav.append(("שבוע הבא", f"sw:{ymd(following)}"))
+    nav.append((BTN_PREV_WEEK, f"sw:{ymd(previous)}"))
     buttons.append(nav)
     buttons.append([("➕ משמרת חדשה", "sh:new"), (BTN_MENU, "home")])
     return "\n".join(lines).strip(), kb(buttons)
@@ -586,7 +615,7 @@ def add_date_screen(today: date) -> tuple[str, dict]:
     text = "\n".join(
         [
             "איזה תאריך?",
-            f"כתבו, למשל {code(greg(today))}",
+            DATE_HINT,
             "אפשר גם «היום» או «מחר».",
         ]
     )
@@ -646,8 +675,11 @@ def add_end_screen(draft: dict, today: date) -> tuple[str, dict]:
     )
 
 
-def edit_menu_screen(draft: dict, *, error: str = "") -> tuple[str, dict]:
+def edit_menu_screen(draft: dict, *, error: str = "", saved: str = "") -> tuple[str, dict]:
     lines = []
+    if saved:
+        lines.append(esc(saved))
+        lines.append("")
     if error:
         lines.append(esc(error))
         lines.append("")
@@ -705,8 +737,7 @@ def edit_date_screen(draft: dict, today: date, *, shift: bool = False) -> tuple[
 
 
 def edit_date_text_screen() -> tuple[str, dict]:
-    text = f"כתבו תאריך, למשל {code('22.10.2026')}"
-    return text, kb([_back_cancel("back:edit")])
+    return DATE_HINT, kb([_back_cancel("back:edit")])
 
 
 def edit_time_screen(draft: dict) -> tuple[str, dict]:
@@ -728,7 +759,7 @@ def edit_time_screen(draft: dict) -> tuple[str, dict]:
 
 
 def edit_desc_screen() -> tuple[str, dict]:
-    text = "כתבו תיאור חדש.\n«בלי» מוחק את התיאור."
+    text = "כתבו תיאור חדש.\nבלי תיאור מוחק את התיאור."
     return text, kb([[("בלי תיאור", "ed:desc0")], _back_cancel("back:edit")])
 
 
@@ -860,11 +891,10 @@ def link_picker(people: list[dict], page: int) -> tuple[str, dict]:
     if not people:
         lines.append("אין עדיין אנשים. אפשר ליצור עכשיו.")
     rows = [[(person["name"], f"set:pick:{person['id']}")] for person in chunk]
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"set:lp:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"set:lp:{page + 1}"))
+    nav = _pager(
+        f"set:lp:{page - 1}" if page > 0 else None,
+        f"set:lp:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         rows.append(nav)
     rows.append([("אדם חדש", "set:new")])
@@ -917,11 +947,10 @@ def workers_screen(people: list[dict], page: int = 0) -> tuple[str, dict]:
     for person in chunk:
         mark = "כן" if person.get("works_shifts") else "לא"
         rows.append([(f"{person['name']} · {mark}", f"set:ws:{person['id']}")])
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"set:wp:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"set:wp:{page + 1}"))
+    nav = _pager(
+        f"set:wp:{page - 1}" if page > 0 else None,
+        f"set:wp:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         rows.append(nav)
     rows.append([("חזרה", "set"), (BTN_MENU, "home")])
@@ -937,11 +966,10 @@ def person_picker(people: list[dict], page: int) -> tuple[str, dict]:
     if pages > 1:
         lines.append(f"עמוד {page + 1}/{pages}")
     rows = [[(person["name"], f"who:{person['id']}")] for person in chunk]
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"whop:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"whop:{page + 1}"))
+    nav = _pager(
+        f"whop:{page - 1}" if page > 0 else None,
+        f"whop:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         rows.append(nav)
     if not people:
@@ -1019,7 +1047,7 @@ def shift_confirm_screen(draft: dict, today: date, person_name: str, *, error: s
 
 
 def shift_date_text_screen(today: date) -> tuple[str, dict]:
-    text = f"כתבו תאריך למשמרת, למשל {code(greg(today))}"
+    text = f"תאריך למשמרת.\n{DATE_HINT}"
     return text, kb(
         [
             [(_day_label("היום", today), "sh:d:0"), (_day_label("מחר", today + timedelta(days=1)), "sh:d:1")],

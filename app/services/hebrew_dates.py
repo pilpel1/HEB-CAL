@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from pyluach.dates import GregorianDate, HebrewDate
@@ -97,6 +98,146 @@ def hebrew_to_gregorian(year: int, month: int, day: int) -> dict:
         raise HebrewDateError("תאריך עברי לא תקין") from exc
     greg = hebrew.to_greg()
     return _describe(year, month, day, date(greg.year, greg.month, greg.day), adjusted)
+
+
+_MONTH_ALIASES = {
+    "ניסן": 1,
+    "אייר": 2,
+    "סיון": 3,
+    "סיוון": 3,
+    "תמוז": 4,
+    "אב": 5,
+    "מנחם אב": 5,
+    "אלול": 6,
+    "תשרי": 7,
+    "חשון": 8,
+    "חשוון": 8,
+    "מרחשון": 8,
+    "מרחשוון": 8,
+    "כסלו": 9,
+    "כסליו": 9,
+    "טבת": 10,
+    "שבט": 11,
+    "אדר": 12,
+    "אדר א": "adar1",
+    "אדר ב": "adar2",
+    "אדר ראשון": "adar1",
+    "אדר שני": "adar2",
+    "אדר הראשון": "adar1",
+    "אדר השני": "adar2",
+}
+
+_MARKS = str.maketrans("", "", "\"'`״׳\u05f3\u05f4")
+
+
+def _bare_hebrew(text: str) -> str:
+    cleaned = text.translate(_MARKS)
+    cleaned = re.sub(r"[\u0591-\u05c7]", "", cleaned)
+    cleaned = cleaned.replace("־", " ")
+    return " ".join(cleaned.split())
+
+
+def _gematria(token: str) -> int | None:
+    from hebrew_numbers import gematria_to_int
+
+    if not token or any(ch.isdigit() for ch in token):
+        return None
+    if not all("א" <= ch <= "ת" for ch in token):
+        return None
+    return gematria_to_int(token)
+
+
+def _day_number(token: str) -> int | None:
+    if token.isdigit():
+        return int(token)
+    value = _gematria(token)
+    if value is None or not 1 <= value <= 30:
+        return None
+    return value
+
+
+def _year_number(token: str) -> int | None:
+    if token.isdigit():
+        value = int(token)
+    else:
+        letters = token[1:] if token.startswith("ה") and len(token) > 1 else token
+        value = _gematria(letters)
+        if value is None:
+            return None
+    if 700 <= value <= 999:
+        return 5000 + value
+    if 5000 <= value <= 5999:
+        return value
+    return None
+
+
+def _resolve_month(key, year: int) -> int:
+    leap = Year(year).leap
+    if key == "adar1":
+        return 12
+    if key == "adar2":
+        return 13 if leap else 12
+    if key == 12:
+        return 13 if leap else 12
+    return int(key)
+
+
+def _gregorian_from_hebrew(year: int, month: int, day: int) -> date:
+    length = len(Month(year, month))
+    if day < 1 or day > length:
+        raise HebrewDateError("התאריך לא קיים בחודש הזה.")
+    hebrew = HebrewDate(year, month, day)
+    greg = hebrew.to_greg()
+    return date(greg.year, greg.month, greg.day)
+
+
+def parse_hebrew_date_text(text: str, today: date) -> date:
+    """יום וחודש עבריים. בלי שנה — המופע הקרוב מהיום והלאה.
+
+    גרשיים לא חובה. חשון/חשוון/מרחשוון, ואדר א׳/ב׳, מתקבלים.
+    אדר סתם בשנה מעוברת הוא אדר ב׳. אדר א׳ או ב׳ בשנה פשוטה הוא אדר.
+    """
+    bare = _bare_hebrew(text or "")
+    tokens = [token for token in bare.split() if token not in {"חודש", "בחודש"}]
+    if len(tokens) < 2:
+        raise HebrewDateError("התאריך לא ברור. למשל י״ג חשון.")
+    day = _day_number(tokens[0])
+    if day is None:
+        raise HebrewDateError("היום לא ברור. למשל י״ג חשון.")
+    rest = tokens[1:]
+    year = None
+    if len(rest) >= 2:
+        parsed_year = _year_number(rest[-1])
+        if parsed_year is not None:
+            year = parsed_year
+            rest = rest[:-1]
+    if rest and rest[0] == "ב":
+        rest = rest[1:]
+    elif rest and rest[0].startswith("ב") and len(rest[0]) > 1:
+        rest = [rest[0][1:], *rest[1:]]
+    month_name = " ".join(rest).strip()
+    month_name = month_name.replace("אדר 1", "אדר א").replace("אדר 2", "אדר ב")
+    key = _MONTH_ALIASES.get(month_name)
+    if key is None:
+        raise HebrewDateError("החודש לא מוכר. למשל חשון, חשוון או אדר.")
+    if year is not None:
+        try:
+            return _gregorian_from_hebrew(year, _resolve_month(key, year), day)
+        except HebrewDateError:
+            raise
+        except Exception as exc:
+            raise HebrewDateError("התאריך לא קיים. למשל י״ג חשון.") from exc
+    hebrew_today = GregorianDate(today.year, today.month, today.day).to_heb()
+    for candidate in range(hebrew_today.year, hebrew_today.year + 8):
+        try:
+            found = _gregorian_from_hebrew(candidate, _resolve_month(key, candidate), day)
+        except HebrewDateError:
+            continue
+        except Exception:
+            continue
+        if found >= today:
+            return found
+    raise HebrewDateError("התאריך לא קיים. למשל י״ג חשון.")
 
 
 def hebrew_year_options(start: int, end: int) -> list[dict]:

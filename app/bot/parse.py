@@ -5,6 +5,7 @@ import re
 from datetime import date
 
 from app.services.event_payload import EventPayloadError, clean_event_time, parse_real_date
+from app.services.hebrew_dates import HebrewDateError, parse_hebrew_date_text
 
 _DMY = re.compile(r"^(\d{1,2})[./](\d{1,2})[./](\d{4})$")
 _COMPACT_TIME = re.compile(r"^\d{3,4}$")
@@ -26,14 +27,24 @@ def parse_user_date(text: str, today: date) -> date:
         except EventPayloadError as exc:
             raise InputError("התאריך לא קיים. למשל 22.10.2026.") from exc
     match = _DMY.fullmatch(raw)
-    if not match:
-        raise InputError("התאריך לא ברור. למשל 22.10.2026.")
-    day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
-    try:
-        parsed = date(year, month, day)
-    except ValueError as exc:
-        raise InputError("התאריך לא קיים. למשל 22.10.2026.") from exc
-    return parsed
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        try:
+            return date(year, month, day)
+        except ValueError as exc:
+            raise InputError("התאריך לא קיים. למשל 22.10.2026.") from exc
+    if re.fullmatch(r"\d{6}", raw):
+        day, month, year = int(raw[:2]), int(raw[2:4]), 2000 + int(raw[4:])
+        try:
+            return date(year, month, day)
+        except ValueError as exc:
+            raise InputError("התאריך לא קיים. למשל 22.10.2026.") from exc
+    if re.search(r"[א-ת]", raw):
+        try:
+            return parse_hebrew_date_text(raw, today)
+        except HebrewDateError as exc:
+            raise InputError(str(exc)) from exc
+    raise InputError("התאריך לא ברור. למשל 22.10.2026 או י״ג חשון.")
 
 
 def parse_user_time(text: str) -> str | None:
