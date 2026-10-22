@@ -19,6 +19,7 @@ from app.database import (
 )
 from app.reminders.repository import people_ids, replace_event_reminders
 from app.reminders.schedule import OffsetError, parse_reminders_payload
+from app.services.shifts import ShiftError, resolve_manual_shift
 from app.services.recurrence import (
     RecurrenceError,
     clean_recurrence,
@@ -121,6 +122,32 @@ def _identity_changed(old, gregorian_date, rule):
 
 def _serialize_rows(rows):
     return [dict(row) for row in rows]
+
+
+def _manual_shift(data):
+    """('keep' | tuple, data, error response).
+
+    משמרת ידנית לא נבדקת מול הימים המותרים. בלי המפתחות — לא נוגעים בדגל.
+    """
+    try:
+        resolved = resolve_manual_shift(data)
+    except ShiftError as exc:
+        return "keep", data, (jsonify({"error": str(exc), "success": False}), 400)
+    if resolved is None:
+        return "keep", data, None
+    if not resolved["is_shift"]:
+        return (0, None, None), data, None
+    adjusted = dict(data)
+    adjusted["title"] = resolved["title"]
+    adjusted["color"] = resolved["color"]
+    adjusted["time"] = None
+    adjusted["end_date"] = None
+    adjusted["recurrence_freq"] = None
+    return (
+        (1, resolved["shift_person_id"], resolved["shift_label"]),
+        adjusted,
+        None,
+    )
 
 
 def _parsed_reminders(data):
@@ -245,10 +272,14 @@ def add_event():
     if reminder_error:
         return reminder_error
 
+    shift, data, shift_error = _manual_shift(data)
+    if shift_error:
+        return shift_error
+
     rule, recurrence_error = _recurrence_from_payload(data, data["gregorian_date"])
     if recurrence_error:
         return recurrence_error
-    if rule == "keep":
+    if rule == "keep" or (shift != "keep" and shift[0]):
         rule = None
 
     event_id = create_event(
@@ -260,6 +291,7 @@ def add_event():
         end_date=data.get('end_date'),
         color=data.get('color'),
         recurrence=rule,
+        shift=None if shift == "keep" else shift,
     )
 
     if event_id:
@@ -285,6 +317,8 @@ def update_single_event(event_id):
         return jsonify({"error": "Event not found", "success": False}), 404
 
     scope = (data.get("scope") or "all").strip()
+    if scope == "occurrence" and data.get("is_shift"):
+        return jsonify({"error": "משמרת נשמרת על האירוע כולו", "success": False}), 400
     if scope == "occurrence":
         if not is_recurring(existing):
             return jsonify({"error": "לאירוע אין חזרה", "success": False}), 400
@@ -324,11 +358,18 @@ def update_single_event(event_id):
     if scope != "all":
         return jsonify({"error": "scope חייב להיות all או occurrence", "success": False}), 400
 
+    shift, data, shift_error = _manual_shift(data)
+    if shift_error:
+        return shift_error
+    marking_shift = shift != "keep" and shift[0]
+
     rule, recurrence_error = _recurrence_from_payload(data, data["gregorian_date"])
     if recurrence_error:
         return recurrence_error
+    if marking_shift:
+        rule = None
 
-    clear_exceptions = _identity_changed(existing, data["gregorian_date"], rule)
+    clear_exceptions = _identity_changed(existing, data["gregorian_date"], rule) or marking_shift
     success = update_event(
         event_id,
         data['title'],
@@ -340,6 +381,7 @@ def update_single_event(event_id):
         data.get('color'),
         recurrence=rule,
         clear_exceptions=clear_exceptions,
+        shift=shift,
     )
 
     if success:

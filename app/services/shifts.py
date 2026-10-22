@@ -6,9 +6,10 @@
 אנשים הם ``reminder_people``. צבע ומשמרות מותרות (בוקר/ערב/לילה, בלי שעות,
 אפשר לפי יום בשבוע) יושבים על אותה שורה.
 
-שמירה יוצרת אירועי יום שלם רגילים עם ``is_shift``. הרשת מוצאת אותם לפי
-האדם, התאריך והתווית — לא לפי הכותרת — כדי שעריכה של הכותרת לא תשבור
-טעינה מחדש. כיבוי תא מוחק רק אירועים שסומנו כמשמרת.
+שמירה מהרשת יוצרת אירועי יום שלם עם ``is_shift``. הכותרת היא רק סוג
+המשמרת (``בוקר``), והצבע הוא צבע האדם. הרשת מוצאת אותם לפי האדם, התאריך
+והתווית. תא חדש מהרשת שלא מותר לאדם נדחה. חריג ידני נשמר מטופס האירוע
+הרגיל, גם ביום שלא ברשימה.
 """
 from __future__ import annotations
 
@@ -18,9 +19,11 @@ from datetime import date, timedelta
 from app.services.recurrence import hebrew_display
 
 SHIFT_LABELS = ("בוקר", "ערב", "לילה")
+SHIFT_LABEL_MAX = 80
 PERSON_COLORS = ("cyan", "yellow", "orange", "green")
 
 # יום ראשון = 0 ... שבת = 6. תואם ל-JS Date.getDay ולכותרת הלוח.
+WEEKDAY_NAMES = ("ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת")
 WEEKDAY_INDEX = {
     6: 0,  # Sunday (datetime.weekday)
     0: 1,
@@ -114,8 +117,137 @@ def clean_person_color(value) -> str | None:
     return text
 
 
-def shift_title(name: str, label: str) -> str:
-    return f"{name} — {label}"
+def shift_title(_name: str, label: str) -> str:
+    """הכותרת בלוח היא רק סוג המשמרת. האדם מזוהה לפי הצבע."""
+    return label
+
+
+def hebrew_day_parts(day: date) -> tuple[str, str]:
+    """יום וחודש עבריים, בלי שנה. 27 בתשרי → (כ״ז, תשרי)."""
+    from hebrew_numbers import int_to_gematria
+    from pyluach.dates import GregorianDate
+
+    from app.services.recurrence import HEBREW_MONTHS
+
+    heb = GregorianDate(day.year, day.month, day.day).to_heb()
+    day_label = int_to_gematria(int(heb.day), gershayim=True)
+    month = HEBREW_MONTHS.get(heb.month, "")
+    return day_label, month
+
+
+def hebrew_day_month(day: date) -> str:
+    day_label, month = hebrew_day_parts(day)
+    return f"{day_label} {month}".strip()
+
+
+def week_parasha(saturday: date) -> str | None:
+    """פרשת השבת של אותו שבוע (השבת היא היום האחרון, ראשון+6)."""
+    from pyluach.dates import GregorianDate
+
+    from app.services.jewish_calendar import get_parasha_hebrew
+
+    name = get_parasha_hebrew(GregorianDate(saturday.year, saturday.month, saturday.day))
+    if not name:
+        return None
+    return str(name)
+
+
+def week_heading(start: date) -> dict:
+    end = start + timedelta(days=6)
+    hebrew_range = f"{hebrew_day_month(start)} – {hebrew_day_month(end)}"
+    parasha = week_parasha(end)
+    title = f"{hebrew_range} · פרשת {parasha}" if parasha else hebrew_range
+    return {
+        "hebrew_range": hebrew_range,
+        "parasha": parasha,
+        "week_title": title,
+    }
+
+
+def _allowed_day_set(allowed: dict, label: str) -> set[int]:
+    days = allowed.get(label, []) if isinstance(allowed, dict) else []
+    result: set[int] = set()
+    for day in days or []:
+        try:
+            number = int(day)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= number <= 6:
+            result.add(number)
+    return result
+
+
+def _rules_for(person: dict) -> dict:
+    allowed = person.get("shift_allowed")
+    if not isinstance(allowed, dict):
+        allowed = parse_shift_allowed(allowed)
+    return allowed
+
+
+def resolve_manual_shift(data: dict):
+    """משמרת מטופס אירוע בודד.
+
+    ``None`` אם הבקשה לא נוגעת במשמרת (עריכה רגילה משאירה את הדגל).
+    אין כאן בדיקה של ``shift_allowed``: חריג ידני מותר בכל יום ובכל משמרת.
+    הרשת המרוכזת היא המקום היחיד שדוחה תא אסור.
+    """
+    keys = ("is_shift", "shift_person_id", "shift_label")
+    if not any(key in data for key in keys):
+        return None
+    if not _truthy_flag(data.get("is_shift")):
+        return {"is_shift": 0, "shift_person_id": None, "shift_label": None}
+
+    label = clean_shift_label(data.get("shift_label"))
+    try:
+        person_id = int(data.get("shift_person_id"))
+    except (TypeError, ValueError) as exc:
+        raise ShiftError("בחרו למי המשמרת") from exc
+
+    from app.reminders.repository import get_person
+
+    person = get_person(person_id)
+    if person is None:
+        raise ShiftError("האדם לא נמצא")
+    return {
+        "is_shift": 1,
+        "shift_person_id": person_id,
+        "shift_label": label,
+        "title": shift_title(person.get("name") or "", label),
+        "color": person.get("color"),
+        "time": None,
+        "end_date": None,
+    }
+
+
+def validate_shift_week(person: dict, week_start: date, cells) -> set[tuple[str, str]]:
+    """דוחה תא חדש מהרשת שלא מותר לאדם. נקרא מה-API לפני כל כתיבה.
+
+    רק התוויות בוקר/ערב/לילה. טקסט חופשי (יום מחלה) לא עובר כאן.
+
+    משמרת שכבר שמורה באותו תא לא נבדקת כאן: אי אפשר להשאיר אותה מסומנת
+    בלי שהשמירה של שאר השבוע תיכשל. יצירה של תא אסור כן נכשלת.
+    """
+    from app.database import get_db
+
+    end = week_start + timedelta(days=6)
+    wanted = _normalize_cells(cells, week_start, end)
+    allowed = _rules_for(person)
+    existing = {
+        (row["gregorian_date"], row["shift_label"])
+        for row in _shifts_in_week(get_db(), person["id"], week_start, end)
+        if row["shift_label"] in SHIFT_LABELS
+    }
+    name = (person.get("name") or "").strip() or "האדם"
+    for date_str, label in sorted(wanted):
+        if (date_str, label) in existing:
+            continue
+        day = date.fromisoformat(date_str)
+        index = weekday_index(day)
+        if index not in _allowed_day_set(allowed, label):
+            raise ShiftError(
+                f"אי אפשר לשמור משמרת {label} ביום {WEEKDAY_NAMES[index]} — היא לא מותרת ל{name}"
+            )
+    return wanted
 
 
 def parse_week_start(value) -> date:
@@ -129,13 +261,20 @@ def parse_week_start(value) -> date:
 
 
 def default_week_start(today: date | None = None) -> date:
-    """השבוע הנוכחי (ראשון–חמישי). בשישי ובשבת — השבוע הבא."""
+    """השבוע שאחרי השבוע הנוכחי. ראשון עד שבת."""
     today = today or date.today()
-    offset = weekday_index(today)
-    sunday = today - timedelta(days=offset)
-    if offset >= 5:
-        return sunday + timedelta(days=7)
-    return sunday
+    sunday = today - timedelta(days=weekday_index(today))
+    return sunday + timedelta(days=7)
+
+
+def clean_shift_label(value) -> str:
+    """תווית חופשית למשמרת ידנית. הרשת עצמה מוגבלת לבוקר/ערב/לילה."""
+    label = str(value or "").strip()
+    if not label:
+        raise ShiftError("כתבו מה המשמרת")
+    if len(label) > SHIFT_LABEL_MAX:
+        raise ShiftError("התיאור ארוך מדי")
+    return label
 
 
 def _truthy_flag(value) -> bool:
@@ -160,9 +299,7 @@ def shift_columns_from_payload(event: dict, *, missing: str):
     raw_label = event.get("shift_label")
     label = None
     if raw_label is not None and str(raw_label).strip() != "":
-        label = str(raw_label).strip()
-        if label not in SHIFT_LABELS:
-            raise ShiftError("תווית משמרת לא מוכרת")
+        label = clean_shift_label(raw_label)
 
     raw_person = event.get("shift_person_id")
     person_id = None
@@ -180,7 +317,11 @@ def shift_columns_from_payload(event: dict, *, missing: str):
 
 
 def ensure_shift_schema(db) -> None:
-    """מוסיף עמודות וטבלת מתג. בטוח להרצה חוזרת ולעלייה מקבילית; לא משנה שורות."""
+    """מוסיף עמודות וטבלת מתג. בטוח להרצה חוזרת ולעלייה מקבילית.
+
+    בתוך אותו מנעול, משמרות קיימות מיושרות לכותרת של סוג המשמרת ולצבע האדם.
+    אירוע רגיל לא משתנה.
+    """
     from app.database import (
         _add_column_if_missing,
         _schema_execute,
@@ -221,6 +362,7 @@ def ensure_shift_schema(db) -> None:
         db.execute(
             "INSERT OR IGNORE INTO household_settings (id, shifts_enabled) VALUES (1, 0)"
         )
+        normalize_shift_events(db)
 
 
 def shifts_enabled() -> bool:
@@ -289,9 +431,7 @@ def week_view(person: dict, start: date) -> dict:
     from app.database import get_db
 
     end = start + timedelta(days=6)
-    allowed = person.get("shift_allowed")
-    if not isinstance(allowed, dict):
-        allowed = parse_shift_allowed(allowed)
+    allowed = _rules_for(person)
     checked: dict[str, list[str]] = {}
     for row in _shifts_in_week(get_db(), person["id"], start, end):
         label = row["shift_label"]
@@ -302,12 +442,17 @@ def week_view(person: dict, start: date) -> dict:
     for offset in range(7):
         day = start + timedelta(days=offset)
         key = day.isoformat()
+        hebrew_day, hebrew_month = hebrew_day_parts(day)
         days.append({
             "date": key,
             "weekday": offset,
-            "allowed": [label for label in SHIFT_LABELS if offset in allowed.get(label, [])],
+            "hebrew": f"{hebrew_day} {hebrew_month}".strip(),
+            "hebrew_day": hebrew_day,
+            "hebrew_month": hebrew_month,
+            "allowed": [label for label in SHIFT_LABELS if offset in _allowed_day_set(allowed, label)],
             "checked": [label for label in SHIFT_LABELS if label in checked.get(key, [])],
         })
+    heading = week_heading(start)
     return {
         "enabled": shifts_enabled(),
         "person": {
@@ -319,6 +464,7 @@ def week_view(person: dict, start: date) -> dict:
         "week_end": end.isoformat(),
         "labels": list(SHIFT_LABELS),
         "days": days,
+        **heading,
     }
 
 
@@ -338,19 +484,32 @@ def _delete_shift_row(db, event_id: int) -> None:
     )
 
 
-def save_shift_week(person: dict, week_start: date, cells) -> dict:
-    """מוסיף תאים חדשים ומוחק משמרות שסומנו כבוי. לא נוגע באירוע רגיל.
+def _rewrite_shift_row(db, event_id: int, person: dict, label: str) -> None:
+    """מיישר כותרת וצבע של משמרת קיימת לאדם, בלי לגעת בשאר השדות."""
+    title = shift_title(person.get("name") or "", label)
+    if person.get("color"):
+        db.execute(
+            "UPDATE events SET title = ?, color = ? WHERE id = ? AND is_shift = 1",
+            (title, person["color"], event_id),
+        )
+    else:
+        db.execute(
+            "UPDATE events SET title = ? WHERE id = ? AND is_shift = 1",
+            (title, event_id),
+        )
 
-    תא חדש חייב להיות מותר לאדם. משמרת שכבר קיימת נשארת גם אם הכלל השתנה
-    מאז (אחרת אי אפשר היה לשמור שבוע בלי למחוק משהו שהמשתמש לא יכול לכבות).
+
+def save_shift_week(person: dict, week_start: date, cells) -> dict:
+    """מוסיף תאי רשת ומוחק רק תאים של הרשת שסומנו כבוי.
+
+    לא נוגע באירוע רגיל, ולא במשמרת ידנית עם טקסט חופשי (יום מחלה, יום חופש).
+    תא חדש של הרשת חייב להיות מותר לאדם. משמרת רשת שכבר קיימת נשארת גם אם
+    הכלל השתנה מאז.
     """
     from app.database import get_db
 
+    wanted = validate_shift_week(person, week_start, cells)
     end = week_start + timedelta(days=6)
-    wanted = _normalize_cells(cells, week_start, end)
-    allowed = person.get("shift_allowed")
-    if not isinstance(allowed, dict):
-        allowed = parse_shift_allowed(allowed)
 
     db = get_db()
     existing_rows = _shifts_in_week(db, person["id"], week_start, end)
@@ -360,13 +519,6 @@ def save_shift_week(person: dict, week_start: date, cells) -> dict:
             continue
         by_key.setdefault((row["gregorian_date"], row["shift_label"]), []).append(row)
 
-    for date_str, label in wanted:
-        if (date_str, label) in by_key:
-            continue
-        day = date.fromisoformat(date_str)
-        if weekday_index(day) not in allowed.get(label, []):
-            raise ShiftError(f"המשמרת {label} לא מותרת ביום הזה")
-
     kept: list[int] = []
     deleted: list[int] = []
     created: list[int] = []
@@ -374,6 +526,7 @@ def save_shift_week(person: dict, week_start: date, cells) -> dict:
         for key, rows in by_key.items():
             if key in wanted:
                 kept.append(rows[0]["id"])
+                _rewrite_shift_row(db, rows[0]["id"], person, key[1])
                 for extra in rows[1:]:
                     _delete_shift_row(db, extra["id"])
                     deleted.append(extra["id"])
@@ -419,3 +572,78 @@ def save_shift_week(person: dict, week_start: date, cells) -> dict:
         "week_start": week_start.isoformat(),
         "person_id": person["id"],
     }
+
+
+def normalize_shift_events(db) -> None:
+    """כותרת משמרת קיימת → שם המשמרת, וצבע → צבע האדם.
+
+    נקרא מתוך ensure_shift_schema, בתוך המנעול. אירוע רגיל לא נגע.
+    בלי עמודת color על האירוע או על האדם מדלגים על הצבע ומשאירים את השאר.
+    """
+    tables = {
+        row[0]
+        for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "events" not in tables:
+        return
+    columns = {row[1] for row in db.execute("PRAGMA table_info(events)")}
+    if "is_shift" not in columns or "shift_label" not in columns or "title" not in columns:
+        return
+    db.execute(
+        """
+        UPDATE events
+        SET title = shift_label
+        WHERE is_shift = 1
+          AND shift_label IS NOT NULL
+          AND shift_label != ''
+          AND title IS NOT shift_label
+        """
+    )
+    if (
+        "color" in columns
+        and "shift_person_id" in columns
+        and "reminder_people" in tables
+    ):
+        people_columns = {row[1] for row in db.execute("PRAGMA table_info(reminder_people)")}
+        if "color" not in people_columns:
+            return
+        db.execute(
+            """
+            UPDATE events
+            SET color = (
+                SELECT reminder_people.color
+                FROM reminder_people
+                WHERE reminder_people.id = events.shift_person_id
+            )
+            WHERE is_shift = 1
+              AND shift_person_id IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM reminder_people
+                  WHERE reminder_people.id = events.shift_person_id
+                    AND reminder_people.color IS NOT NULL
+                    AND reminder_people.color != ''
+              )
+            """
+        )
+
+
+def annotate_shift_events(events: list[dict]) -> list[dict]:
+    """בתצוגה, צ'יפ משמרת בצבע האדם ובכותרת של התווית.
+
+    גם טקסט חופשי (``יום מחלה``), וגם שורה ישנה ``אביחי — בוקר``.
+    """
+    if not events or not any(event.get("is_shift") for event in events):
+        return events
+    from app.reminders.repository import list_people
+
+    people = {person["id"]: person for person in list_people()}
+    for event in events:
+        if not event.get("is_shift"):
+            continue
+        label = str(event.get("shift_label") or "").strip()
+        if label:
+            event["title"] = label
+        person = people.get(event.get("shift_person_id"))
+        if person and person.get("color"):
+            event["color"] = person["color"]
+    return events

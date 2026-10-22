@@ -76,6 +76,22 @@
                             </label>
                         </div>
                     </div>
+                    <div class="quick-shift" id="quickShiftBlock" hidden>
+                        <label class="quick-reminder-check" for="quick_shift_enabled">
+                            <input type="checkbox" id="quick_shift_enabled">
+                            <span>משמרת</span>
+                        </label>
+                        <div id="quick_shift_panel" class="quick-shift-panel" hidden>
+                            <select id="quick_shift_person" class="form-select form-select-sm" aria-label="אדם"></select>
+                            <input type="text" class="form-control form-control-sm" id="quick_shift_label" maxlength="80" placeholder="יום מחלה, יום חופש…" aria-label="תיאור המשמרת" autocomplete="off">
+                            <div id="quick_shift_picks" class="quick-shift-picks" role="group" aria-label="הצעות">
+                                <button type="button" class="quick-shift-pick" data-shift-pick="בוקר">בוקר</button>
+                                <button type="button" class="quick-shift-pick" data-shift-pick="ערב">ערב</button>
+                                <button type="button" class="quick-shift-pick" data-shift-pick="לילה">לילה</button>
+                            </div>
+                            <p class="quick-shift-note">הכותרת היא מה שכתוב כאן, גם אם זה לא בוקר/ערב/לילה. הצבע לפי האדם.</p>
+                        </div>
+                    </div>
                     <div class="mb-0">
                         <label for="quick_description" class="form-label">תיאור</label>
                         <textarea class="form-control" id="quick_description" rows="2"></textarea>
