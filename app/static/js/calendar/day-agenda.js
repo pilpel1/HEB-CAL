@@ -1,7 +1,16 @@
-// פאנל יום מתחת ללוח בטלפון: הטקסט המלא שלא נכנס לתא
+// פאנל יום: בטלפון מתחת ללוח, מ-992px עמודה בצד שמאל (סוף ה-RTL).
+// בין 481 ל-991 אין פאנל.
 
 function isCompactCalendar() {
     return window.matchMedia('(max-width: 480px)').matches;
+}
+
+function isDesktopAgenda() {
+    return window.matchMedia('(min-width: 992px)').matches;
+}
+
+function showsDayAgenda() {
+    return isCompactCalendar() || isDesktopAgenda();
 }
 
 /** זום דפדפן (פינץ'), לא זום של האפליקציה. מעל 1 — גרירה אחת מפנה את העמוד. */
@@ -408,11 +417,12 @@ function referenceWeekRowsArea() {
 function syncWeekRowHeight() {
     const root = document.documentElement;
     const stream = infiniteCalendar.stream;
+    // הצפיפות חלה גם בדסקטופ (CSS). גובה השורה הקבוע נשאר רק בטלפון.
+    root.dataset.calDensity = densityDivisor() === 9 ? 'compact' : 'comfortable';
     if (!isCompactCalendar() || !stream) {
         if (root.style.getPropertyValue('--week-row-height')) {
             root.style.removeProperty('--week-row-height');
         }
-        root.removeAttribute('data-cal-density');
         if (typeof fitRenderedWeekChips === 'function') {
             fitRenderedWeekChips();
         }
@@ -423,7 +433,6 @@ function syncWeekRowHeight() {
         return;
     }
     const divisor = densityDivisor();
-    root.dataset.calDensity = divisor === 9 ? 'compact' : 'comfortable';
     const next = `${Math.max(28, Math.floor(grid / divisor))}px`;
     const width = stream.clientWidth;
     if (root.style.getPropertyValue('--week-row-height') === next) {
@@ -556,7 +565,7 @@ function syncAgendaSelection() {
     document.querySelectorAll('#calendar-weeks td.is-agenda-day').forEach((td) => {
         td.classList.remove('is-agenda-day');
     });
-    if (!isCompactCalendar() || !infiniteCalendar.agendaDate) {
+    if (!showsDayAgenda() || !infiniteCalendar.agendaDate) {
         return;
     }
     const cell = document.querySelector(
@@ -609,8 +618,19 @@ function renderDayAgenda(dateStr) {
     }
 
     const day = typeof dayInfoFor === 'function' ? dayInfoFor(dateStr) : null;
-    const heb = day ? `${get_hebrew_day(day.hebrew_day)}׳ ${day.hebrew_month}` : '';
-    const greg = formatShortGregorian(dateStr);
+    const hebCore = day ? `${get_hebrew_day(day.hebrew_day)}׳ ${day.hebrew_month}` : '';
+    let heb = hebCore;
+    let greg = formatShortGregorian(dateStr);
+    if (isDesktopAgenda()) {
+        if (day && day.hebrew_year) {
+            heb = hebCore ? `${hebCore} ${day.hebrew_year}` : String(day.hebrew_year);
+        }
+        const parts = String(dateStr).split('-');
+        if (parts.length === 3) {
+            const monthName = GREGORIAN_MONTH_NAMES_HE[Number(parts[1]) - 1] || '';
+            greg = `${Number(parts[2])} ${monthName} ${parts[0]}`.trim();
+        }
+    }
     title.textContent = [heb, greg].filter(Boolean).join(' · ');
 
     const items = [];
@@ -716,8 +736,7 @@ function initDayAgenda() {
         );
     });
 
-    const compactQuery = window.matchMedia('(max-width: 480px)');
-    compactQuery.addEventListener('change', () => {
+    const onChromeChange = () => {
         applyHeaderCollapsed(readHeaderCollapsed());
         if (!infiniteCalendar.ready || !infiniteCalendar.body) {
             return;
@@ -733,5 +752,7 @@ function initDayAgenda() {
         if (infiniteCalendar.agendaDate) {
             renderDayAgenda(infiniteCalendar.agendaDate);
         }
-    });
+    };
+    window.matchMedia('(max-width: 480px)').addEventListener('change', onChromeChange);
+    window.matchMedia('(min-width: 992px)').addEventListener('change', onChromeChange);
 }

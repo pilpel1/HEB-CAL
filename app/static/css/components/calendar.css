@@ -1100,6 +1100,10 @@
     padding: 0.15rem 0.7rem;
 }
 
+.day-agenda #day-agenda-add .day-agenda-add-icon {
+    display: none;
+}
+
 /* בדסקטופ אותם אייקונים בשורה ליד החודש. דגל מהטלפון לא סוגר אותם. */
 @media (min-width: 481px) {
     .calendar-nav > .btn,
@@ -1246,6 +1250,132 @@
 .infinite-calendar.is-booting .day-agenda,
 .infinite-calendar.is-booting .agenda-resize {
     visibility: hidden;
+}
+
+/*
+ * מסך רחב: פאנל היום בצד שמאל (עמודה 2 = הסוף ב-RTL), כרבע מהכרטיס.
+ * מתחת ל-992 נשאר הפאנל התחתון של הטלפון, או בלי פאנל בין 481 ל-991.
+ */
+@media (min-width: 992px) {
+    .calendar-container.infinite-calendar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) clamp(280px, 25%, 380px);
+        grid-template-rows: auto minmax(0, 1fr);
+        align-items: stretch;
+    }
+
+    .infinite-calendar .calendar-toolbar {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .calendar-stream-frame {
+        grid-column: 1;
+        grid-row: 2;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    .day-agenda {
+        display: flex;
+        flex-direction: column;
+        grid-column: 2;
+        grid-row: 2;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        margin: 0;
+        background: #f8fafc;
+        border-inline-start: 1px solid #e5e7eb;
+        padding-inline-start: 0.75rem;
+    }
+
+    .day-agenda-head {
+        padding: 0.1rem 0.15rem 0.35rem 0;
+    }
+
+    .day-agenda-title {
+        font-size: 0.95rem;
+        line-height: 1.35;
+    }
+
+    .day-agenda #day-agenda-add {
+        width: 36px;
+        height: 36px;
+        min-height: 36px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .day-agenda #day-agenda-add .day-agenda-add-label {
+        display: none;
+    }
+
+    .day-agenda #day-agenda-add .day-agenda-add-icon {
+        display: inline-block;
+    }
+
+    .day-agenda-list {
+        padding-inline-end: 0.15rem;
+    }
+}
+
+/* צפוף בדסקטופ/טאבלט: תא נמוך יותר, צ'יפ קטן, ולכן יותר אירועים נכנסים באותו גובה.
+   בטלפון (עד 480) הצפיפות נשארת דרך --week-row-height, בלי הדריסות האלה. */
+@media (min-width: 481px) {
+    html[data-cal-density="compact"] .day-cell {
+        min-height: 84px;
+    }
+
+    html[data-cal-density="compact"] .dates-container {
+        padding: 0 2px;
+    }
+
+    html[data-cal-density="compact"] .gregorian-date,
+    html[data-cal-density="compact"] .hebrew-date {
+        padding: 1px 2px;
+        font-size: 0.75em;
+    }
+
+    html[data-cal-density="compact"] .day-content {
+        padding: 1px 4px;
+        gap: 1px;
+    }
+
+    html[data-cal-density="compact"] .jewish-events-container {
+        padding: 0 3px;
+        gap: 1px;
+    }
+
+    html[data-cal-density="compact"] .multi-day-rail {
+        padding: 0;
+        gap: 1px;
+    }
+
+    html[data-cal-density="compact"] .holiday,
+    html[data-cal-density="compact"] .parasha,
+    html[data-cal-density="compact"] .fast {
+        font-size: 0.68rem;
+        padding: 0 2px;
+        margin: 0;
+        line-height: 1.2;
+    }
+
+    html[data-cal-density="compact"] .event-item,
+    html[data-cal-density="compact"] .event-lane-spacer {
+        font-size: 0.72rem;
+        padding: 0 3px;
+        margin: 0;
+        min-height: 1.15em;
+        line-height: 1.15;
+    }
+
+    html[data-cal-density="compact"] .infinite-calendar .weekday-header > div {
+        padding: 3px 2px;
+        font-size: 0.8rem;
+    }
 }
 
 /* בטלפון :hover נתקע אחרי מגע וממלא כפתור outline בכחול */

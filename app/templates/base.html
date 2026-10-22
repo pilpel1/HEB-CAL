@@ -13,6 +13,12 @@
                 theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             }
             document.documentElement.setAttribute('data-bs-theme', theme);
+            var density = null;
+            try { density = localStorage.getItem('heb-cal-density'); } catch (e) {}
+            document.documentElement.setAttribute(
+                'data-cal-density',
+                density === 'compact' ? 'compact' : 'comfortable'
+            );
         })();
     </script>
     <!-- Bootstrap RTL -->
