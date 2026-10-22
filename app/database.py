@@ -201,6 +201,9 @@ def init_db():
     db = get_db()
     apply_pending_migrations(db)
     _migrate_hebrew_years_to_letters(db)
+    from app.bot.session import ensure_bot_schema
+
+    ensure_bot_schema(db)
 
 
 _RECURRENCE_COLUMNS = (

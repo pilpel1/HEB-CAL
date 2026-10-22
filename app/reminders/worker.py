@@ -1,4 +1,4 @@
-"""סבב שליחה: תזכורות שהגיע זמנן + מענה ל-/start.
+"""סבב שליחה: תזכורות שהגיע זמנן + תפריט הבוט (כפתורים ופקודות).
 
 הרצה מהשורש של הריפו:
 
@@ -100,7 +100,7 @@ def run_loop(interval: int | None = None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="שליחת תזכורות טלגרם ומענה ל-/start")
+    parser = argparse.ArgumentParser(description="שליחת תזכורות טלגרם ותפריט הבוט")
     parser.add_argument(
         "--once",
         action="store_true",
