@@ -6,7 +6,13 @@ from datetime import date, timedelta
 from app.bot.query import PAGE_SIZE, PEOPLE_PAGE, clamp_page
 from app.bot.textutil import clip, code, esc
 from app.services.recurrence import hebrew_display
-from app.services.shifts import WEEKDAY_NAMES, hebrew_day_month, week_heading, weekday_index
+from app.services.shifts import (
+    WEEKDAY_NAMES,
+    hebrew_day_month,
+    week_heading,
+    week_parasha,
+    weekday_index,
+)
 
 SHIFT_LABELS = {"m": "בוקר", "e": "ערב", "n": "לילה"}
 PRESET_TIMES = ("09:00", "12:00", "18:00", "21:00")
@@ -14,6 +20,47 @@ MENU_TITLE = "📅 לוח השנה המשותף — מה להציג?"
 BTN_MENU = "🏠 תפריט ראשי"
 BTN_ADD = "➕ הוספת אירוע"
 LIST_HINT = "לחצו על אירוע לפרטים, עריכה או מחיקה."
+DAY_LETTERS = ("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳")
+SHIFTS_PER_ROW = 3
+# בטלגרם הכפתור הראשון בשורה יושב משמאל. חץ ← על «הבא» משמאל, → על «הקודם» מימין.
+BTN_NEXT = "הבא ←"
+BTN_PREV = "→ הקודם"
+BTN_NEXT_WEEK = "שבוע הבא ←"
+BTN_PREV_WEEK = "→ שבוע קודם"
+DATE_HINT = (
+    'כתבו תאריך בפורמט DD.MM.YYYY (או 6 ספרות, למשל 251026), '
+    'או תאריך עברי כמו י"ג חשון.'
+)
+_FIELD_SAVED = {
+    "title": "הכותרת עודכנה ✅ — לשנות עוד משהו?",
+    "date": "התאריך עודכן ✅ — לשנות עוד משהו?",
+    "time": "השעה עודכנה ✅ — לשנות עוד משהו?",
+    "desc": "התיאור עודכן ✅ — לשנות עוד משהו?",
+    "end": "תאריך הסיום עודכן ✅ — לשנות עוד משהו?",
+}
+
+
+_BUTTON_STYLES = frozenset({"danger", "success", "primary"})
+# רק כפתור השמירה עצמו. כניסה להוספה נשארת רגילה כדי שלא תצבע את התפריט.
+_SUCCESS_ACTIONS = frozenset({"add:ok", "ed:ok", "sh:ok"})
+_SHIFT_ORDER = {"בוקר": 0, "ערב": 1, "לילה": 2}
+
+
+def button_style(callback_data: str) -> str | None:
+    """סגנון Bot API 9.4, רק איפה שהוא משנה החלטה.
+
+    danger על מחיקה (כולל האישור). success רק על «שמירה».
+    primary על פתיחת עריכה בכרטיס. «לשמור בכל זאת» נשאר בלי צבע:
+    ירוק היה מעודד דריסה. צבע של אדם לא נכנס לכאן.
+    """
+    data = str(callback_data or "")
+    if data.startswith("rmy:") or data.startswith("rm:"):
+        return "danger"
+    if data in _SUCCESS_ACTIONS:
+        return "success"
+    if data.startswith("ed:") and data[3:].isdigit():
+        return "primary"
+    return None
 
 
 def kb(rows: list[list[tuple[str, str]]]) -> dict:
@@ -24,7 +71,13 @@ def kb(rows: list[list[tuple[str, str]]]) -> dict:
             raw = str(data)
             if not raw or len(raw.encode("utf-8")) > 64:
                 raise ValueError(f"callback_data too long: {raw!r}")
-            buttons.append({"text": clip(text, 40), "callback_data": raw})
+            button = {"text": clip(text, 40), "callback_data": raw}
+            style = button_style(raw)
+            if style:
+                if style not in _BUTTON_STYLES:
+                    raise ValueError(f"unknown button style: {style!r}")
+                button["style"] = style
+            buttons.append(button)
         if buttons:
             inline.append(buttons)
     if not inline:
@@ -45,10 +98,24 @@ def _pairs(items: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
     return rows
 
 
+def field_saved(kind: str) -> str:
+    return _FIELD_SAVED[kind]
+
+
+def _pager(previous: str | None, following: str | None) -> list[tuple[str, str]]:
+    """הבא משמאל, הקודם מימין. כפתור ראשון במערך = שמאל בטלגרם."""
+    row = []
+    if following:
+        row.append((BTN_NEXT, following))
+    if previous:
+        row.append((BTN_PREV, previous))
+    return row
+
+
 def menu_rows() -> list[list[tuple[str, str]]]:
     return [
-        [("📆 אירועי היום", "today"), ("🗓 השבוע הקרוב", "week")],
-        [("⏭ אירועים קרובים", "soon"), ("👷 משמרות", "shifts")],
+        [("🗓 אירועי השבוע", "week"), ("📆 אירועי היום", "today")],
+        [("👷 משמרות", "shifts"), ("⏭ אירועים קרובים", "soon")],
         [("👤 לפי אדם", "who"), ("🔍 חיפוש אירוע", "find")],
         [(BTN_ADD, "add"), ("⚙️ הגדרות", "set")],
     ]
@@ -205,11 +272,10 @@ def list_screen(
         lines.append("")
         lines.append(LIST_HINT)
     buttons = [[item] for item in _unique_buttons(chunk, people, with_date=with_date)]
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"pg:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"pg:{page + 1}"))
+    nav = _pager(
+        f"pg:{page - 1}" if page > 0 else None,
+        f"pg:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         buttons.append(nav)
     if kind != "shifts":
@@ -280,7 +346,7 @@ def _empty_hint(kind: str, mode: str) -> str:
     if kind == "soon":
         return "אין אירועים ב-30 הימים הקרובים."
     if kind == "shifts":
-        return "אין משמרות בשבועיים הקרובים."
+        return "אין משמרות בשבוע הזה."
     if kind == "person":
         return "אין לאדם הזה משמרות או תזכורות בטווח."
     if kind == "find":
@@ -303,6 +369,110 @@ def _event_line(event: dict, people: dict, *, with_date: bool) -> str:
         bits.append("חוזר")
     extra = " · ".join(bits)
     return f"• <b>{title}</b>\n  {extra}"
+
+
+def _day_letter(day: date) -> str:
+    return DAY_LETTERS[weekday_index(day)]
+
+
+def _shift_face(event: dict) -> str:
+    """סוג המשמרת. כותרת חופשית שונה מהסוג מוצגת כמו שהיא."""
+    label = str(event.get("shift_label") or "").strip()
+    title = str(event.get("title") or "").strip()
+    if title and title != label:
+        return title
+    return label or title or "משמרת"
+
+
+def _shift_bit(event: dict, people: dict) -> str:
+    return f"{_person_name(people, event.get('shift_person_id'))} {_shift_face(event)}"
+
+
+def _shift_sort_key(event: dict, people: dict) -> tuple:
+    face = _shift_face(event)
+    return (
+        _person_name(people, event.get("shift_person_id")),
+        _SHIFT_ORDER.get(face, 9),
+        face,
+        event.get("id") or 0,
+    )
+
+
+def _day_bits(items: list[dict], people: dict) -> str:
+    """אותו אדם עם כמה משמרות נכתב פעם אחת: «שירה בוקר, ערב, לילה»."""
+    groups: list[tuple[str, list[str]]] = []
+    for event in items:
+        name = _person_name(people, event.get("shift_person_id"))
+        face = _shift_face(event)
+        if groups and groups[-1][0] == name:
+            groups[-1][1].append(face)
+        else:
+            groups.append((name, [face]))
+    parts = []
+    for name, faces in groups:
+        if len(faces) == 1:
+            parts.append(f"{name} {faces[0]}")
+        else:
+            parts.append(f"{name} {', '.join(faces)}")
+    return " · ".join(parts)
+
+
+def _week_header(start: date) -> str:
+    end = start + timedelta(days=6)
+    span = code(f"{greg(start)}–{greg(end)}")
+    try:
+        parasha = week_parasha(end)
+    except Exception:
+        parasha = None
+    if parasha:
+        return f"{span} · פרשת {esc(parasha)}"
+    return span
+
+
+def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> tuple[str, dict]:
+    """שבוע אחד (ראשון–שבת). רק ימים עם משמרות, וכפתור לכל משמרת."""
+    by_day: dict[str, list[dict]] = {}
+    for event in rows:
+        raw = (event.get("gregorian_date") or "")[:10]
+        by_day.setdefault(raw, []).append(event)
+    lines = [_week_header(anchor)]
+    buttons: list[list[tuple[str, str]]] = []
+    used: set[str] = set()
+    found = False
+    for offset in range(7):
+        day = anchor + timedelta(days=offset)
+        items = by_day.get(day.isoformat()) or []
+        if not items:
+            continue
+        found = True
+        items.sort(key=lambda event: _shift_sort_key(event, people))
+        lines.append(
+            f"{_day_letter(day)} {day.day}.{day.month} · {esc(_day_bits(items, people))}"
+        )
+        day_buttons: list[tuple[str, str]] = []
+        for event in items:
+            # היום כבר בשורת הטקסט. תאריך רק כשיש שני כפתורים זהים.
+            label = _shift_bit(event, people)
+            if label in used:
+                label = f"{day.day}.{day.month} {label}"
+            if label in used:
+                label = f"{label} #{event.get('id')}"
+            used.add(label)
+            day_buttons.append((label, f"ev:{event.get('id')}:{ymd(day)}"))
+        for index in range(0, len(day_buttons), SHIFTS_PER_ROW):
+            buttons.append(day_buttons[index : index + SHIFTS_PER_ROW])
+    if not found:
+        lines.append("אין משמרות בשבוע הזה")
+    previous = anchor - timedelta(days=7)
+    following = anchor + timedelta(days=7)
+    this_sunday = today - timedelta(days=weekday_index(today))
+    nav = [(BTN_NEXT_WEEK, f"sw:{ymd(following)}")]
+    if anchor != this_sunday:
+        nav.append(("השבוע", f"sw:{ymd(this_sunday)}"))
+    nav.append((BTN_PREV_WEEK, f"sw:{ymd(previous)}"))
+    buttons.append(nav)
+    buttons.append([("➕ משמרת חדשה", "sh:new"), (BTN_MENU, "home")])
+    return "\n".join(lines).strip(), kb(buttons)
 
 
 def shifts_off_screen() -> tuple[str, dict]:
@@ -445,7 +615,7 @@ def add_date_screen(today: date) -> tuple[str, dict]:
     text = "\n".join(
         [
             "איזה תאריך?",
-            f"כתבו, למשל {code(greg(today))}",
+            DATE_HINT,
             "אפשר גם «היום» או «מחר».",
         ]
     )
@@ -505,8 +675,11 @@ def add_end_screen(draft: dict, today: date) -> tuple[str, dict]:
     )
 
 
-def edit_menu_screen(draft: dict, *, error: str = "") -> tuple[str, dict]:
+def edit_menu_screen(draft: dict, *, error: str = "", saved: str = "") -> tuple[str, dict]:
     lines = []
+    if saved:
+        lines.append(esc(saved))
+        lines.append("")
     if error:
         lines.append(esc(error))
         lines.append("")
@@ -564,8 +737,7 @@ def edit_date_screen(draft: dict, today: date, *, shift: bool = False) -> tuple[
 
 
 def edit_date_text_screen() -> tuple[str, dict]:
-    text = f"כתבו תאריך, למשל {code('22.10.2026')}"
-    return text, kb([_back_cancel("back:edit")])
+    return DATE_HINT, kb([_back_cancel("back:edit")])
 
 
 def edit_time_screen(draft: dict) -> tuple[str, dict]:
@@ -587,7 +759,7 @@ def edit_time_screen(draft: dict) -> tuple[str, dict]:
 
 
 def edit_desc_screen() -> tuple[str, dict]:
-    text = "כתבו תיאור חדש.\n«בלי» מוחק את התיאור."
+    text = "כתבו תיאור חדש.\nבלי תיאור מוחק את התיאור."
     return text, kb([[("בלי תיאור", "ed:desc0")], _back_cancel("back:edit")])
 
 
@@ -719,11 +891,10 @@ def link_picker(people: list[dict], page: int) -> tuple[str, dict]:
     if not people:
         lines.append("אין עדיין אנשים. אפשר ליצור עכשיו.")
     rows = [[(person["name"], f"set:pick:{person['id']}")] for person in chunk]
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"set:lp:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"set:lp:{page + 1}"))
+    nav = _pager(
+        f"set:lp:{page - 1}" if page > 0 else None,
+        f"set:lp:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         rows.append(nav)
     rows.append([("אדם חדש", "set:new")])
@@ -776,11 +947,10 @@ def workers_screen(people: list[dict], page: int = 0) -> tuple[str, dict]:
     for person in chunk:
         mark = "כן" if person.get("works_shifts") else "לא"
         rows.append([(f"{person['name']} · {mark}", f"set:ws:{person['id']}")])
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"set:wp:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"set:wp:{page + 1}"))
+    nav = _pager(
+        f"set:wp:{page - 1}" if page > 0 else None,
+        f"set:wp:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         rows.append(nav)
     rows.append([("חזרה", "set"), (BTN_MENU, "home")])
@@ -796,11 +966,10 @@ def person_picker(people: list[dict], page: int) -> tuple[str, dict]:
     if pages > 1:
         lines.append(f"עמוד {page + 1}/{pages}")
     rows = [[(person["name"], f"who:{person['id']}")] for person in chunk]
-    nav = []
-    if page > 0:
-        nav.append(("הקודם", f"whop:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(("הבא", f"whop:{page + 1}"))
+    nav = _pager(
+        f"whop:{page - 1}" if page > 0 else None,
+        f"whop:{page + 1}" if page + 1 < pages else None,
+    )
     if nav:
         rows.append(nav)
     if not people:
@@ -878,7 +1047,7 @@ def shift_confirm_screen(draft: dict, today: date, person_name: str, *, error: s
 
 
 def shift_date_text_screen(today: date) -> tuple[str, dict]:
-    text = f"כתבו תאריך למשמרת, למשל {code(greg(today))}"
+    text = f"תאריך למשמרת.\n{DATE_HINT}"
     return text, kb(
         [
             [(_day_label("היום", today), "sh:d:0"), (_day_label("מחר", today + timedelta(days=1)), "sh:d:1")],

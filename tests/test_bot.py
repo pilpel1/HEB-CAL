@@ -1,7 +1,7 @@
 """בוט טלגרם: תפריט, רשימות, CRUD, הגדרות. בלי רשת."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.bot.dispatch import handle_update
@@ -44,6 +44,7 @@ def _buttons(reply):
         for button in row:
             assert button["text"]
             assert 1 <= len(button["callback_data"].encode("utf-8")) <= 64
+            assert button.get("style") in (None, "danger", "success", "primary")
             found.append(button)
     return found
 
@@ -100,6 +101,66 @@ def _titles(app):
         return [event["title"] for event in get_all_events()]
 
 
+def test_button_style_is_semantic_and_ignores_colors():
+    from app.bot.ui import button_style, kb
+
+    assert button_style("rm:4") == "danger"
+    assert button_style("rmy:4") == "danger"
+    assert button_style("add") is None
+    assert button_style("sh:new") is None
+    assert button_style("set:new") is None
+    assert button_style("add:ok") == "success"
+    assert button_style("ed:ok") == "success"
+    assert button_style("sh:ok") == "success"
+    assert button_style("ed:force") is None
+    assert button_style("ed:12") == "primary"
+    assert button_style("today") is None
+    assert button_style("ev:3:20261022") is None
+    assert button_style("home") is None
+    assert button_style("set:hh:1") is None
+    for color in ("cyan", "yellow", "orange", "green", "red", "blue", "pink"):
+        assert button_style(color) is None
+    marked = kb([[("שמירה", "add:ok"), ("היום", "today")]])
+    save, other = marked["inline_keyboard"][0]
+    assert save["style"] == "success"
+    assert "style" not in other
+
+
+def test_screen_styles_match_the_action(app):
+    from app.services.shifts import set_shifts_enabled
+
+    _person(app, "דני", chat=42)
+    menu = _go(app, _msg("/start"))
+    styles = {button["text"]: button.get("style") for button in _buttons(menu)}
+    assert styles["➕ הוספת אירוע"] is None
+    assert styles["📆 אירועי היום"] is None
+    assert styles["⚙️ הגדרות"] is None
+
+    _event(app, "פגישה", TODAY, time="10:00")
+    card = _press(app, _go(app, _msg("/today")), "פגישה")
+    card_styles = {button["text"]: button.get("style") for button in _buttons(card)}
+    assert card_styles["✏️ עריכה"] == "primary"
+    assert card_styles["🗑 מחיקה"] == "danger"
+    assert card_styles["↩️ חזרה לרשימה"] is None
+    ask = _press(app, card, "מחיקה")
+    ask_styles = {button["text"]: button.get("style") for button in _buttons(ask)}
+    assert ask_styles["כן, למחוק"] == "danger"
+    assert ask_styles["לא"] is None
+
+    with app.app_context():
+        set_shifts_enabled(True)
+    _person(app, "אביחי", works_shifts=1)
+    board = _go(app, _cb("shifts"))
+    board_styles = {button["text"]: button.get("style") for button in _buttons(board)}
+    assert board_styles["➕ משמרת חדשה"] is None
+    assert board_styles["🏠 תפריט ראשי"] is None
+    assert all(
+        button.get("style") is None
+        for button in _buttons(board)
+        if button["callback_data"].startswith("ev:")
+    )
+
+
 def test_parse_rejects_impossible_dates_and_times():
     with_error = False
     try:
@@ -128,6 +189,30 @@ def test_parse_rejects_impossible_dates_and_times():
     assert parse_user_time("9:30") == "09:30"
     assert parse_user_time("1830") == "18:30"
     assert parse_user_time("כל היום") is None
+    assert parse_user_date("251026", TODAY).isoformat() == "2026-10-25"
+    assert parse_user_date('י"ג חשון', TODAY).isoformat() == "2026-10-24"
+    assert parse_user_date("יג חשוון", TODAY).isoformat() == "2026-10-24"
+    assert parse_user_date("י״ג במרחשוון", TODAY).isoformat() == "2026-10-24"
+    assert parse_user_date("יג בחשוון", TODAY).isoformat() == "2026-10-24"
+    assert parse_user_date("ל חשון", TODAY).isoformat() == "2026-11-10"
+    later = TODAY.replace(month=11, day=11)
+    assert parse_user_date("ל חשון", later).isoformat() == "2027-11-30"
+    assert parse_user_date("א׳ אדר א׳", TODAY).isoformat() == "2027-02-08"
+    assert parse_user_date("א אדר", TODAY).isoformat() == "2027-03-10"
+    assert parse_user_date("א אדר", date(2027, 3, 15)).isoformat() == "2028-02-28"
+    assert parse_user_date('י"ג חשון תשפ״ו', TODAY).isoformat() == "2025-11-04"
+    assert parse_user_date("יג חשון ה'תשפז", TODAY).isoformat() == "2026-10-24"
+    assert parse_user_date("א תשרי", TODAY).isoformat() == "2027-10-02"
+    try:
+        parse_user_date("321399", TODAY)
+        raise AssertionError("bad compact date")
+    except InputError:
+        pass
+    try:
+        parse_user_date("יג חודשלא", TODAY)
+        raise AssertionError("bad hebrew month")
+    except InputError as exc:
+        assert "חודש" in str(exc)
 
 
 def test_start_unlinked_is_only_the_chat_id(app):
@@ -155,15 +240,20 @@ def test_start_linked_is_only_the_menu(app):
     assert "דני" not in reply["text"]
     labels = [button["text"] for button in _buttons(reply)]
     assert labels == [
+        "🗓 אירועי השבוע",
         "📆 אירועי היום",
-        "🗓 השבוע הקרוב",
-        "⏭ אירועים קרובים",
         "👷 משמרות",
+        "⏭ אירועים קרובים",
         "👤 לפי אדם",
         "🔍 חיפוש אירוע",
         "➕ הוספת אירוע",
         "⚙️ הגדרות",
     ]
+    rows = reply["markup"]["inline_keyboard"]
+    assert [button["text"] for button in rows[0]] == ["🗓 אירועי השבוע", "📆 אירועי היום"]
+    assert [button["text"] for button in rows[1]] == ["👷 משמרות", "⏭ אירועים קרובים"]
+    assert [button["text"] for button in rows[2]] == ["👤 לפי אדם", "🔍 חיפוש אירוע"]
+    assert [button["text"] for button in rows[3]] == ["➕ הוספת אירוע", "⚙️ הגדרות"]
     _has_exit(reply)
     for button in _buttons(reply):
         screen = _go(app, _cb(button["callback_data"]))
@@ -217,14 +307,14 @@ def test_today_week_soon_and_pagination(app):
     assert "מחר-אירוע" not in today["text"]
     assert "לחצו על אירוע לפרטים, עריכה או מחיקה." in today["text"]
     assert "רצף-0" in today["text"]
-    assert "הבא" in [button["text"] for button in _buttons(today)]
+    assert "הבא ←" in [button["text"] for button in _buttons(today)]
     page2 = _press(app, today, "הבא")
-    assert "הקודם" in [button["text"] for button in _buttons(page2)]
+    assert "→ הקודם" in [button["text"] for button in _buttons(page2)]
     assert "היום-אירוע" in page2["text"]
     assert "18:30" in page2["text"]
     assert "רצף-0" not in page2["text"]
     clamped = _go(app, _cb("pg:99"))
-    assert "הבא" not in [button["text"] for button in _buttons(clamped)]
+    assert not any(button["text"].startswith("הבא") for button in _buttons(clamped))
 
     week = _go(app, _msg("/week"))
     week2 = _press(app, week, "הבא")
@@ -243,7 +333,15 @@ def test_today_week_soon_and_pagination(app):
     assert "<code>21.11.2026</code>" in soon["text"]
     blob = soon["text"]
     screen = soon
-    while "הבא" in [button["text"] for button in _buttons(screen)]:
+    screen = _press(app, screen, "הבא")
+    nav = next(
+        row
+        for row in screen["markup"]["inline_keyboard"]
+        if any("הבא" in button["text"] or "הקודם" in button["text"] for button in row)
+    )
+    assert [button["text"] for button in nav] == ["הבא ←", "→ הקודם"]
+    blob += screen["text"]
+    while any(button["text"].startswith("הבא") for button in _buttons(screen)):
         screen = _press(app, screen, "הבא")
         blob += screen["text"]
     assert "עוד-30" in blob
@@ -623,6 +721,29 @@ def test_single_missing_household_falls_back(app):
     assert "הדלקת משמרות" in [button["text"] for button in _buttons(reply)]
 
 
+def test_other_date_hint_and_edit_field_saved(app):
+    _go(app, _msg("/add"))
+    confirm = _go(app, _msg("פגישה"))
+    asked = _press(app, confirm, "תאריך אחר")
+    assert "DD.MM.YYYY" in asked["text"]
+    assert "251026" in asked["text"]
+    assert 'י"ג חשון' in asked["text"]
+    chosen = _go(app, _msg('י"ג חשון'))
+    assert "24.10.2026" in chosen["text"]
+
+    _event(app, "בלי", TODAY)
+    card = _press(app, _go(app, _msg("/today")), "בלי")
+    editor = _press(app, card, "עריכה")
+    desc = _press(app, editor, "תיאור")
+    assert "בלי תיאור מוחק את התיאור." in desc["text"]
+    assert "«" not in desc["text"]
+    back = _press(app, desc, "בלי תיאור")
+    assert "התיאור עודכן ✅ — לשנות עוד משהו?" in back["text"]
+    labels = [button["text"] for button in _buttons(back)]
+    for name in ("כותרת", "תאריך", "שעה", "תיאור", "תאריך סיום", "שמירה"):
+        assert name in labels
+
+
 def test_edit_time_and_replace_lonely_chat(app):
     _event(app, "שעה", TODAY)
     card = _press(app, _go(app, _msg("/today")), "שעה")
@@ -712,7 +833,7 @@ def test_people_picker_paginates(app):
     for index in range(7):
         _person(app, f"אדם-{index}")
     picker = _go(app, _cb("who"))
-    assert "הבא" in [button["text"] for button in _buttons(picker)]
+    assert "הבא ←" in [button["text"] for button in _buttons(picker)]
     assert "אדם-0" in picker["text"] or any(button["text"] == "אדם-0" for button in _buttons(picker))
     page2 = _press(app, picker, "הבא")
     labels = [button["text"] for button in _buttons(page2)]
@@ -733,6 +854,85 @@ def test_all_day_word_and_shift_disabled_blocks_create(app):
         from app.database import get_all_events
 
         assert get_all_events()[0]["time"] is None
+
+
+def test_shifts_board_is_one_week_and_start_stays_the_menu(app):
+    from app.services.shifts import set_shifts_enabled
+
+    with app.app_context():
+        set_shifts_enabled(True)
+    avihai = _person(app, "אביחי", chat=42, works_shifts=1)
+    shira = _person(app, "שירה", works_shifts=1)
+    sunday = TODAY - timedelta(days=weekday_index(TODAY))
+    next_sunday = sunday + timedelta(days=7)
+    monday = next_sunday + timedelta(days=1)
+    _event(app, "בוקר", next_sunday, shift=(1, avihai["id"], "בוקר"))
+    _event(app, "ערב", next_sunday, shift=(1, shira["id"], "ערב"))
+    _event(app, "בוקר מוקדם", monday, shift=(1, avihai["id"], "בוקר"))
+    for label in ("בוקר", "ערב", "לילה"):
+        _event(app, label, monday, shift=(1, shira["id"], label))
+    _event(app, "לפני", sunday - timedelta(days=1), shift=(1, avihai["id"], "לילה"))
+    later = sunday + timedelta(days=14)
+    _event(app, "אחר כך", later, shift=(1, avihai["id"], "בוקר"))
+
+    listed = _go(app, _cb("shifts"))
+    assert "<code>18.10.2026–24.10.2026</code> · פרשת לך לך" in listed["text"]
+    assert "אין משמרות בשבוע הזה" in listed["text"]
+    assert "25.10" not in listed["text"]
+    assert "לפני" not in listed["text"]
+    assert "אחר כך" not in listed["text"]
+    assert "כל היום" not in listed["text"]
+    assert "עמוד " not in listed["text"]
+    assert [[button["text"] for button in row] for row in listed["markup"]["inline_keyboard"]] == [
+        ["שבוע הבא ←", "→ שבוע קודם"],
+        ["➕ משמרת חדשה", "🏠 תפריט ראשי"],
+    ]
+
+    nxt = _press(app, listed, "שבוע הבא")
+    assert "<code>25.10.2026–31.10.2026</code> · פרשת וירא" in nxt["text"]
+    assert "18.10.2026" not in nxt["text"]
+    assert "א׳ 25.10 · אביחי בוקר · שירה ערב" in nxt["text"]
+    assert "ב׳ 26.10 · אביחי בוקר מוקדם · שירה בוקר, ערב, לילה" in nxt["text"]
+    assert "אין משמרות" not in nxt["text"]
+    assert "אחר כך" not in nxt["text"]
+    for letter in ("ג׳", "ד׳", "ה׳", "ו׳", "ש׳"):
+        assert letter not in nxt["text"]
+    assert [[button["text"] for button in row] for row in nxt["markup"]["inline_keyboard"]] == [
+        ["אביחי בוקר", "שירה ערב"],
+        ["אביחי בוקר מוקדם", "שירה בוקר", "26.10 שירה ערב"],
+        ["שירה לילה"],
+        ["שבוע הבא ←", "השבוע", "→ שבוע קודם"],
+        ["➕ משמרת חדשה", "🏠 תפריט ראשי"],
+    ]
+
+    card = _press(app, nxt, "אביחי בוקר")
+    assert "<b>בוקר</b>" in card["text"]
+    assert "אביחי" in card["text"]
+
+    far = _press(app, nxt, "שבוע הבא")
+    assert "<code>01.11.2026–07.11.2026</code>" in far["text"]
+    assert "א׳ 1.11 · אביחי אחר כך" in far["text"]
+    assert "25.10" not in far["text"]
+
+    jumped = _press(app, far, "השבוע")
+    assert "<code>18.10.2026–24.10.2026</code>" in jumped["text"]
+    assert "אין משמרות בשבוע הזה" in jumped["text"]
+    assert "אחר כך" not in jumped["text"]
+    assert "השבוע" not in [button["text"] for button in _buttons(jumped)]
+
+    back = _press(app, nxt, "שבוע קודם")
+    assert "<code>18.10.2026–24.10.2026</code>" in back["text"]
+    assert "אחר כך" not in back["text"]
+
+    earlier = _press(app, listed, "שבוע קודם")
+    assert "<code>11.10.2026–17.10.2026</code>" in earlier["text"]
+    assert "ש׳ 17.10 · אביחי לפני" in earlier["text"]
+    assert "25.10" not in earlier["text"]
+
+    home = _go(app, _msg("/start"))
+    assert home["text"] == "📅 לוח השנה המשותף — מה להציג?"
+    assert "פרשת" not in home["text"]
+    assert "👷 משמרות" in [button["text"] for button in _buttons(home)]
 
 
 def test_callback_ack_is_before_the_screen_and_under_a_second(app, monkeypatch):
