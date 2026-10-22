@@ -121,7 +121,7 @@ def _manual_shift(data):
     if not resolved["is_shift"]:
         return (0, None, None), data, None
     adjusted = dict(data)
-    adjusted["title"] = resolved["title"]
+    # הכותרת נשארת מהטופס. סוג המשמרת נשמר לחוד ב-shift_label.
     adjusted["color"] = resolved["color"]
     adjusted["time"] = None
     adjusted["end_date"] = None

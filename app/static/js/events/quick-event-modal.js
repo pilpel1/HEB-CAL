@@ -2,21 +2,171 @@
 
 let quickSeriesSnapshot = null;
 let quickOccurrenceSnapshot = null;
+let hebrewDateToken = 0;
+let hebrewPickerMute = false;
+let hebrewYearsPromise = null;
+
+function loadHebrewYearLabels() {
+    if (!hebrewYearsPromise) {
+        hebrewYearsPromise = fetch('/api/hebrew-years?from=5660&to=5820')
+            .then((response) => (response.ok ? response.json() : { years: [] }))
+            .then((data) => (Array.isArray(data.years) ? data.years : []))
+            .catch(() => []);
+    }
+    return hebrewYearsPromise;
+}
+
+async function ensureHebrewYearSelect(year, label) {
+    const select = document.getElementById('quick_hebrew_year');
+    if (!select) {
+        return;
+    }
+    if (select.dataset.filled !== '1') {
+        const years = await loadHebrewYearLabels();
+        if (select.dataset.filled !== '1' && years.length) {
+            select.replaceChildren();
+            years.forEach((item) => {
+                const option = document.createElement('option');
+                option.value = String(item.year);
+                option.textContent = item.label || String(item.year);
+                select.append(option);
+            });
+            select.dataset.filled = '1';
+        }
+    }
+    if (year && ![...select.options].some((option) => option.value === String(year))) {
+        const option = document.createElement('option');
+        option.value = String(year);
+        option.textContent = label || String(year);
+        select.append(option);
+    }
+    if (year && select.options.length) {
+        select.value = String(year);
+    }
+}
+
+function fillHebrewMonthSelect(months, selected) {
+    const select = document.getElementById('quick_hebrew_month');
+    if (!select || !Array.isArray(months) || !months.length) {
+        return;
+    }
+    const current = selected != null ? String(selected) : select.value;
+    select.replaceChildren();
+    months.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = String(item.value);
+        option.textContent = item.name;
+        select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === current)) {
+        select.value = current;
+    }
+}
+
+function fillHebrewDaySelect(count, selected) {
+    const select = document.getElementById('quick_hebrew_day');
+    if (!select) {
+        return;
+    }
+    const days = Number(count) || 30;
+    const wanted = Number(selected) || Number(select.value) || 1;
+    const day = Math.min(Math.max(wanted, 1), days);
+    if (select.options.length !== days) {
+        select.replaceChildren();
+        for (let number = 1; number <= days; number += 1) {
+            const option = document.createElement('option');
+            option.value = String(number);
+            option.textContent = (typeof get_hebrew_day === 'function' && get_hebrew_day(number)) || String(number);
+            select.append(option);
+        }
+    }
+    select.value = String(day);
+}
+
+async function applyHebrewDatePayload(data, token) {
+    if (!data || token !== hebrewDateToken) {
+        return;
+    }
+    const hebrewInput = document.getElementById('quick_hebrew_date');
+    if (hebrewInput && data.hebrew_date) {
+        hebrewInput.value = data.hebrew_date;
+    }
+    await ensureHebrewYearSelect(data.year, data.year_label);
+    if (token !== hebrewDateToken) {
+        return;
+    }
+    hebrewPickerMute = true;
+    try {
+        fillHebrewMonthSelect(data.months, data.month);
+        fillHebrewDaySelect(data.days_in_month, data.day);
+        if (data.year) {
+            const yearSelect = document.getElementById('quick_hebrew_year');
+            if (yearSelect && [...yearSelect.options].some((option) => option.value === String(data.year))) {
+                yearSelect.value = String(data.year);
+            }
+        }
+    } finally {
+        hebrewPickerMute = false;
+    }
+}
+
+function refreshQuickModalTitle() {
+    const isEdit = Boolean(document.getElementById('quick_event_id')?.value);
+    setQuickEventModalMode(isEdit);
+}
 
 async function fillHebrewDateFromGregorian(gregorianValue, hebrewInputId) {
     if (!gregorianValue) {
         return;
     }
-
+    const token = ++hebrewDateToken;
     try {
         const response = await fetch(`/api/hebrew-date/${gregorianValue}`);
         const data = await response.json();
+        if (!response.ok || token !== hebrewDateToken) {
+            return;
+        }
         const hebrewInput = document.getElementById(hebrewInputId);
-        if (hebrewInput) {
+        if (hebrewInput && data.hebrew_date && hebrewInputId !== 'quick_hebrew_date') {
             hebrewInput.value = data.hebrew_date;
+        }
+        await applyHebrewDatePayload(data, token);
+        if (token === hebrewDateToken) {
+            refreshQuickModalTitle();
         }
     } catch (error) {
         console.error('Error converting date:', error);
+    }
+}
+
+async function onHebrewPickerChange() {
+    if (hebrewPickerMute) {
+        return;
+    }
+    const year = document.getElementById('quick_hebrew_year')?.value;
+    const month = document.getElementById('quick_hebrew_month')?.value;
+    const day = document.getElementById('quick_hebrew_day')?.value;
+    if (!year || !month || !day) {
+        return;
+    }
+    const token = ++hebrewDateToken;
+    try {
+        const response = await fetch(`/api/gregorian-from-hebrew?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}`);
+        const data = await response.json();
+        if (!response.ok || token !== hebrewDateToken) {
+            return;
+        }
+        const gregorian = document.getElementById('quick_gregorian_date');
+        if (gregorian && data.gregorian_date) {
+            gregorian.value = data.gregorian_date;
+            syncEndDateMin(data.gregorian_date, document.getElementById('quick_end_date'));
+        }
+        await applyHebrewDatePayload(data, token);
+        if (token === hebrewDateToken) {
+            refreshQuickModalTitle();
+        }
+    } catch (error) {
+        console.error('Error converting Hebrew date:', error);
     }
 }
 
@@ -298,6 +448,10 @@ function fillQuickEventForm(eventData = {}, options = {}) {
             shiftUiState.quickShiftFill = pending;
         }
     }
+    if (eventData.gregorian_date) {
+        return fillHebrewDateFromGregorian(eventData.gregorian_date, 'quick_hebrew_date');
+    }
+    return Promise.resolve();
 }
 
 function getQuickEventFormData() {
@@ -326,10 +480,10 @@ async function openQuickEventModal(dateStr) {
         form.reset();
     }
 
-    fillQuickEventForm({ gregorian_date: dateStr });
+    const pendingHebrew = fillQuickEventForm({ gregorian_date: dateStr });
     // אחרי reset — מוודאים שוב שה-min על תאריך הסיום ננעל לתאריך ההתחלה
     syncEndDateMin(dateStr, document.getElementById('quick_end_date'));
-    await fillHebrewDateFromGregorian(dateStr, 'quick_hebrew_date');
+    await pendingHebrew;
     setQuickEventModalMode(false);
 
     bootstrap.Modal.getOrCreateInstance(modalElement).show();
@@ -355,7 +509,7 @@ async function openEditEventModal(eventId, occurrenceDate) {
         const series = event.series || null;
         quickOccurrenceSnapshot = series ? { ...event } : null;
         quickSeriesSnapshot = series;
-        fillQuickEventForm(event, { keepScope: Boolean(series) });
+        await fillQuickEventForm(event, { keepScope: Boolean(series) });
         if (series) {
             setRecurrenceScopeVisible(true, 'occurrence');
         }
@@ -456,10 +610,14 @@ function initQuickEventModal() {
         initCalendarContextMenu(calendarRoot);
     }
 
+    ['quick_hebrew_day', 'quick_hebrew_month', 'quick_hebrew_year'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', onHebrewPickerChange);
+    });
+
     const endToggle = document.getElementById('quick_end_toggle');
     if (endToggle) {
         endToggle.addEventListener('click', () => {
-            const wrap = endToggle.closest('.quick-end-wrap');
+            const wrap = document.querySelector('#quickEventModal .quick-end-wrap');
             const endInput = document.getElementById('quick_end_date');
             if (wrap?.classList.contains('is-open')) {
                 if (endInput) {

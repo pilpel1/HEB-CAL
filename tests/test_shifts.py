@@ -220,7 +220,7 @@ def test_week_save_is_idempotent_and_only_removes_shifts(client):
     assert sorted(body["kept"]) == sorted(created_ids)
     assert len(client.get("/api/events").get_json()) == 3
 
-    # עריכת הכותרת לא מורידה את הסימון. בתצוגה ובשמירה חוזרת הכותרת היא רק «בוקר».
+    # עריכת הכותרת לא מורידה את הסימון. הסוג נשאר «בוקר», והכותרת נשמרת.
     edited = client.put(f"/api/events/{sunday['id']}", json={
         "title": "אביחי בבוקר מוקדם",
         "gregorian_date": sunday["gregorian_date"],
@@ -229,7 +229,8 @@ def test_week_save_is_idempotent_and_only_removes_shifts(client):
     })
     assert edited.status_code == 200
     shown = client.get(f"/api/events/{sunday['id']}").get_json()
-    assert shown["title"] == "בוקר"
+    assert shown["title"] == "אביחי בבוקר מוקדם"
+    assert shown["shift_label"] == "בוקר"
     assert shown["is_shift"] == 1
     again = client.put("/api/shifts/week", json={
         "person_id": avihai["id"],
@@ -238,7 +239,8 @@ def test_week_save_is_idempotent_and_only_removes_shifts(client):
     })
     assert again.get_json()["created"] == []
     kept_title = client.get(f"/api/events/{sunday['id']}").get_json()
-    assert kept_title["title"] == "בוקר"
+    assert kept_title["title"] == "אביחי בבוקר מוקדם"
+    assert kept_title["shift_label"] == "בוקר"
     assert kept_title["is_shift"] == 1
 
     manual = client.post("/api/events", json={
@@ -542,6 +544,14 @@ def test_normalize_rewrites_old_shift_title_and_copies_color(client):
         db.execute(
             "INSERT INTO events (title, gregorian_date, hebrew_date, is_shift) VALUES ('יום הולדת', '2026-01-01', 'א', 0)"
         )
+        db.execute(
+            """
+            INSERT INTO events (
+                title, gregorian_date, hebrew_date, is_shift, shift_person_id, shift_label
+            ) VALUES ('בוקר מוקדם', '2026-10-19', 'ב', 1, ?, 'בוקר')
+            """,
+            (person["id"],),
+        )
         db.commit()
         normalize_shift_events(db)
         normalize_shift_events(db)
@@ -551,6 +561,11 @@ def test_normalize_rewrites_old_shift_title_and_copies_color(client):
         assert row["color"] == "cyan"
         plain = db.execute("SELECT title FROM events WHERE title = 'יום הולדת'").fetchone()
         assert plain["title"] == "יום הולדת"
+        custom = db.execute(
+            "SELECT title, shift_label FROM events WHERE gregorian_date = '2026-10-19'"
+        ).fetchone()
+        assert custom["title"] == "בוקר מוקדם"
+        assert custom["shift_label"] == "בוקר"
     shown = client.get(f"/api/events/{shift_id}").get_json()
     assert shown["title"] == "בוקר"
     assert shown["color"] == "cyan"
@@ -580,7 +595,7 @@ def test_manual_shift_is_allowed_outside_the_rules(client):
     assert event["is_shift"] == 1
     assert event["shift_person_id"] == person["id"]
     assert event["shift_label"] == "לילה"
-    assert event["title"] == "לילה"
+    assert event["title"] == "חריג"
     assert event["color"] == "cyan"
     assert event["time"] is None
     assert event["end_date"] is None
@@ -649,7 +664,7 @@ def test_free_text_shift_survives_grid_resave(client):
     assert created.status_code == 200, created.get_json()
     shift_id = created.get_json()["id"]
     event = client.get(f"/api/events/{shift_id}").get_json()
-    assert event["title"] == "יום מחלה"
+    assert event["title"] == "משהו אחר"
     assert event["shift_label"] == "יום מחלה"
     assert event["color"] == "orange"
     assert event["is_shift"] == 1
@@ -671,7 +686,7 @@ def test_free_text_shift_survives_grid_resave(client):
     assert morning_id in wiped.get_json()["deleted"]
     left = {row["id"]: row for row in client.get("/api/events").get_json()}
     assert morning_id not in left
-    assert left[shift_id]["title"] == "יום מחלה"
+    assert left[shift_id]["title"] == "משהו אחר"
     assert left[shift_id]["shift_label"] == "יום מחלה"
     assert left[shift_id]["color"] == "orange"
     assert left[shift_id]["is_shift"] == 1
@@ -727,6 +742,17 @@ def test_calendar_and_settings_markup(client):
     assert 'id="current-month"' in calendar
     assert 'id="shiftEntryModal"' in calendar
     assert 'id="quick_shift_enabled"' in calendar
+    assert "הכותרת היא מה שכתוב כאן" not in calendar
+    assert 'type="hidden" id="quick_shift_label"' in calendar
+    assert 'placeholder="יום מחלה, יום חופש…"' not in calendar
+    assert 'id="quick_hebrew_day"' in calendar
+    assert 'id="quick_hebrew_month"' in calendar
+    assert 'id="quick_hebrew_year"' in calendar
+    assert '>תאריך עברי</label>' not in calendar
+    assert 'aria-label="תאריך עברי"' in calendar
+    assert 'aria-label="הגדרות תזכורות"' in calendar
+    assert 'href="/settings#settings-reminders"' in calendar
+    assert 'class="reminder-people-link"' not in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings
     assert 'id="settings-shifts-title">משמרות</h2>' in settings
@@ -764,6 +790,7 @@ def test_calendar_and_settings_markup(client):
     assert 'id="pageSizeSelect"' in events_list
     assert 'id="sortOrderSelect"' in events_list
     assert '<h2 class="h5">תזכורות</h2>' in settings
+    assert 'id="settings-reminders"' in settings
     assert "אנשים לתזכורות" not in settings
     assert 'id="chatIdHelpBtn"' in settings
     assert 'aria-label="איך מקבלים מזהה צ׳אט"' in settings

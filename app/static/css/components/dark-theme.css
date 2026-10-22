@@ -335,8 +335,19 @@
     color: #fff;
 }
 
-[data-bs-theme="dark"] .quick-reminder-custom-toggle {
+[data-bs-theme="dark"] #quick_reminder_custom_toggle.is-open {
+    border-color: #93c5fd;
     color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .reminder-settings-gear {
+    color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .reminder-settings-gear:hover,
+[data-bs-theme="dark"] .reminder-settings-gear:focus {
+    color: #93c5fd;
+    background: rgba(147, 197, 253, 0.12);
 }
 
 [data-bs-theme="dark"] .reminder-form-error {

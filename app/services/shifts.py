@@ -6,10 +6,11 @@
 אנשים הם ``reminder_people``. צבע ומשמרות מותרות (בוקר/ערב/לילה, בלי שעות,
 אפשר לפי יום בשבוע) יושבים על אותה שורה.
 
-שמירה מהרשת יוצרת אירועי יום שלם עם ``is_shift``. הכותרת היא רק סוג
+שמירה מהרשת יוצרת אירועי יום שלם עם ``is_shift``. ברשת הכותרת היא סוג
 המשמרת (``בוקר``), והצבע הוא צבע האדם. הרשת מוצאת אותם לפי האדם, התאריך
 והתווית. תא חדש מהרשת שלא מותר לאדם נדחה. חריג ידני נשמר מטופס האירוע
-הרגיל, גם ביום שלא ברשימה.
+הרגיל, גם ביום שלא ברשימה: סוג המשמרת ב-``shift_label``, והכותרת נשארת
+מה שהמשתמש כתב.
 """
 from __future__ import annotations
 
@@ -190,6 +191,7 @@ def resolve_manual_shift(data: dict):
     ``None`` אם הבקשה לא נוגעת במשמרת (עריכה רגילה משאירה את הדגל).
     אין כאן בדיקה של ``shift_allowed``: חריג ידני מותר בכל יום ובכל משמרת.
     הרשת המרוכזת היא המקום היחיד שדוחה תא אסור.
+    הכותרת לא מוחלפת כאן — היא נשארת מהטופס, והסוג נשמר ב-``shift_label``.
     """
     keys = ("is_shift", "shift_person_id", "shift_label")
     if not any(key in data for key in keys):
@@ -214,7 +216,6 @@ def resolve_manual_shift(data: dict):
         "is_shift": 1,
         "shift_person_id": person_id,
         "shift_label": label,
-        "title": shift_title(person.get("name") or "", label),
         "color": person.get("color"),
         "time": None,
         "end_date": None,
@@ -492,19 +493,14 @@ def _delete_shift_row(db, event_id: int) -> None:
     )
 
 
-def _rewrite_shift_row(db, event_id: int, person: dict, label: str) -> None:
-    """מיישר כותרת וצבע של משמרת קיימת לאדם, בלי לגעת בשאר השדות."""
-    title = shift_title(person.get("name") or "", label)
-    if person.get("color"):
-        db.execute(
-            "UPDATE events SET title = ?, color = ? WHERE id = ? AND is_shift = 1",
-            (title, person["color"], event_id),
-        )
-    else:
-        db.execute(
-            "UPDATE events SET title = ? WHERE id = ? AND is_shift = 1",
-            (title, event_id),
-        )
+def _rewrite_shift_row(db, event_id: int, person: dict) -> None:
+    """מיישר את צבע המשמרת לצבע האדם. הכותרת נשארת כמו שנשמרה."""
+    if not person.get("color"):
+        return
+    db.execute(
+        "UPDATE events SET color = ? WHERE id = ? AND is_shift = 1",
+        (person["color"], event_id),
+    )
 
 
 def save_shift_week(person: dict, week_start: date, cells) -> dict:
@@ -534,7 +530,7 @@ def save_shift_week(person: dict, week_start: date, cells) -> dict:
         for key, rows in by_key.items():
             if key in wanted:
                 kept.append(rows[0]["id"])
-                _rewrite_shift_row(db, rows[0]["id"], person, key[1])
+                _rewrite_shift_row(db, rows[0]["id"], person)
                 for extra in rows[1:]:
                     _delete_shift_row(db, extra["id"])
                     deleted.append(extra["id"])
@@ -583,9 +579,10 @@ def save_shift_week(person: dict, week_start: date, cells) -> dict:
 
 
 def normalize_shift_events(db) -> None:
-    """כותרת משמרת קיימת → שם המשמרת, וצבע → צבע האדם.
+    """כותרת ישנה ``שם — סוג`` → סוג המשמרת, וצבע → צבע האדם.
 
     נקרא מתוך ensure_shift_schema, בתוך המנעול. אירוע רגיל לא נגע.
+    כותרת אחרת (למשל «בוקר מוקדם») נשארת: הסוג יושב ב-shift_label.
     בלי עמודת color על האירוע או על האדם מדלגים על הצבע ומשאירים את השאר.
     """
     tables = {
@@ -604,6 +601,7 @@ def normalize_shift_events(db) -> None:
         WHERE is_shift = 1
           AND shift_label IS NOT NULL
           AND shift_label != ''
+          AND instr(title, ' — ') > 0
           AND title IS NOT shift_label
         """
     )
@@ -636,9 +634,9 @@ def normalize_shift_events(db) -> None:
 
 
 def annotate_shift_events(events: list[dict]) -> list[dict]:
-    """בתצוגה, צ'יפ משמרת בצבע האדם ובכותרת של התווית.
+    """בתצוגה, צ'יפ משמרת בצבע האדם.
 
-    גם טקסט חופשי (``יום מחלה``), וגם שורה ישנה ``אביחי — בוקר``.
+    הכותרת נשארת מה שנשמר. סוג המשמרת נשאר ב-``shift_label``.
     """
     if not events or not any(event.get("is_shift") for event in events):
         return events
@@ -648,9 +646,6 @@ def annotate_shift_events(events: list[dict]) -> list[dict]:
     for event in events:
         if not event.get("is_shift"):
             continue
-        label = str(event.get("shift_label") or "").strip()
-        if label:
-            event["title"] = label
         person = people.get(event.get("shift_person_id"))
         if person and person.get("color"):
             event["color"] = person["color"]
