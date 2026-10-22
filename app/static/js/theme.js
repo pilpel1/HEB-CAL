@@ -30,6 +30,9 @@
                 icon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
             }
         });
+        document.querySelectorAll('[data-theme-switch]').forEach((input) => {
+            input.checked = isDark;
+        });
     }
 
     function applyTheme(theme) {
@@ -49,6 +52,20 @@
         if (choice && next === root.getAttribute('data-bs-theme')) {
             return;
         }
+        try {
+            localStorage.setItem(STORAGE_KEY, next);
+        } catch (err) {
+            // localStorage חסום (מצב פרטי) — הבחירה תחזיק רק עד רענון
+        }
+        applyTheme(next);
+    });
+
+    document.addEventListener('change', (e) => {
+        const input = e.target.closest('[data-theme-switch]');
+        if (!input) {
+            return;
+        }
+        const next = input.checked ? 'dark' : 'light';
         try {
             localStorage.setItem(STORAGE_KEY, next);
         } catch (err) {

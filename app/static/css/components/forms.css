@@ -424,6 +424,55 @@
     margin: 0;
 }
 
+.settings-page {
+    max-width: 40rem;
+    margin-inline: auto;
+}
+
+.settings-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.settings-top h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.settings-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 44px;
+}
+
+.settings-switch-label {
+    margin: 0;
+    font-weight: 600;
+}
+
+.settings-switch {
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+}
+
+.settings-switch .form-check-input {
+    float: none;
+    margin: 0;
+    width: 2.25rem;
+    height: 1.2rem;
+    cursor: pointer;
+}
+
 .reminder-settings .card {
     border-radius: 1rem;
 }

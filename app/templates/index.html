@@ -6,13 +6,13 @@
 <!-- לוח שנה אינסופי — גלילה רציפה עם טעינה הדרגתית -->
 <div class="calendar-container infinite-calendar is-booting">
     <div class="calendar-toolbar" id="calendar-toolbar">
-        <div class="toolbar-expanded" id="toolbar-expanded">
-            <h2 id="current-month" class="toolbar-month-label" aria-live="polite"></h2>
+        <h2 id="current-month" class="toolbar-month-label" aria-live="polite"></h2>
+        <div class="toolbar-actions" id="toolbar-actions">
             <div class="calendar-nav" id="calendar-nav">
-                <button type="button" class="btn btn-outline-primary btn-today" id="goToTodayBtn" onclick="goToToday()">היום</button>
-                <div class="dropdown d-inline-block">
-                    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false">
-                        דלג לתאריך...
+                <button type="button" class="btn btn-outline-primary btn-today" id="goToTodayBtn" onclick="goToToday()" title="היום" aria-label="היום">היום</button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false" title="דלג לתאריך" aria-label="דלג לתאריך">
+                        <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
                     </button>
                     <div class="dropdown-menu p-3" aria-labelledby="jumpToDateBtn">
                         <div class="mb-2">
@@ -39,15 +39,21 @@
                         <button class="btn btn-primary w-100" onclick="jumpToDate()">אישור</button>
                     </div>
                 </div>
-                <button type="button" class="btn btn-primary calendar-events-list-btn" id="addEventFromCalendarBtn">הוסף אירוע</button>
-                <a href="/events_list" class="btn btn-outline-secondary" id="calendarEventsLink">רשימת אירועים</a>
-                <button type="button" class="btn btn-outline-primary" id="enterShiftsBtn" hidden>הזן משמרות</button>
-                <button type="button" class="btn btn-outline-secondary settings-gear-btn" id="quick-settings-open" title="הגדרות" aria-label="הגדרות" aria-expanded="false" aria-controls="quick-settings">
-                    <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                <button type="button" class="btn btn-primary" id="addEventFromCalendarBtn" title="הוסף אירוע" aria-label="הוסף אירוע">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
                 </button>
+                <a href="/events_list" class="btn btn-outline-secondary" id="calendarEventsLink" title="רשימת אירועים" aria-label="רשימת אירועים">
+                    <i class="fa-solid fa-list" aria-hidden="true"></i>
+                </a>
+                <button type="button" class="btn btn-outline-primary" id="enterShiftsBtn" hidden title="הזן משמרות" aria-label="הזן משמרות">
+                    <i class="fa-solid fa-user-clock" aria-hidden="true"></i>
+                </button>
+                <a href="/settings" class="btn btn-outline-secondary settings-gear-btn" title="הגדרות" aria-label="הגדרות">
+                    <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                </a>
             </div>
         </div>
-        <button type="button" class="header-collapse" id="header-collapse" aria-expanded="true" aria-controls="toolbar-expanded" aria-label="כווץ את סרגל הפעולות">
+        <button type="button" class="header-collapse" id="header-collapse" aria-expanded="true" aria-controls="toolbar-actions" aria-label="כווץ את סרגל הפעולות">
             <span class="header-collapse-grip" aria-hidden="true"></span>
             <span class="header-collapse-arrow" aria-hidden="true">
                 <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
@@ -72,35 +78,6 @@
             } catch (e) {}
         })();
     </script>
-    <div class="quick-settings" id="quick-settings" hidden>
-        <button type="button" class="quick-settings-backdrop" id="quick-settings-backdrop" aria-label="סגור"></button>
-        <div class="quick-settings-sheet" role="dialog" aria-modal="true" aria-labelledby="quick-settings-title">
-            <div class="quick-settings-head">
-                <h2 id="quick-settings-title">הגדרות</h2>
-                <button type="button" class="quick-settings-close" id="quick-settings-close" aria-label="סגור">
-                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div class="quick-settings-row">
-                <span class="quick-settings-label" id="quick-theme-label">ערכת נושא</span>
-                <div class="quick-settings-choices" role="group" aria-labelledby="quick-theme-label">
-                    <button type="button" class="quick-settings-choice" data-theme-toggle data-theme-choice="light">בהיר</button>
-                    <button type="button" class="quick-settings-choice" data-theme-toggle data-theme-choice="dark">כהה</button>
-                </div>
-            </div>
-            <div class="quick-settings-row">
-                <span class="quick-settings-label" id="quick-density-label">צפיפות</span>
-                <div class="quick-settings-choices" role="group" aria-labelledby="quick-density-label">
-                    <button type="button" class="quick-settings-choice" data-density-choice="comfortable">מרווח</button>
-                    <button type="button" class="quick-settings-choice" data-density-choice="compact">צפוף</button>
-                </div>
-            </div>
-            <a href="/settings" class="quick-settings-more">
-                <span>אנשים, תזכורות ומשמרות</span>
-                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-            </a>
-        </div>
-    </div>
 
     <div class="calendar-stream-frame">
         <div id="calendar-stream" class="calendar-stream" tabindex="-1" aria-busy="true">

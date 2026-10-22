@@ -409,18 +409,25 @@ def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar
     assert "הזן משמרות" in calendar
-    assert 'id="quick-settings-open"' in calendar
     assert 'class="btn btn-outline-secondary settings-gear-btn"' in calendar
     assert 'aria-label="הגדרות"' in calendar
+    assert 'href="/settings"' in calendar
+    assert 'id="quick-settings"' not in calendar
+    assert 'aria-label="היום"' in calendar
+    assert 'aria-label="דלג לתאריך"' in calendar
+    assert 'aria-label="הוסף אירוע"' in calendar
+    assert 'aria-label="רשימת אירועים"' in calendar
+    assert 'aria-label="הזן משמרות"' in calendar
     assert 'id="header-collapse"' in calendar
     assert 'heb-cal-header-collapsed' in calendar
-    assert 'id="quick-settings"' in calendar
-    assert 'data-theme-choice="dark"' in calendar
-    assert 'data-density-choice="compact"' in calendar
-    assert 'אנשים, תזכורות ומשמרות' in calendar
-    assert 'href="/settings"' in calendar
+    assert 'id="current-month"' in calendar
     assert 'id="shiftEntryModal"' in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings
     assert "הפעלת משמרות בבית הזה" in settings
     assert 'id="personShiftMatrix"' in settings
+    assert 'data-theme-switch' in settings
+    assert 'data-density-switch' in settings
+    assert "מצב כהה" in settings
+    assert "תצוגה צפופה" in settings
+    assert "אנשים לתזכורות" in settings
