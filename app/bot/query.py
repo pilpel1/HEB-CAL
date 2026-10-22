@@ -119,9 +119,8 @@ def range_for(kind: str, today: date) -> tuple[date, date] | None:
     if kind == "soon":
         return today, today + timedelta(days=SOON_DAYS)
     if kind == "shifts":
-        # ברירת המחדל של המסך: השבוע (ראשון) ועוד שבוע. הדפדוף זז דרך sw:.
-        start, _end = week_bounds(today)
-        return start, start + timedelta(days=13)
+        # שבוע אחד (ראשון–שבת). הדפדוף זז דרך sw:.
+        return week_bounds(today)
     if kind == "person":
         return today, today + timedelta(days=PERSON_DAYS)
     return None

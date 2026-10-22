@@ -637,7 +637,7 @@ class Bot:
                 "shift_sunday": anchor.isoformat(),
             }
         )
-        end = anchor + timedelta(days=13)
+        end = anchor + timedelta(days=6)
         rows = [row for row in lists.events_between(anchor, end) if row.get("is_shift")]
         text, markup = ui.shifts_board(rows, self.by_id, self.today, anchor)
         if note:

@@ -796,7 +796,7 @@ def test_all_day_word_and_shift_disabled_blocks_create(app):
         assert get_all_events()[0]["time"] is None
 
 
-def test_shifts_board_is_two_weeks_and_start_stays_the_menu(app):
+def test_shifts_board_is_one_week_and_start_stays_the_menu(app):
     from app.services.shifts import set_shifts_enabled
 
     with app.app_context():
@@ -816,38 +816,58 @@ def test_shifts_board_is_two_weeks_and_start_stays_the_menu(app):
     _event(app, "אחר כך", later, shift=(1, avihai["id"], "בוקר"))
 
     listed = _go(app, _cb("shifts"))
-    assert "השבוע · פרשת לך לך" in listed["text"]
-    assert "שבוע הבא · פרשת וירא" in listed["text"]
-    assert "אין משמרות" in listed["text"]
-    assert "עדיין" not in listed["text"]
-    assert "א׳ 25.10 · אביחי בוקר · שירה ערב" in listed["text"]
-    assert "ב׳ 26.10 · אביחי בוקר מוקדם · שירה בוקר, ערב, לילה" in listed["text"]
-    assert "כל היום" not in listed["text"]
-    assert "משמרת ·" not in listed["text"]
+    assert "<code>18.10.2026–24.10.2026</code> · פרשת לך לך" in listed["text"]
+    assert "אין משמרות בשבוע הזה" in listed["text"]
+    assert "25.10" not in listed["text"]
     assert "לפני" not in listed["text"]
     assert "אחר כך" not in listed["text"]
+    assert "כל היום" not in listed["text"]
     assert "עמוד " not in listed["text"]
-    keyboard = listed["markup"]["inline_keyboard"]
-    assert [[button["text"] for button in row] for row in keyboard] == [
-        ["אביחי בוקר", "שירה ערב"],
-        ["אביחי בוקר מוקדם", "שירה בוקר", "26.10 שירה ערב"],
-        ["שירה לילה"],
+    assert [[button["text"] for button in row] for row in listed["markup"]["inline_keyboard"]] == [
         ["שבוע קודם", "שבוע הבא"],
         ["➕ משמרת חדשה", "🏠 תפריט ראשי"],
     ]
 
-    card = _press(app, listed, "אביחי בוקר")
+    nxt = _press(app, listed, "שבוע הבא")
+    assert "<code>25.10.2026–31.10.2026</code> · פרשת וירא" in nxt["text"]
+    assert "18.10.2026" not in nxt["text"]
+    assert "א׳ 25.10 · אביחי בוקר · שירה ערב" in nxt["text"]
+    assert "ב׳ 26.10 · אביחי בוקר מוקדם · שירה בוקר, ערב, לילה" in nxt["text"]
+    assert "אין משמרות" not in nxt["text"]
+    assert "אחר כך" not in nxt["text"]
+    for letter in ("ג׳", "ד׳", "ה׳", "ו׳", "ש׳"):
+        assert letter not in nxt["text"]
+    assert [[button["text"] for button in row] for row in nxt["markup"]["inline_keyboard"]] == [
+        ["אביחי בוקר", "שירה ערב"],
+        ["אביחי בוקר מוקדם", "שירה בוקר", "26.10 שירה ערב"],
+        ["שירה לילה"],
+        ["שבוע קודם", "השבוע", "שבוע הבא"],
+        ["➕ משמרת חדשה", "🏠 תפריט ראשי"],
+    ]
+
+    card = _press(app, nxt, "אביחי בוקר")
     assert "<b>בוקר</b>" in card["text"]
     assert "אביחי" in card["text"]
 
-    nxt = _press(app, listed, "שבוע הבא")
-    assert "שבוע הבא · פרשת וירא" in nxt["text"]
-    assert "השבוע · פרשת לך לך" not in nxt["text"]
-    assert "אחר כך" in nxt["text"] or "אביחי בוקר" in nxt["text"]
-    assert "1.11" in nxt["text"]
+    far = _press(app, nxt, "שבוע הבא")
+    assert "<code>01.11.2026–07.11.2026</code>" in far["text"]
+    assert "א׳ 1.11 · אביחי אחר כך" in far["text"]
+    assert "25.10" not in far["text"]
+
+    jumped = _press(app, far, "השבוע")
+    assert "<code>18.10.2026–24.10.2026</code>" in jumped["text"]
+    assert "אין משמרות בשבוע הזה" in jumped["text"]
+    assert "אחר כך" not in jumped["text"]
+    assert "השבוע" not in [button["text"] for button in _buttons(jumped)]
+
     back = _press(app, nxt, "שבוע קודם")
-    assert "השבוע · פרשת לך לך" in back["text"]
+    assert "<code>18.10.2026–24.10.2026</code>" in back["text"]
     assert "אחר כך" not in back["text"]
+
+    earlier = _press(app, listed, "שבוע קודם")
+    assert "<code>11.10.2026–17.10.2026</code>" in earlier["text"]
+    assert "ש׳ 17.10 · אביחי לפני" in earlier["text"]
+    assert "25.10" not in earlier["text"]
 
     home = _go(app, _msg("/start"))
     assert home["text"] == "📅 לוח השנה המשותף — מה להציג?"

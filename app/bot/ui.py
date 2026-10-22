@@ -317,7 +317,7 @@ def _empty_hint(kind: str, mode: str) -> str:
     if kind == "soon":
         return "אין אירועים ב-30 הימים הקרובים."
     if kind == "shifts":
-        return "אין משמרות בשבועיים הקרובים."
+        return "אין משמרות בשבוע הזה."
     if kind == "person":
         return "אין לאדם הזה משמרות או תזכורות בטווח."
     if kind == "find":
@@ -388,67 +388,60 @@ def _day_bits(items: list[dict], people: dict) -> str:
     return " · ".join(parts)
 
 
-def _week_header(start: date, today: date) -> str:
-    this_sunday = today - timedelta(days=weekday_index(today))
-    delta = (start - this_sunday).days // 7
-    name = {0: "השבוע", 1: "שבוע הבא", -1: "שבוע שעבר"}.get(delta)
-    if name is None:
-        end = start + timedelta(days=6)
-        name = f"{start.day}.{start.month}–{end.day}.{end.month}"
+def _week_header(start: date) -> str:
+    end = start + timedelta(days=6)
+    span = code(f"{greg(start)}–{greg(end)}")
     try:
-        parasha = week_parasha(start + timedelta(days=6))
+        parasha = week_parasha(end)
     except Exception:
         parasha = None
     if parasha:
-        return f"{name} · פרשת {esc(parasha)}"
-    return name
+        return f"{span} · פרשת {esc(parasha)}"
+    return span
 
 
 def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> tuple[str, dict]:
-    """שבוע נוכחי והבא, שורה אחת ליום, וכפתורי היום באותה שורה."""
+    """שבוע אחד (ראשון–שבת). רק ימים עם משמרות, וכפתור לכל משמרת."""
     by_day: dict[str, list[dict]] = {}
     for event in rows:
         raw = (event.get("gregorian_date") or "")[:10]
         by_day.setdefault(raw, []).append(event)
-    lines: list[str] = []
+    lines = [_week_header(anchor)]
     buttons: list[list[tuple[str, str]]] = []
     used: set[str] = set()
-    for start in (anchor, anchor + timedelta(days=7)):
-        lines.append(_week_header(start, today))
-        found = False
-        for offset in range(7):
-            day = start + timedelta(days=offset)
-            items = by_day.get(day.isoformat()) or []
-            if not items:
-                continue
-            found = True
-            items.sort(key=lambda event: _shift_sort_key(event, people))
-            lines.append(
-                f"{_day_letter(day)} {day.day}.{day.month} · {esc(_day_bits(items, people))}"
-            )
-            day_buttons: list[tuple[str, str]] = []
-            for event in items:
-                # היום כבר בשורת הטקסט. תאריך רק כשיש שני כפתורים זהים.
-                label = _shift_bit(event, people)
-                if label in used:
-                    label = f"{day.day}.{day.month} {label}"
-                if label in used:
-                    label = f"{label} #{event.get('id')}"
-                used.add(label)
-                day_buttons.append((label, f"ev:{event.get('id')}:{ymd(day)}"))
-            for index in range(0, len(day_buttons), SHIFTS_PER_ROW):
-                buttons.append(day_buttons[index : index + SHIFTS_PER_ROW])
-        if not found:
-            lines.append("אין משמרות")
-        lines.append("")
+    found = False
+    for offset in range(7):
+        day = anchor + timedelta(days=offset)
+        items = by_day.get(day.isoformat()) or []
+        if not items:
+            continue
+        found = True
+        items.sort(key=lambda event: _shift_sort_key(event, people))
+        lines.append(
+            f"{_day_letter(day)} {day.day}.{day.month} · {esc(_day_bits(items, people))}"
+        )
+        day_buttons: list[tuple[str, str]] = []
+        for event in items:
+            # היום כבר בשורת הטקסט. תאריך רק כשיש שני כפתורים זהים.
+            label = _shift_bit(event, people)
+            if label in used:
+                label = f"{day.day}.{day.month} {label}"
+            if label in used:
+                label = f"{label} #{event.get('id')}"
+            used.add(label)
+            day_buttons.append((label, f"ev:{event.get('id')}:{ymd(day)}"))
+        for index in range(0, len(day_buttons), SHIFTS_PER_ROW):
+            buttons.append(day_buttons[index : index + SHIFTS_PER_ROW])
+    if not found:
+        lines.append("אין משמרות בשבוע הזה")
     previous = anchor - timedelta(days=7)
     following = anchor + timedelta(days=7)
-    buttons.append(
-        [
-            ("שבוע קודם", f"sw:{ymd(previous)}"),
-            ("שבוע הבא", f"sw:{ymd(following)}"),
-        ]
-    )
+    this_sunday = today - timedelta(days=weekday_index(today))
+    nav = [("שבוע קודם", f"sw:{ymd(previous)}")]
+    if anchor != this_sunday:
+        nav.append(("השבוע", f"sw:{ymd(this_sunday)}"))
+    nav.append(("שבוע הבא", f"sw:{ymd(following)}"))
+    buttons.append(nav)
     buttons.append([("➕ משמרת חדשה", "sh:new"), (BTN_MENU, "home")])
     return "\n".join(lines).strip(), kb(buttons)
 
