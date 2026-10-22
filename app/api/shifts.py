@@ -78,6 +78,8 @@ def put_shift_week():
     person, error = _person_or_404(data.get("person_id"))
     if error:
         return error
+    if not shifts_enabled():
+        return jsonify({"error": "המשמרות כבויות בבית הזה", "success": False}), 400
     try:
         start = parse_week_start(data.get("week_start"))
         validate_shift_week(person, start, data.get("cells"))

@@ -16,9 +16,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 
 # גרסה 1: טבלאות בסיס, תזכורות, חזרות, וסכמת משמרות.
 # גרסה 2: יישור כותרת וצבע של משמרות קיימות, בתוך אותו מנעול (אידמפוטנטי).
+# גרסה 3: reminder_sends לפי צ'אט (כדי שלא יישלח שוב אחרי כשל חלקי).
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
@@ -246,8 +247,9 @@ def ensure_recurrence_schema(db) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 reminder_id INTEGER NOT NULL,
                 occurrence_date TEXT NOT NULL,
+                chat_id TEXT NOT NULL DEFAULT '',
                 sent_at TEXT,
-                UNIQUE (reminder_id, occurrence_date),
+                UNIQUE (reminder_id, occurrence_date, chat_id),
                 FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE CASCADE
             )
             """,
@@ -256,6 +258,9 @@ def ensure_recurrence_schema(db) -> None:
             db,
             "CREATE INDEX IF NOT EXISTS idx_reminder_sends_reminder ON reminder_sends(reminder_id)",
         )
+        from app.reminders.repository import ensure_reminder_sends_per_chat
+
+        ensure_reminder_sends_per_chat(db)
 
 def _migrate_hebrew_years_to_letters(db):
     """ממיר שנים מספריות בתאריכים עבריים שמורים לאותיות (פעם אחת לנתונים קיימים)."""
@@ -572,18 +577,20 @@ def import_data(payload, mode="replace"):
             if not isinstance(event, dict):
                 raise ValueError("Each event must be an object")
 
-            title = event.get("title")
-            gregorian_date = event.get("gregorian_date")
-            hebrew_date = event.get("hebrew_date")
+            from app.services.event_payload import EventPayloadError, clean_event_write
 
-            if not title or not gregorian_date or not hebrew_date:
-                raise ValueError("Event entries must include title, gregorian_date and hebrew_date")
+            try:
+                cleaned = clean_event_write(event)
+            except EventPayloadError as exc:
+                raise ValueError(str(exc)) from exc
 
-            hebrew_date = normalize_hebrew_date_text(hebrew_date)
-            time_value = event.get("time")
-            description = event.get("description", "")
-            end_date = _normalize_end_date(gregorian_date, event.get("end_date"))
-            color_value = event.get("color")
+            title = cleaned["title"]
+            gregorian_date = cleaned["gregorian_date"]
+            hebrew_date = normalize_hebrew_date_text(cleaned["hebrew_date"])
+            time_value = cleaned["time"]
+            description = cleaned["description"]
+            end_date = cleaned["end_date"]
+            color_value = cleaned["color"] if "color" in cleaned else event.get("color")
             fingerprint = _event_fingerprint({
                 **event,
                 "end_date": end_date,
@@ -897,9 +904,9 @@ def delete_event(event_id):
         )
         db.execute("DELETE FROM reminders WHERE event_id = ?", (event_id,))
         db.execute("DELETE FROM event_exceptions WHERE event_id = ?", (event_id,))
-        db.execute("DELETE FROM events WHERE id = ?", (event_id,))
+        cursor = db.execute("DELETE FROM events WHERE id = ?", (event_id,))
         db.commit()
-        return True
+        return cursor.rowcount > 0
     except sqlite3.Error as e:
         print(f"Error deleting event: {e}")
         return False

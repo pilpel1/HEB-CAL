@@ -3,6 +3,8 @@ import json
 import sqlite3
 from datetime import date
 
+import pytest
+
 from app.services.shifts import default_week_start, shift_title
 
 
@@ -10,6 +12,16 @@ def _allowed(labels_days):
     base = {"בוקר": [], "ערב": [], "לילה": []}
     base.update(labels_days)
     return base
+
+
+@pytest.fixture(autouse=True)
+def _enable_shifts(client, request):
+    """הכתיבה לרשת דורשת מתג דלוק. בדיקת ברירת המחדל נשארת כבויה."""
+    if request.node.name == "test_household_toggle_defaults_off":
+        yield
+        return
+    client.put("/api/shifts/settings", json={"enabled": True})
+    yield
 
 
 def _person(client, name="אביחי", **extra):

@@ -82,6 +82,8 @@ from . import shifts  # noqa: E402,F401
 
 @api.route('/calendar/<int:year>/<int:month>')
 def get_calendar(year, month):
+    if not 1 <= month <= 12 or not MINYEAR <= year <= MAXYEAR:
+        return jsonify({'error': 'Invalid year or month'}), 400
     # יצירת לוח שנה חדש
     cal = calendar.monthcalendar(year, month)
     

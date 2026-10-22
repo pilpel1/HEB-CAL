@@ -204,7 +204,10 @@ def nth_start(anchor: date, freq: str, calendar_name: str, index: int) -> date:
 
 def iter_starts(event: dict):
     """מניב (date, index) מהעוגן, כולל חיתוך until/count."""
-    anchor = _parse_iso(event.get("gregorian_date"))
+    try:
+        anchor = _parse_iso(event.get("gregorian_date"))
+    except RecurrenceError:
+        return
     if anchor is None:
         return
     rule = recurrence_fields(event)
@@ -228,8 +231,11 @@ def iter_starts(event: dict):
 
 
 def duration_days(event: dict) -> int:
-    start = _parse_iso(event.get("gregorian_date"))
-    end = _parse_iso(event.get("end_date"))
+    try:
+        start = _parse_iso(event.get("gregorian_date"))
+        end = _parse_iso(event.get("end_date"))
+    except RecurrenceError:
+        return 0
     if not start or not end or end <= start:
         return 0
     return (end - start).days

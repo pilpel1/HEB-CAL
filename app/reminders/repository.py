@@ -225,6 +225,27 @@ def update_person(
 
 def delete_person(person_id: int) -> bool:
     db = get_db()
+    rows = db.execute("SELECT id, recipient_ids FROM reminders").fetchall()
+    for row in rows:
+        try:
+            ids = json.loads(row["recipient_ids"] or "[]")
+        except (TypeError, json.JSONDecodeError):
+            ids = []
+        if not isinstance(ids, list):
+            ids = []
+        leftover = []
+        for item in ids:
+            try:
+                number = int(item)
+            except (TypeError, ValueError):
+                continue
+            if number != person_id and number not in leftover:
+                leftover.append(number)
+        if leftover != ids:
+            db.execute(
+                "UPDATE reminders SET recipient_ids = ? WHERE id = ?",
+                (json.dumps(leftover), row["id"]),
+            )
     cursor = db.execute("DELETE FROM reminder_people WHERE id = ?", (person_id,))
     db.commit()
     return cursor.rowcount > 0
@@ -295,7 +316,9 @@ def replace_event_reminders(event_id: int, reminders: list[dict], *, commit: boo
                     "UPDATE reminders SET recipient_ids = ?, sent_at = NULL WHERE id = ?",
                     (ids_json, primary["id"]),
                 )
+                db.execute("DELETE FROM reminder_sends WHERE reminder_id = ?", (primary["id"],))
             for extra in rows[1:]:
+                db.execute("DELETE FROM reminder_sends WHERE reminder_id = ?", (extra["id"],))
                 db.execute("DELETE FROM reminders WHERE id = ?", (extra["id"],))
         else:
             db.execute(
@@ -309,6 +332,7 @@ def replace_event_reminders(event_id: int, reminders: list[dict], *, commit: boo
     for offset, rows in by_offset.items():
         if offset not in seen:
             for row in rows:
+                db.execute("DELETE FROM reminder_sends WHERE reminder_id = ?", (row["id"],))
                 db.execute("DELETE FROM reminders WHERE id = ?", (row["id"],))
 
     if commit:
@@ -322,32 +346,76 @@ def delete_reminders_for_event(event_id: int, *, commit: bool = True) -> None:
         db.commit()
 
 
+def ensure_reminder_sends_per_chat(db) -> None:
+    """מוסיף chat_id ל-reminder_sends. שורה ישנה מקבלת chat_id ריק (= כל הצ'אטים)."""
+    from app.database import _schema_execute, exclusive_schema_transaction
+
+    with exclusive_schema_transaction(db):
+        tables = {
+            row[0]
+            for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "reminder_sends" not in tables:
+            return
+        cols = {row[1] for row in db.execute("PRAGMA table_info(reminder_sends)")}
+        if "chat_id" in cols:
+            return
+        _schema_execute(db, "ALTER TABLE reminder_sends RENAME TO reminder_sends_legacy")
+        _schema_execute(
+            db,
+            """
+            CREATE TABLE reminder_sends (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reminder_id INTEGER NOT NULL,
+                occurrence_date TEXT NOT NULL,
+                chat_id TEXT NOT NULL DEFAULT '',
+                sent_at TEXT,
+                UNIQUE (reminder_id, occurrence_date, chat_id),
+                FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE CASCADE
+            )
+            """,
+        )
+        db.execute(
+            """
+            INSERT INTO reminder_sends (reminder_id, occurrence_date, chat_id, sent_at)
+            SELECT reminder_id, occurrence_date, '', sent_at FROM reminder_sends_legacy
+            """
+        )
+        _schema_execute(db, "DROP TABLE reminder_sends_legacy")
+        _schema_execute(
+            db,
+            "CREATE INDEX IF NOT EXISTS idx_reminder_sends_reminder ON reminder_sends(reminder_id)",
+        )
+
+
 def mark_reminder_sent(
     reminder_id: int,
     sent_at: datetime | None = None,
     *,
     occurrence_date: str | None = None,
+    chat_id: str | None = None,
 ) -> None:
     """חותמת שליחה.
 
-    בלי ``occurrence_date`` — ``sent_at`` על שורת התזכורת (אירוע חד-פעמי).
-    עם תאריך מופע — שורה ב-``reminder_sends``, כדי שהמופע הבא בסדרה עדיין יישלח.
+    ``chat_id`` — רק הצ'אט הזה (כשל חלקי לא שולח שוב לאחרים).
+    בלי ``occurrence_date`` ובלי צ'אט — ``sent_at`` על שורת התזכורת (חד-פעמי).
+    עם תאריך מופע — שורה ב-``reminder_sends``.
     """
     db = get_db()
     stamp = sent_at or datetime.now(timezone.utc)
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=timezone.utc)
     text = stamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    if occurrence_date:
+    if chat_id or occurrence_date:
         db.execute(
             """
-            INSERT INTO reminder_sends (reminder_id, occurrence_date, sent_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(reminder_id, occurrence_date) DO NOTHING
+            INSERT INTO reminder_sends (reminder_id, occurrence_date, chat_id, sent_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(reminder_id, occurrence_date, chat_id) DO NOTHING
             """,
-            (reminder_id, occurrence_date[:10], text),
+            (reminder_id, (occurrence_date or "")[:10], str(chat_id or ""), text),
         )
-    else:
+    if not chat_id and not occurrence_date:
         db.execute(
             "UPDATE reminders SET sent_at = ? WHERE id = ? AND sent_at IS NULL",
             (text, reminder_id),
@@ -361,6 +429,39 @@ def sent_occurrence_keys() -> set[tuple[int, str]]:
         "SELECT reminder_id, occurrence_date FROM reminder_sends"
     ).fetchall()
     return {(row["reminder_id"], row["occurrence_date"]) for row in rows}
+
+
+def sent_chat_keys() -> set[tuple[int, str, str]]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT reminder_id, occurrence_date, chat_id FROM reminder_sends"
+    ).fetchall()
+    return {
+        (row["reminder_id"], row["occurrence_date"], row["chat_id"] or "")
+        for row in rows
+    }
+
+
+def clear_reminder_delivery(event_id: int, *, commit: bool = True) -> None:
+    """מאפס חותמות שליחה אחרי שינוי שעה/תאריך, כדי שהתזכורת תישלח מחדש."""
+    db = get_db()
+    db.execute(
+        """
+        DELETE FROM reminder_sends
+        WHERE reminder_id IN (SELECT id FROM reminders WHERE event_id = ?)
+        """,
+        (event_id,),
+    )
+    db.execute("UPDATE reminders SET sent_at = NULL WHERE event_id = ?", (event_id,))
+    if commit:
+        db.commit()
+
+
+def clear_reminder_sends(reminder_id: int, *, commit: bool = False) -> None:
+    db = get_db()
+    db.execute("DELETE FROM reminder_sends WHERE reminder_id = ?", (reminder_id,))
+    if commit:
+        db.commit()
 
 
 def load_reminder_rows() -> list[dict]:
