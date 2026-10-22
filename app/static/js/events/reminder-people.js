@@ -8,7 +8,75 @@ function initReminderPeoplePage() {
     }
     form.addEventListener('submit', saveReminderPerson);
     document.getElementById('reminderPersonCancel')?.addEventListener('click', resetReminderPersonForm);
+    initChatIdHelp();
     loadReminderPeople();
+}
+
+function placeChatIdHelp() {
+    const button = document.getElementById('chatIdHelpBtn');
+    const pop = document.getElementById('chatIdHelp');
+    if (!button || !pop || pop.hidden) {
+        return;
+    }
+    const margin = 8;
+    const rect = button.getBoundingClientRect();
+    const width = pop.offsetWidth;
+    const height = pop.offsetHeight;
+    let top = rect.bottom + margin;
+    if (top + height > window.innerHeight - margin) {
+        top = rect.top - margin - height;
+    }
+    if (top < margin) {
+        top = margin;
+    }
+    let left = rect.right - width;
+    if (left < margin) {
+        left = margin;
+    }
+    if (left + width > window.innerWidth - margin) {
+        left = window.innerWidth - margin - width;
+    }
+    pop.style.top = `${Math.round(top)}px`;
+    pop.style.left = `${Math.round(left)}px`;
+}
+
+function initChatIdHelp() {
+    const button = document.getElementById('chatIdHelpBtn');
+    const pop = document.getElementById('chatIdHelp');
+    if (!button || !pop) {
+        return;
+    }
+    const close = () => {
+        pop.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+    };
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const open = pop.hidden;
+        pop.hidden = !open;
+        button.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) {
+            placeChatIdHelp();
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (pop.hidden) {
+            return;
+        }
+        if (pop.contains(event.target) || button.contains(event.target)) {
+            return;
+        }
+        close();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !pop.hidden) {
+            close();
+            button.focus();
+        }
+    });
+    window.addEventListener('resize', placeChatIdHelp);
+    window.addEventListener('scroll', placeChatIdHelp, true);
 }
 
 function setReminderPersonError(message) {

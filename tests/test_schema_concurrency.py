@@ -348,3 +348,50 @@ def test_duplicate_column_and_already_exists_are_success(tmp_path):
         assert "is_shift" in cols
     finally:
         conn.close()
+
+
+def test_version_two_rewrites_shift_rows_already_at_version_one(tmp_path):
+    """בסיס שכבר עבר את גרסה 1 מקבל את יישור הכותרת והצבע במנעול של גרסה 2."""
+    path = tmp_path / "v1.sqlite"
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        from app.database import SCHEMA_VERSION, apply_pending_migrations
+
+        assert SCHEMA_VERSION >= 2
+        apply_pending_migrations(conn)
+        conn.execute("PRAGMA user_version = 1")
+        conn.execute(
+            "INSERT INTO reminder_people (name, telegram_chat_id, color) VALUES ('אביחי', '1', 'cyan')"
+        )
+        person_id = conn.execute("SELECT id FROM reminder_people").fetchone()["id"]
+        conn.execute(
+            """
+            INSERT INTO events (
+                title, gregorian_date, hebrew_date, color,
+                is_shift, shift_person_id, shift_label
+            ) VALUES ('אביחי — בוקר', '2026-10-18', 'א', NULL, 1, ?, 'בוקר')
+            """,
+            (person_id,),
+        )
+        conn.execute(
+            """
+            INSERT INTO events (title, gregorian_date, hebrew_date, is_shift)
+            VALUES ('יום הולדת', '2026-01-01', 'א', 0)
+            """
+        )
+        conn.commit()
+
+        apply_pending_migrations(conn)
+        shift = conn.execute(
+            "SELECT title, color FROM events WHERE shift_label = 'בוקר'"
+        ).fetchone()
+        assert shift["title"] == "בוקר"
+        assert shift["color"] == "cyan"
+        plain = conn.execute(
+            "SELECT title FROM events WHERE gregorian_date = '2026-01-01'"
+        ).fetchone()
+        assert plain["title"] == "יום הולדת"
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    finally:
+        conn.close()

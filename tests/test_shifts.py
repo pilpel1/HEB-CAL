@@ -679,6 +679,12 @@ def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar
     assert "הזן משמרות" in calendar
+    assert 'class="shift-grid-icon"' in calendar
+    assert "fa-user-clock" not in calendar
+    plus = calendar.index('id="addEventFromCalendarBtn"')
+    shifts = calendar.index('id="enterShiftsBtn"')
+    listing = calendar.index('id="calendarEventsLink"')
+    assert plus < shifts < listing
     assert 'class="btn btn-outline-secondary settings-gear-btn"' in calendar
     assert 'aria-label="הגדרות"' in calendar
     assert 'href="/settings"' in calendar
@@ -702,3 +708,11 @@ def test_calendar_and_settings_markup(client):
     assert "מצב כהה" in settings
     assert "תצוגה צפופה" in settings
     assert "אנשים לתזכורות" in settings
+    assert 'id="chatIdHelpBtn"' in settings
+    assert 'aria-label="איך משיגים מזהה צ׳אט"' in settings
+    label = settings.index("מזהה צ׳אט בטלגרם")
+    help_btn = settings.index('id="chatIdHelpBtn"')
+    help_pop = settings.index('id="chatIdHelp"')
+    assert label < help_btn < help_pop
+    assert "TELEGRAM_BOT_TOKEN" in settings[help_pop:help_pop + 1200]
+    assert '<h2 class="h5">איך משיגים מזהה צ׳אט</h2>' not in settings

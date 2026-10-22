@@ -14,10 +14,11 @@ from app.services.recurrence import clean_recurrence, recurrence_fields
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 
-# כל הסכמה הנוכחית (טבלאות בסיס, תזכורות, חזרות, משמרות) היא גרסה 1.
+# גרסה 1: טבלאות בסיס, תזכורות, חזרות, וסכמת משמרות.
+# גרסה 2: יישור כותרת וצבע של משמרות קיימות, בתוך אותו מנעול (אידמפוטנטי).
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
-# הגוף אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג לא משנה שורות.
-SCHEMA_VERSION = 1
+# גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
+SCHEMA_VERSION = 2
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
