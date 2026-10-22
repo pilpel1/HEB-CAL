@@ -761,11 +761,18 @@ function applyQuickShiftLook() {
     if (!on || shiftUiState.filling) {
         return;
     }
-    const label = document.getElementById('quick_shift_label')?.value || 'בוקר';
+    const labelInput = document.getElementById('quick_shift_label');
     const title = document.getElementById('quick_title');
-    if (title) {
+    if (labelInput && title && !labelInput.value.trim() && title.value.trim()) {
+        labelInput.value = title.value.trim();
+    }
+    const label = (labelInput?.value || '').trim();
+    if (title && label) {
         title.value = label;
     }
+    document.querySelectorAll('#quick_shift_picks [data-shift-pick]').forEach((button) => {
+        button.classList.toggle('is-selected', button.dataset.shiftPick === label);
+    });
     const personId = document.getElementById('quick_shift_person')?.value;
     const person = (shiftUiState.people || []).find((item) => String(item.id) === String(personId));
     if (typeof setQuickColor === 'function') {
@@ -791,7 +798,18 @@ function initQuickShiftFields() {
     box.dataset.bound = '1';
     box.addEventListener('change', applyQuickShiftLook);
     document.getElementById('quick_shift_person')?.addEventListener('change', applyQuickShiftLook);
-    document.getElementById('quick_shift_label')?.addEventListener('change', applyQuickShiftLook);
+    document.getElementById('quick_shift_label')?.addEventListener('input', applyQuickShiftLook);
+    document.getElementById('quick_shift_picks')?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-shift-pick]');
+        if (!button) {
+            return;
+        }
+        const input = document.getElementById('quick_shift_label');
+        if (input) {
+            input.value = button.dataset.shiftPick || '';
+        }
+        applyQuickShiftLook();
+    });
 }
 
 async function fillQuickShiftFields(eventData) {
@@ -832,8 +850,11 @@ async function fillQuickShiftFields(eventData) {
         }
         const label = document.getElementById('quick_shift_label');
         if (label) {
-            label.value = data.shift_label || 'בוקר';
+            label.value = data.shift_label || '';
         }
+        document.querySelectorAll('#quick_shift_picks [data-shift-pick]').forEach((button) => {
+            button.classList.toggle('is-selected', button.dataset.shiftPick === (data.shift_label || ''));
+        });
         if (panel) {
             panel.hidden = !isShift;
         }
@@ -863,6 +884,6 @@ function readQuickShiftFields() {
     return {
         is_shift: true,
         shift_person_id: personId ? Number(personId) : null,
-        shift_label: document.getElementById('quick_shift_label')?.value || '',
+        shift_label: (document.getElementById('quick_shift_label')?.value || '').trim(),
     };
 }

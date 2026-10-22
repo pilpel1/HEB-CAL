@@ -550,6 +550,10 @@ function initQuickEventModal() {
             alert('חסר תאריך סיום לחזרה');
             return;
         }
+        if (eventData.is_shift && !String(eventData.shift_label || '').trim()) {
+            alert('כתבו מה המשמרת');
+            return;
+        }
         if (eventData.is_shift) {
             eventData.recurrence_freq = '';
             eventData.recurrence_until = null;

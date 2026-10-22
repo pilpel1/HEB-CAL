@@ -604,6 +604,76 @@ def test_manual_shift_is_allowed_outside_the_rules(client):
     assert plain["title"] == "כבר לא משמרת"
 
 
+def test_free_text_shift_survives_grid_resave(client):
+    person = _person(client, name="אביחי", color="orange", shift_allowed=_allowed({
+        "בוקר": [0, 1, 2, 3, 4],
+        "ערב": [],
+        "לילה": [],
+    }))
+    created = client.post("/api/events", json={
+        "title": "משהו אחר",
+        "gregorian_date": "2026-10-21",
+        "hebrew_date": "א",
+        "color": "green",
+        "is_shift": True,
+        "shift_person_id": person["id"],
+        "shift_label": "יום מחלה",
+    })
+    assert created.status_code == 200, created.get_json()
+    shift_id = created.get_json()["id"]
+    event = client.get(f"/api/events/{shift_id}").get_json()
+    assert event["title"] == "יום מחלה"
+    assert event["shift_label"] == "יום מחלה"
+    assert event["color"] == "orange"
+    assert event["is_shift"] == 1
+
+    morning = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-21", "label": "בוקר"}],
+    })
+    assert morning.status_code == 200, morning.get_json()
+    morning_id = morning.get_json()["created"][0]
+
+    wiped = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [],
+    })
+    assert wiped.status_code == 200, wiped.get_json()
+    assert morning_id in wiped.get_json()["deleted"]
+    left = {row["id"]: row for row in client.get("/api/events").get_json()}
+    assert morning_id not in left
+    assert left[shift_id]["title"] == "יום מחלה"
+    assert left[shift_id]["shift_label"] == "יום מחלה"
+    assert left[shift_id]["color"] == "orange"
+    assert left[shift_id]["is_shift"] == 1
+
+    view = client.get(
+        f"/api/shifts/week?person_id={person['id']}&week_start=2026-10-18"
+    ).get_json()
+    wednesday = next(day for day in view["days"] if day["date"] == "2026-10-21")
+    assert wednesday["checked"] == []
+
+    empty = client.post("/api/events", json={
+        "title": "ריק",
+        "gregorian_date": "2026-10-22",
+        "hebrew_date": "ב",
+        "is_shift": True,
+        "shift_person_id": person["id"],
+        "shift_label": "   ",
+    })
+    assert empty.status_code == 400
+    assert "כתבו" in empty.get_json()["error"]
+
+    grid_label = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-21", "label": "יום מחלה"}],
+    })
+    assert grid_label.status_code == 400
+
+
 def test_calendar_and_settings_markup(client):
     calendar = client.get("/").get_data(as_text=True)
     assert 'id="enterShiftsBtn"' in calendar

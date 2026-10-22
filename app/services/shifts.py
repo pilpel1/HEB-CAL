@@ -19,6 +19,7 @@ from datetime import date, timedelta
 from app.services.recurrence import hebrew_display
 
 SHIFT_LABELS = ("בוקר", "ערב", "לילה")
+SHIFT_LABEL_MAX = 80
 PERSON_COLORS = ("cyan", "yellow", "orange", "green")
 
 # יום ראשון = 0 ... שבת = 6. תואם ל-JS Date.getDay ולכותרת הלוח.
@@ -196,9 +197,7 @@ def resolve_manual_shift(data: dict):
     if not _truthy_flag(data.get("is_shift")):
         return {"is_shift": 0, "shift_person_id": None, "shift_label": None}
 
-    label = str(data.get("shift_label") or "").strip()
-    if label not in SHIFT_LABELS:
-        raise ShiftError("בחרו בוקר, ערב או לילה")
+    label = clean_shift_label(data.get("shift_label"))
     try:
         person_id = int(data.get("shift_person_id"))
     except (TypeError, ValueError) as exc:
@@ -221,7 +220,9 @@ def resolve_manual_shift(data: dict):
 
 
 def validate_shift_week(person: dict, week_start: date, cells) -> set[tuple[str, str]]:
-    """דוחה תא חדש שלא מותר לאדם. נקרא מה-API לפני כל כתיבה.
+    """דוחה תא חדש מהרשת שלא מותר לאדם. נקרא מה-API לפני כל כתיבה.
+
+    רק התוויות בוקר/ערב/לילה. טקסט חופשי (יום מחלה) לא עובר כאן.
 
     משמרת שכבר שמורה באותו תא לא נבדקת כאן: אי אפשר להשאיר אותה מסומנת
     בלי שהשמירה של שאר השבוע תיכשל. יצירה של תא אסור כן נכשלת.
@@ -269,6 +270,16 @@ def default_week_start(today: date | None = None) -> date:
     return sunday
 
 
+def clean_shift_label(value) -> str:
+    """תווית חופשית למשמרת ידנית. הרשת עצמה מוגבלת לבוקר/ערב/לילה."""
+    label = str(value or "").strip()
+    if not label:
+        raise ShiftError("כתבו מה המשמרת")
+    if len(label) > SHIFT_LABEL_MAX:
+        raise ShiftError("התיאור ארוך מדי")
+    return label
+
+
 def _truthy_flag(value) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in ("1", "true", "yes")
@@ -291,9 +302,7 @@ def shift_columns_from_payload(event: dict, *, missing: str):
     raw_label = event.get("shift_label")
     label = None
     if raw_label is not None and str(raw_label).strip() != "":
-        label = str(raw_label).strip()
-        if label not in SHIFT_LABELS:
-            raise ShiftError("תווית משמרת לא מוכרת")
+        label = clean_shift_label(raw_label)
 
     raw_person = event.get("shift_person_id")
     person_id = None
@@ -494,10 +503,11 @@ def _rewrite_shift_row(db, event_id: int, person: dict, label: str) -> None:
 
 
 def save_shift_week(person: dict, week_start: date, cells) -> dict:
-    """מוסיף תאים חדשים ומוחק משמרות שסומנו כבוי. לא נוגע באירוע רגיל.
+    """מוסיף תאי רשת ומוחק רק תאים של הרשת שסומנו כבוי.
 
-    תא חדש חייב להיות מותר לאדם. משמרת שכבר קיימת נשארת גם אם הכלל השתנה
-    מאז (אחרת אי אפשר היה לשמור שבוע בלי למחוק משהו שהמשתמש לא יכול לכבות).
+    לא נוגע באירוע רגיל, ולא במשמרת ידנית עם טקסט חופשי (יום מחלה, יום חופש).
+    תא חדש של הרשת חייב להיות מותר לאדם. משמרת רשת שכבר קיימת נשארת גם אם
+    הכלל השתנה מאז.
     """
     from app.database import get_db
 
@@ -582,16 +592,15 @@ def normalize_shift_events(db) -> None:
     columns = {row[1] for row in db.execute("PRAGMA table_info(events)")}
     if "is_shift" not in columns or "shift_label" not in columns or "title" not in columns:
         return
-    placeholders = ",".join("?" for _ in SHIFT_LABELS)
     db.execute(
-        f"""
+        """
         UPDATE events
         SET title = shift_label
         WHERE is_shift = 1
-          AND shift_label IN ({placeholders})
+          AND shift_label IS NOT NULL
+          AND shift_label != ''
           AND title IS NOT shift_label
-        """,
-        SHIFT_LABELS,
+        """
     )
     if (
         "color" in columns
@@ -622,9 +631,9 @@ def normalize_shift_events(db) -> None:
 
 
 def annotate_shift_events(events: list[dict]) -> list[dict]:
-    """בתצוגה, צ'יפ משמרת תמיד בצבע האדם ובכותרת של סוג המשמרת.
+    """בתצוגה, צ'יפ משמרת בצבע האדם ובכותרת של התווית.
 
-    גם אם השורה נשמרה בלי צבע או עם כותרת ישנה ``אביחי — בוקר``.
+    גם טקסט חופשי (``יום מחלה``), וגם שורה ישנה ``אביחי — בוקר``.
     """
     if not events or not any(event.get("is_shift") for event in events):
         return events
@@ -634,8 +643,8 @@ def annotate_shift_events(events: list[dict]) -> list[dict]:
     for event in events:
         if not event.get("is_shift"):
             continue
-        label = event.get("shift_label")
-        if label in SHIFT_LABELS:
+        label = str(event.get("shift_label") or "").strip()
+        if label:
             event["title"] = label
         person = people.get(event.get("shift_person_id"))
         if person and person.get("color"):

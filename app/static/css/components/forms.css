@@ -333,9 +333,33 @@
     margin-top: 0.15rem;
 }
 
-.quick-shift-panel .form-select {
-    flex: 1 1 8rem;
+.quick-shift-panel .form-select,
+.quick-shift-panel .form-control {
+    flex: 1 0 100%;
     min-height: 40px;
+}
+
+.quick-shift-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.quick-shift-pick {
+    min-height: 40px;
+    padding: 0.2rem 0.75rem;
+    border: 1px solid var(--border-color, #ced4da);
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+.quick-shift-pick.is-selected {
+    border-color: var(--primary-color, #2563eb);
+    background: rgba(37, 99, 235, 0.12);
+    font-weight: 700;
 }
 
 .quick-shift-note {
