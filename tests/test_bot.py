@@ -44,6 +44,7 @@ def _buttons(reply):
         for button in row:
             assert button["text"]
             assert 1 <= len(button["callback_data"].encode("utf-8")) <= 64
+            assert button.get("style") in (None, "danger", "success", "primary")
             found.append(button)
     return found
 
@@ -98,6 +99,66 @@ def _titles(app):
         from app.database import get_all_events
 
         return [event["title"] for event in get_all_events()]
+
+
+def test_button_style_is_semantic_and_ignores_colors():
+    from app.bot.ui import button_style, kb
+
+    assert button_style("rm:4") == "danger"
+    assert button_style("rmy:4") == "danger"
+    assert button_style("add") == "success"
+    assert button_style("sh:new") == "success"
+    assert button_style("set:new") == "success"
+    assert button_style("add:ok") == "success"
+    assert button_style("ed:ok") == "success"
+    assert button_style("sh:ok") == "success"
+    assert button_style("ed:force") == "success"
+    assert button_style("ed:12") == "primary"
+    assert button_style("today") is None
+    assert button_style("ev:3:20261022") is None
+    assert button_style("home") is None
+    assert button_style("set:hh:1") is None
+    for color in ("cyan", "yellow", "orange", "green", "red", "blue", "pink"):
+        assert button_style(color) is None
+    marked = kb([[("שמירה", "add:ok"), ("היום", "today")]])
+    save, other = marked["inline_keyboard"][0]
+    assert save["style"] == "success"
+    assert "style" not in other
+
+
+def test_screen_styles_match_the_action(app):
+    from app.services.shifts import set_shifts_enabled
+
+    _person(app, "דני", chat=42)
+    menu = _go(app, _msg("/start"))
+    styles = {button["text"]: button.get("style") for button in _buttons(menu)}
+    assert styles["➕ הוספת אירוע"] == "success"
+    assert styles["📆 אירועי היום"] is None
+    assert styles["⚙️ הגדרות"] is None
+
+    _event(app, "פגישה", TODAY, time="10:00")
+    card = _press(app, _go(app, _msg("/today")), "פגישה")
+    card_styles = {button["text"]: button.get("style") for button in _buttons(card)}
+    assert card_styles["✏️ עריכה"] == "primary"
+    assert card_styles["🗑 מחיקה"] == "danger"
+    assert card_styles["↩️ חזרה לרשימה"] is None
+    ask = _press(app, card, "מחיקה")
+    ask_styles = {button["text"]: button.get("style") for button in _buttons(ask)}
+    assert ask_styles["כן, למחוק"] == "danger"
+    assert ask_styles["לא"] is None
+
+    with app.app_context():
+        set_shifts_enabled(True)
+    _person(app, "אביחי", works_shifts=1)
+    board = _go(app, _cb("shifts"))
+    board_styles = {button["text"]: button.get("style") for button in _buttons(board)}
+    assert board_styles["➕ משמרת חדשה"] == "success"
+    assert board_styles["🏠 תפריט ראשי"] is None
+    assert all(
+        button.get("style") is None
+        for button in _buttons(board)
+        if button["callback_data"].startswith("ev:")
+    )
 
 
 def test_parse_rejects_impossible_dates_and_times():

@@ -24,6 +24,29 @@ DAY_LETTERS = ("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳")
 SHIFTS_PER_ROW = 3
 
 
+_BUTTON_STYLES = frozenset({"danger", "success", "primary"})
+# שמירה, הוספה ויצירה. אישור מחיקה לא כאן — הוא danger.
+_SUCCESS_ACTIONS = frozenset(
+    {"add", "sh:new", "set:new", "add:ok", "ed:ok", "sh:ok", "ed:force"}
+)
+
+
+def button_style(callback_data: str) -> str | None:
+    """סגנון Bot API 9.4 לפי הפעולה. לקוח ישן מתעלם מהשדה.
+
+    danger למחיקה, success להוספה/יצירה/שמירה, primary לפתיחת עריכה.
+    אין כאן צבע של אדם או של יומן.
+    """
+    data = str(callback_data or "")
+    if data.startswith("rmy:") or data.startswith("rm:"):
+        return "danger"
+    if data in _SUCCESS_ACTIONS:
+        return "success"
+    if data.startswith("ed:") and data[3:].isdigit():
+        return "primary"
+    return None
+
+
 def kb(rows: list[list[tuple[str, str]]]) -> dict:
     inline = []
     for row in rows:
@@ -32,7 +55,13 @@ def kb(rows: list[list[tuple[str, str]]]) -> dict:
             raw = str(data)
             if not raw or len(raw.encode("utf-8")) > 64:
                 raise ValueError(f"callback_data too long: {raw!r}")
-            buttons.append({"text": clip(text, 40), "callback_data": raw})
+            button = {"text": clip(text, 40), "callback_data": raw}
+            style = button_style(raw)
+            if style:
+                if style not in _BUTTON_STYLES:
+                    raise ValueError(f"unknown button style: {style!r}")
+                button["style"] = style
+            buttons.append(button)
         if buttons:
             inline.append(buttons)
     if not inline:
