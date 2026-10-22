@@ -13,10 +13,24 @@ const shiftUiState = {
     rulesDirty: false,
     rulesSaving: false,
     rulesAgain: false,
+    autoTitle: '',
 };
 
 function shiftLabelNames() {
     return ['בוקר', 'ערב', 'לילה'];
+}
+
+// לחיצה על בוקר/ערב/לילה קובעת את סוג המשמרת.
+// את הכותרת ממלאים רק כשהיא ריקה, או שעדיין שווה למילוי האוטומטי הקודם.
+// טקסט שהמשתמש כתב (למשל «בוקר מוקדם») לא נדרס.
+function shiftTitleAfterPick(currentTitle, previousAuto, nextLabel) {
+    const current = String(currentTitle || '').trim();
+    const auto = String(previousAuto || '').trim();
+    const next = String(nextLabel || '').trim();
+    if (!current || (auto && current === auto)) {
+        return { title: next, auto: next, filled: true };
+    }
+    return { title: current, auto, filled: false };
 }
 
 function shiftDayLetters() {
@@ -1001,6 +1015,21 @@ function fillQuickShiftPeople(selectedId) {
     }
 }
 
+function paintQuickShiftPicks() {
+    const label = (document.getElementById('quick_shift_label')?.value || '').trim();
+    document.querySelectorAll('#quick_shift_picks [data-shift-pick]').forEach((button) => {
+        const on = button.dataset.shiftPick === label;
+        button.classList.toggle('is-selected', on);
+        button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+}
+
+function rememberShiftAutoTitle() {
+    const label = (document.getElementById('quick_shift_label')?.value || '').trim();
+    const title = (document.getElementById('quick_title')?.value || '').trim();
+    shiftUiState.autoTitle = shiftLabelNames().includes(label) && title === label ? label : '';
+}
+
 function applyQuickShiftLook() {
     const on = Boolean(document.getElementById('quick_shift_enabled')?.checked);
     const panel = document.getElementById('quick_shift_panel');
@@ -1012,21 +1041,10 @@ function applyQuickShiftLook() {
         recurrence.hidden = on;
     }
     document.querySelector('#quickEventModal .quick-color-picker')?.classList.toggle('is-shift-locked', on);
+    paintQuickShiftPicks();
     if (!on || shiftUiState.filling) {
         return;
     }
-    const labelInput = document.getElementById('quick_shift_label');
-    const title = document.getElementById('quick_title');
-    if (labelInput && title && !labelInput.value.trim() && title.value.trim()) {
-        labelInput.value = title.value.trim();
-    }
-    const label = (labelInput?.value || '').trim();
-    if (title && label) {
-        title.value = label;
-    }
-    document.querySelectorAll('#quick_shift_picks [data-shift-pick]').forEach((button) => {
-        button.classList.toggle('is-selected', button.dataset.shiftPick === label);
-    });
     const personId = document.getElementById('quick_shift_person')?.value;
     const person = (shiftUiState.people || []).find((item) => String(item.id) === String(personId));
     if (typeof setQuickColor === 'function') {
@@ -1044,6 +1062,20 @@ function applyQuickShiftLook() {
     }
 }
 
+function chooseQuickShiftLabel(label) {
+    const title = document.getElementById('quick_title');
+    const result = shiftTitleAfterPick(title ? title.value : '', shiftUiState.autoTitle, label);
+    if (title && result.filled) {
+        title.value = result.title;
+    }
+    shiftUiState.autoTitle = result.auto;
+    const hidden = document.getElementById('quick_shift_label');
+    if (hidden) {
+        hidden.value = label;
+    }
+    applyQuickShiftLook();
+}
+
 function initQuickShiftFields() {
     const box = document.getElementById('quick_shift_enabled');
     if (!box || box.dataset.bound === '1') {
@@ -1052,17 +1084,12 @@ function initQuickShiftFields() {
     box.dataset.bound = '1';
     box.addEventListener('change', applyQuickShiftLook);
     document.getElementById('quick_shift_person')?.addEventListener('change', applyQuickShiftLook);
-    document.getElementById('quick_shift_label')?.addEventListener('input', applyQuickShiftLook);
     document.getElementById('quick_shift_picks')?.addEventListener('click', (event) => {
         const button = event.target.closest('[data-shift-pick]');
         if (!button) {
             return;
         }
-        const input = document.getElementById('quick_shift_label');
-        if (input) {
-            input.value = button.dataset.shiftPick || '';
-        }
-        applyQuickShiftLook();
+        chooseQuickShiftLabel(button.dataset.shiftPick || '');
     });
 }
 
@@ -1106,9 +1133,8 @@ async function fillQuickShiftFields(eventData) {
         if (label) {
             label.value = data.shift_label || '';
         }
-        document.querySelectorAll('#quick_shift_picks [data-shift-pick]').forEach((button) => {
-            button.classList.toggle('is-selected', button.dataset.shiftPick === (data.shift_label || ''));
-        });
+        rememberShiftAutoTitle();
+        paintQuickShiftPicks();
         if (panel) {
             panel.hidden = !isShift;
         }
@@ -1135,9 +1161,13 @@ function readQuickShiftFields() {
         return { is_shift: false, shift_person_id: null, shift_label: null };
     }
     const personId = document.getElementById('quick_shift_person')?.value;
+    let label = (document.getElementById('quick_shift_label')?.value || '').trim();
+    if (!label) {
+        label = (document.getElementById('quick_title')?.value || '').trim();
+    }
     return {
         is_shift: true,
         shift_person_id: personId ? Number(personId) : null,
-        shift_label: (document.getElementById('quick_shift_label')?.value || '').trim(),
+        shift_label: label,
     };
 }

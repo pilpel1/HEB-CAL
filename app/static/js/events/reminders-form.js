@@ -194,24 +194,34 @@ function initReminderFields() {
         grid.append(chip);
     });
 
+    const customRow = document.getElementById('quick_reminder_custom_row');
+    const other = document.createElement('button');
+    other.type = 'button';
+    other.id = 'quick_reminder_custom_toggle';
+    other.className = 'reminder-offset-chip';
+    other.textContent = 'אחר';
+    other.setAttribute('aria-expanded', 'false');
+    other.setAttribute('aria-controls', 'quick_reminder_custom_row');
+    other.addEventListener('click', () => {
+        if (!customRow) {
+            return;
+        }
+        customRow.hidden = !customRow.hidden;
+        const open = !customRow.hidden;
+        other.setAttribute('aria-expanded', open ? 'true' : 'false');
+        other.classList.toggle('is-open', open);
+        if (open) {
+            document.getElementById('quick_reminder_custom_amount')?.focus();
+        }
+    });
+    grid.append(other);
+
     checkbox.addEventListener('change', () => {
         setReminderPanelOpen(checkbox.checked);
         if (!checkbox.checked) {
             setReminderError('');
         }
     });
-
-    const customToggle = document.getElementById('quick_reminder_custom_toggle');
-    const customRow = document.getElementById('quick_reminder_custom_row');
-    if (customToggle && customRow) {
-        customToggle.addEventListener('click', () => {
-            customRow.hidden = !customRow.hidden;
-            customToggle.setAttribute('aria-expanded', customRow.hidden ? 'false' : 'true');
-            if (!customRow.hidden) {
-                document.getElementById('quick_reminder_custom_amount')?.focus();
-            }
-        });
-    }
 
     document.getElementById('quick_reminder_custom_add')?.addEventListener('click', addCustomReminder);
     document.getElementById('quick_reminder_custom_amount')?.addEventListener('keydown', (event) => {
@@ -233,6 +243,9 @@ async function fillReminderFields(reminders) {
     reminderFormState.customOffsets = [...new Set(offsets.filter((value) => !presetValues.has(value)))];
     const selectedPresets = new Set(offsets.filter((value) => presetValues.has(value)));
     document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip').forEach((chip) => {
+        if (!chip.dataset.offset) {
+            return;
+        }
         const on = selectedPresets.has(Number(chip.dataset.offset));
         chip.classList.toggle('is-selected', on);
         chip.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -274,7 +287,10 @@ function readReminderFields() {
     }
     const offsets = new Set(reminderFormState.customOffsets);
     document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip.is-selected').forEach((chip) => {
-        offsets.add(Number(chip.dataset.offset));
+        const value = Number(chip.dataset.offset);
+        if (Number.isInteger(value)) {
+            offsets.add(value);
+        }
     });
     if (!offsets.size) {
         setReminderError('בחרו מתי להזכיר, או בטלו את התזכורת');

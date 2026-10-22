@@ -1,10 +1,11 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from datetime import MAXYEAR, MINYEAR, datetime
 from pyluach.dates import GregorianDate
 import logging
 import calendar
 from app.services.jewish_calendar import JewishCalendarService
-from app.services.hebrew_format import format_hebrew_date, format_hebrew_year
+from app.services.hebrew_format import format_hebrew_year
+from app.services.hebrew_dates import HebrewDateError, gregorian_to_hebrew, hebrew_to_gregorian, hebrew_year_options
 
 
 # הגדרת לוגים
@@ -55,26 +56,36 @@ def _hebrew_ymd(year, month, day):
 def get_hebrew_date(date_str):
     try:
         # המר את המחרוזת לאובייקט תאריך
-        gregorian_date = datetime.strptime(date_str, '%Y-%m-%d')
-        
-        # המר לתאריך עברי
-        heb_year, heb_month, heb_day = _hebrew_ymd(
-            gregorian_date.year,
-            gregorian_date.month,
-            gregorian_date.day,
-        )
-        
-        # החזר את התאריך העברי כמחרוזת (שנה באותיות)
-        return jsonify({
-            'hebrew_date': format_hebrew_date(
-                get_hebrew_day(heb_day),
-                get_hebrew_month_name(heb_month),
-                heb_year,
-            )
-        })
+        gregorian_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        if gregorian_date.isoformat() != date_str:
+            raise ValueError('Invalid date')
+        return jsonify(gregorian_to_hebrew(gregorian_date))
     except Exception as e:
         logging.error(f"Error converting date {date_str}: {str(e)}")
         return jsonify({'error': str(e)}), 400
+
+
+@api.route('/gregorian-from-hebrew')
+def gregorian_from_hebrew():
+    """יום / חודש / שנה עבריים → תאריך לועזי, כולל אדר א׳/ב׳ ואורך חודש."""
+    try:
+        payload = hebrew_to_gregorian(
+            request.args.get('year'),
+            request.args.get('month'),
+            request.args.get('day'),
+        )
+    except HebrewDateError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(payload)
+
+
+@api.route('/hebrew-years')
+def hebrew_years():
+    try:
+        years = hebrew_year_options(request.args.get('from'), request.args.get('to'))
+    except HebrewDateError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'years': years})
 
 from . import events
 from . import colors  # noqa: E402,F401

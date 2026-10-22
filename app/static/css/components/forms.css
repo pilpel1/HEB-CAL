@@ -67,12 +67,49 @@
     unicode-bidi: plaintext;
 }
 
-/* תאריך + שעה + עברי בשורה אחת; בטלפון עברי יורד מתחת */
+/* תאריך + שעה בשורה, ומתחתיהם התאריך העברי והבורר */
 .quick-when {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.75fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr);
     gap: 0.5rem 0.6rem;
     margin-bottom: 0.75rem;
+}
+
+.quick-field-hebrew {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.quick-hebrew-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+#quickEventModal #quick_hebrew_date {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0.1rem 0;
+    min-height: 0;
+    height: auto;
+    font-size: 0.95rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.quick-hebrew-picker {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.5fr) minmax(0, 1.05fr);
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
+.quick-hebrew-picker .form-select {
+    min-width: 0;
 }
 
 .quick-when .form-control {
@@ -194,6 +231,11 @@
         min-height: 40px;
     }
 
+    .reminder-settings-gear {
+        width: 40px;
+        height: 40px;
+    }
+
     #quickEventModal .form-control {
         padding: 0.4rem 0.5rem;
         font-size: 16px;
@@ -206,29 +248,16 @@
     }
 
     .quick-when {
-        grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr);
         gap: 0.35rem 0.4rem;
         margin-bottom: 0.45rem;
-    }
-
-    .quick-field-hebrew {
-        grid-column: 1 / -1;
-    }
-
-    #quickEventModal .quick-field-hebrew .form-control {
-        min-height: 0;
-        height: auto;
-        padding: 0.15rem 0.35rem;
-        background: transparent;
-        border-color: transparent;
-        font-size: 0.95rem;
     }
 
     .quick-end-toggle {
         display: inline-flex;
         align-items: center;
+        flex: 0 0 auto;
         min-height: 40px;
-        margin: 0 0 0.25rem;
+        margin: 0;
         padding: 0;
         border: 0;
         background: none;
@@ -236,6 +265,7 @@
         font: inherit;
         font-weight: 600;
         font-size: 0.9rem;
+        white-space: nowrap;
     }
 
     .quick-end-wrap:not(.is-open) .quick-end-field {
@@ -329,26 +359,37 @@
 
 .quick-shift-panel:not([hidden]) {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
+    flex-direction: column;
+    gap: 0.35rem;
     margin-top: 0.15rem;
 }
 
-.quick-shift-panel .form-select,
-.quick-shift-panel .form-control {
-    flex: 1 0 100%;
+.quick-shift-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.quick-shift-row .form-select {
+    flex: 0 1 46%;
+    width: 46%;
+    min-width: 0;
     min-height: 40px;
 }
 
 .quick-shift-picks {
+    flex: 1 1 auto;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: 0.25rem;
+    min-width: 0;
 }
 
 .quick-shift-pick {
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 40px;
-    padding: 0.2rem 0.75rem;
+    padding: 0.2rem 0.3rem;
     border: 1px solid var(--border-color, #ced4da);
     border-radius: 999px;
     background: transparent;
@@ -363,20 +404,36 @@
     font-weight: 700;
 }
 
-.quick-shift-note {
-    flex: 1 0 100%;
-    margin: 0;
-    font-size: 0.78rem;
-    line-height: 1.35;
-    color: var(--bs-secondary-color, #6c757d);
-}
-
 #quickEventModal .quick-color-picker.is-shift-locked {
     pointer-events: none;
 }
 
 .quick-reminder-wrap {
     margin-top: 0.65rem;
+}
+
+.quick-reminder-head {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.reminder-settings-gear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    margin-inline-start: 0.1rem;
+    border-radius: 999px;
+    color: var(--bs-secondary-color, #6c757d);
+    text-decoration: none;
+}
+
+.reminder-settings-gear:hover,
+.reminder-settings-gear:focus {
+    color: var(--primary-color, #2563eb);
+    background: rgba(37, 99, 235, 0.08);
 }
 
 .quick-reminder-check {
@@ -426,15 +483,9 @@
     color: #fff;
 }
 
-.quick-reminder-custom-toggle {
-    border: 0;
-    background: none;
-    color: var(--primary-color, #2563eb);
-    font: inherit;
-    font-weight: 600;
-    font-size: 0.85rem;
-    min-height: 36px;
-    padding: 0;
+#quick_reminder_custom_toggle.is-open {
+    border-color: var(--primary-color, #2563eb);
+    font-weight: 700;
 }
 
 .reminder-custom-row:not([hidden]) {
@@ -457,8 +508,7 @@
     margin: 0;
 }
 
-.reminder-empty-people,
-.reminder-people-link {
+.reminder-empty-people {
     font-size: 0.85rem;
     margin: 0;
 }

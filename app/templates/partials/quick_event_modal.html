@@ -27,12 +27,18 @@
                             <input type="time" class="form-control" id="quick_time" dir="ltr" step="60">
                         </div>
                         <div class="quick-field quick-field-hebrew">
-                            <label for="quick_hebrew_date" class="form-label">תאריך עברי</label>
-                            <input type="text" class="form-control" id="quick_hebrew_date" readonly required>
+                            <div class="quick-hebrew-line">
+                                <input type="text" class="form-control" id="quick_hebrew_date" readonly required aria-label="תאריך עברי">
+                                <button type="button" class="quick-end-toggle" id="quick_end_toggle" aria-expanded="false" aria-controls="quick_end_date">+ תאריך סיום</button>
+                            </div>
+                            <div class="quick-hebrew-picker" id="quick_hebrew_picker">
+                                <select id="quick_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי"></select>
+                                <select id="quick_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי"></select>
+                                <select id="quick_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית"></select>
+                            </div>
                         </div>
                     </div>
                     <div class="quick-end-wrap">
-                        <button type="button" class="quick-end-toggle" id="quick_end_toggle" aria-expanded="false" aria-controls="quick_end_date">+ תאריך סיום</button>
                         <div class="quick-end-field">
                             <label for="quick_end_date" class="form-label">תאריך סיום</label>
                             <input type="date" class="form-control" id="quick_end_date" dir="ltr">
@@ -78,14 +84,15 @@
                             <span>משמרת</span>
                         </label>
                         <div id="quick_shift_panel" class="quick-shift-panel" hidden>
-                            <select id="quick_shift_person" class="form-select form-select-sm" aria-label="אדם"></select>
-                            <input type="text" class="form-control form-control-sm" id="quick_shift_label" maxlength="80" placeholder="יום מחלה, יום חופש…" aria-label="תיאור המשמרת" autocomplete="off">
-                            <div id="quick_shift_picks" class="quick-shift-picks" role="group" aria-label="הצעות">
-                                <button type="button" class="quick-shift-pick" data-shift-pick="בוקר">בוקר</button>
-                                <button type="button" class="quick-shift-pick" data-shift-pick="ערב">ערב</button>
-                                <button type="button" class="quick-shift-pick" data-shift-pick="לילה">לילה</button>
+                            <input type="hidden" id="quick_shift_label" value="">
+                            <div class="quick-shift-row">
+                                <select id="quick_shift_person" class="form-select form-select-sm" aria-label="אדם"></select>
+                                <div id="quick_shift_picks" class="quick-shift-picks" role="group" aria-label="סוג משמרת">
+                                    <button type="button" class="quick-shift-pick" data-shift-pick="בוקר" aria-pressed="false">בוקר</button>
+                                    <button type="button" class="quick-shift-pick" data-shift-pick="ערב" aria-pressed="false">ערב</button>
+                                    <button type="button" class="quick-shift-pick" data-shift-pick="לילה" aria-pressed="false">לילה</button>
+                                </div>
                             </div>
-                            <p class="quick-shift-note">הכותרת היא מה שכתוב כאן. הצבע לפי האדם.</p>
                         </div>
                     </div>
                     <div class="mb-0">
@@ -93,30 +100,31 @@
                         <textarea class="form-control" id="quick_description" rows="2"></textarea>
                     </div>
                     <div class="quick-reminder-wrap">
-                        <label class="quick-reminder-check" for="quick_reminder_enabled">
-                            <input type="checkbox" id="quick_reminder_enabled">
-                            <span>תזכורת</span>
-                        </label>
+                        <div class="quick-reminder-head">
+                            <label class="quick-reminder-check" for="quick_reminder_enabled">
+                                <input type="checkbox" id="quick_reminder_enabled">
+                                <span>תזכורת</span>
+                            </label>
+                            <a class="reminder-settings-gear" href="/settings#settings-reminders" target="_blank" rel="noopener" aria-label="הגדרות תזכורות" title="הגדרות תזכורות">
+                                <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                            </a>
+                        </div>
                         <div id="quick_reminder_panel" class="quick-reminder-panel" hidden>
                             <div id="quick_reminder_offsets" class="reminder-offset-grid" role="group" aria-label="מתי להזכיר"></div>
-                            <div class="reminder-custom">
-                                <button type="button" class="quick-reminder-custom-toggle" id="quick_reminder_custom_toggle" aria-expanded="false" aria-controls="quick_reminder_custom_row">אחר</button>
-                                <div id="quick_reminder_custom_row" class="reminder-custom-row" hidden>
-                                    <input type="number" class="form-control" id="quick_reminder_custom_amount" min="1" step="1" inputmode="numeric" dir="ltr" aria-label="כמות">
-                                    <select class="form-select" id="quick_reminder_custom_unit" aria-label="יחידה">
-                                        <option value="minutes">דקות</option>
-                                        <option value="hours">שעות</option>
-                                        <option value="days">ימים</option>
-                                    </select>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="quick_reminder_custom_add">הוסף</button>
-                                </div>
-                                <div id="quick_reminder_custom_list" class="reminder-offset-grid"></div>
+                            <div id="quick_reminder_custom_row" class="reminder-custom-row" hidden>
+                                <input type="number" class="form-control" id="quick_reminder_custom_amount" min="1" step="1" inputmode="numeric" dir="ltr" aria-label="כמות">
+                                <select class="form-select" id="quick_reminder_custom_unit" aria-label="יחידה">
+                                    <option value="minutes">דקות</option>
+                                    <option value="hours">שעות</option>
+                                    <option value="days">ימים</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="quick_reminder_custom_add">הוסף</button>
                             </div>
+                            <div id="quick_reminder_custom_list" class="reminder-offset-grid"></div>
                             <p id="quick_reminder_error" class="reminder-form-error" hidden></p>
                             <div class="reminder-recipients">
                                 <div class="form-label">למי להזכיר</div>
                                 <div id="quick_reminder_recipients"></div>
-                                <a class="reminder-people-link" href="/settings" target="_blank" rel="noopener">תזכורות</a>
                             </div>
                         </div>
                     </div>
