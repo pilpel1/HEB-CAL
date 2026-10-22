@@ -112,6 +112,12 @@ def test_desktop_agenda_collapse_is_stored_and_stays_collapsed_on_select(client)
     assert "--agenda-panel: 0px" in side
     assert "rotate(-90deg)" in side
     assert "rotate(90deg)" in side
+    assert "height: 60px" in side
+    assert "width: 18px" in side
+    assert "top: 50%" in side
+    assert "translateY(-50%)" in side
+    assert ".day-agenda-toggle:hover" in css
+    assert ".day-agenda-toggle:hover" in dark
     assert "day-agenda-heb" in side
     assert "day-agenda-greg" in side
     assert ":hover" not in side

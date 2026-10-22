@@ -345,12 +345,18 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
                 const head = getComputedStyle(document.querySelector('.day-agenda-head'));
                 const panel = getComputedStyle(document.querySelector('.day-agenda'));
                 const card = getComputedStyle(document.querySelector('.infinite-calendar'));
+                const frame = document.querySelector('.calendar-stream-frame').getBoundingClientRect();
                 const svg = getComputedStyle(document.querySelector('#day-agenda-toggle svg'));
                 const seam = stream.left;
+                const mid = frame.top + frame.height / 2;
                 return {
                     expanded: document.getElementById('day-agenda-toggle').getAttribute('aria-expanded'),
                     label: document.getElementById('day-agenda-toggle').getAttribute('aria-label'),
                     agendaW: agenda.width,
+                    toggleH: toggle.height,
+                    toggleW: toggle.width,
+                    chevron: parseFloat(svg.width),
+                    centered: Math.abs((toggle.top + toggle.height / 2) - mid) < 2,
                     straddles: toggle.left < seam - 1 && toggle.right > seam + 1,
                     stacked: heb.top + 4 < greg.top,
                     headBorder: parseFloat(head.borderBottomWidth) >= 1,
@@ -363,6 +369,10 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
             assert open_state["expanded"] == "true"
             assert open_state["label"] == "הסתר אירועי היום"
             assert 270 <= open_state["agendaW"] <= 390
+            assert 56 <= open_state["toggleH"] <= 64
+            assert 16 <= open_state["toggleW"] <= 18
+            assert open_state["chevron"] >= 16
+            assert open_state["centered"] is True
             assert open_state["straddles"] is True
             assert open_state["stacked"] is True
             assert open_state["headBorder"] is True
@@ -395,6 +405,7 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
                 const frame = document.querySelector('.calendar-stream-frame').getBoundingClientRect();
                 const toggle = document.querySelector('.day-agenda-toggle').getBoundingClientRect();
                 const svg = getComputedStyle(document.querySelector('#day-agenda-toggle svg'));
+                const mid = frame.top + frame.height / 2;
                 return {
                     collapsed: cal.classList.contains('is-agenda-collapsed'),
                     expanded: document.getElementById('day-agenda-toggle').getAttribute('aria-expanded'),
@@ -406,7 +417,7 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
                     toggleH: toggle.height,
                     toggleW: toggle.width,
                     toggleAtEdge: Math.abs(toggle.left - frame.left) < 2,
-                    nearTop: toggle.top - frame.top < 8,
+                    centered: Math.abs((toggle.top + toggle.height / 2) - mid) < 2,
                     arrow: svg.transform,
                     storage: localStorage.getItem('heb-cal-agenda-collapsed'),
                 };
@@ -418,10 +429,10 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
             assert closed["inert"] is True
             assert closed["agendaW"] < 2
             assert closed["streamRatio"] > 0.97
-            assert 28 <= closed["toggleH"] <= 36
-            assert closed["toggleW"] <= 22
+            assert 56 <= closed["toggleH"] <= 64
+            assert 16 <= closed["toggleW"] <= 18
             assert closed["toggleAtEdge"] is True
-            assert closed["nearTop"] is True
+            assert closed["centered"] is True
             assert closed["storage"] == "1"
             assert _matrix_sin(closed["arrow"]) > 0.9
 

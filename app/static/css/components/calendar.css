@@ -1324,48 +1324,42 @@
         opacity: 0;
     }
 
-    /* חץ על התפר, בגובה כותרת הימים — לא באמצע התא, כדי לא לכסות צ'יפ.
-       פתוח: מצביע שמאלה (לסגור). סגור: לשונית דקה שמצביעה ימינה (לפתוח). */
+    /* ידית דקה באמצע גובה הלוח. פתוח: חץ שמאלה (לסגור). סגור: אותה ידית בקצה, חץ ימינה. */
     .day-agenda-toggle {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         position: absolute;
         z-index: 4;
-        top: 2px;
-        inset-inline-end: -11px;
-        width: 22px;
-        height: 28px;
+        top: 50%;
+        inset-inline-end: -9px;
+        width: 18px;
+        height: 60px;
         margin: 0;
         padding: 0;
-        border: 1px solid #d0dae6;
+        border: 1px solid #c5d0de;
         border-radius: 999px;
         background: #fff;
         color: #334155;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
         cursor: pointer;
-        transition: inset-inline-end 180ms ease, width 180ms ease, height 180ms ease, border-radius 180ms ease, background-color 180ms ease, color 180ms ease;
+        transform: translateY(-50%);
+        transition: inset-inline-end 180ms ease, background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
     }
 
     .day-agenda-toggle svg {
         display: block;
+        width: 16px;
+        height: 16px;
         transform: rotate(-90deg);
         transition: transform 180ms ease;
     }
 
     .infinite-calendar.is-agenda-collapsed .day-agenda-toggle {
         inset-inline-end: 0;
-        top: 0;
-        width: 20px;
-        height: 32px;
-        border-start-start-radius: 0;
-        border-end-start-radius: 0.7rem;
-        border-start-end-radius: 0;
-        border-end-end-radius: 0;
-        border-inline-end-width: 0;
         background: #eef3fb;
         color: #1d4ed8;
-        box-shadow: none;
+        border-color: #c5d4e8;
     }
 
     .infinite-calendar.is-agenda-collapsed .day-agenda-toggle svg {
@@ -1552,8 +1546,15 @@
 @media (min-width: 992px) and (hover: hover) {
     .day-agenda-toggle:hover {
         background: #f8fafc;
-        color: #0f172a;
-        border-color: #b9c6d6;
+        color: #1d4ed8;
+        border-color: #94a3b8;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
+    }
+
+    .infinite-calendar.is-agenda-collapsed .day-agenda-toggle:hover {
+        background: #e4ecf8;
+        color: #1d4ed8;
+        border-color: #93b0d6;
     }
 }
 
