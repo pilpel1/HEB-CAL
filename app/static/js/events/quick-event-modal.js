@@ -456,12 +456,6 @@ function initQuickEventModal() {
         initCalendarContextMenu(calendarRoot);
     }
 
-    modalElement.querySelectorAll('.quick-color-swatch').forEach((swatch) => {
-        swatch.addEventListener('click', () => {
-            setQuickColor(swatch.dataset.color || '');
-        });
-    });
-
     const endToggle = document.getElementById('quick_end_toggle');
     if (endToggle) {
         endToggle.addEventListener('click', () => {

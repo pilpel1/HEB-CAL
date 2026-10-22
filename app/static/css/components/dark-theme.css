@@ -356,3 +356,11 @@
 [data-bs-theme="dark"] .shift-color-dot {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
+
+[data-bs-theme="dark"] .settings-color-row {
+    border-bottom-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .settings-color-swatch {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}

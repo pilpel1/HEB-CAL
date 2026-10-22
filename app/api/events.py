@@ -5,11 +5,9 @@ from flask import jsonify, make_response, request
 
 from . import api
 from app.database import (
-    add_custom_color,
     create_event,
     delete_event,
     export_data,
-    get_all_colors,
     get_all_events,
     get_db,
     get_event,
@@ -561,23 +559,3 @@ def import_events():
     except ValueError as exc:
         return jsonify({"error": str(exc), "success": False}), 400
 
-
-@api.route('/colors', methods=['GET'])
-def get_colors():
-    return jsonify(get_all_colors())
-
-
-@api.route('/colors', methods=['POST'])
-def add_color():
-    data = _get_payload()
-    if not data.get('name') or not data.get('color_code'):
-        return jsonify({"error": "Missing required fields: ['name', 'color_code']"}), 400
-
-    success = add_custom_color(
-        data['name'],
-        data['color_code'],
-        data.get('background_color', f"rgba({data['color_code']}, 0.2)"),
-    )
-    if success:
-        return jsonify({"message": "Color added successfully"})
-    return jsonify({"error": "Failed to add color"}), 400

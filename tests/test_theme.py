@@ -2,7 +2,7 @@ import pytest
 
 
 @pytest.mark.parametrize("path", ["/", "/events_list", "/settings"])
-def test_pages_include_theme_bootstrap_and_toggle(client, path):
+def test_pages_include_theme_bootstrap_and_single_settings_toggle(client, path):
     html = client.get(path).get_data(as_text=True)
 
     head = html.split("</head>")[0]
@@ -12,12 +12,32 @@ def test_pages_include_theme_bootstrap_and_toggle(client, path):
     assert head.index("data-bs-theme") < head.index("bootstrap.rtl.min.css")
 
     assert "js/theme.js" in html
-    if path == "/events_list":
-        assert "data-theme-toggle" not in html
-        assert "theme_toggle.html" not in html
+    assert "data-theme-toggle" not in html
+    assert "theme_toggle.html" not in html
     if path == "/settings":
-        assert "data-theme-switch" in html
-        assert "data-theme-toggle" not in html
+        assert html.count("data-theme-switch") == 1
+        assert html.count('id="themeSwitch"') == 1
+        assert "צבעים" in html
+        assert 'id="settingsColors"' in html
+        assert 'id="settingsColorHex"' in html
+        assert 'type="color"' in html
+    else:
+        assert "data-theme-switch" not in html
+        assert 'id="themeSwitch"' not in html
+
+
+def test_theme_js_uses_single_shared_key(client):
+    response = client.get("/static/js/theme.js")
+    try:
+        js = response.get_data(as_text=True)
+    finally:
+        response.close()
+    assert "heb-cal-theme" in js
+    assert "data-theme-toggle" not in js
+    assert "data-theme-switch" in js
+    assert js.count("localStorage.setItem") == 1
+    assert "heb-cal-theme-events" not in js
+    assert "heb-cal-theme-settings" not in js
 
 
 def test_theme_assets_are_served(client):

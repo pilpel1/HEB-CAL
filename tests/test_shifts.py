@@ -724,6 +724,9 @@ def test_calendar_and_settings_markup(client):
     assert "גיבוי וייבוא" in settings
     assert 'id="exportEventsBtn"' in settings
     assert 'id="importEventsBtn"' in settings
+    assert "צבעים" in settings
+    assert 'id="settingsColors"' in settings
+    assert settings.count("data-theme-switch") == 1
     events_list = client.get("/events_list").get_data(as_text=True)
     assert 'id="searchInput"' in events_list
     assert 'id="addEventFromListBtn"' in events_list

@@ -42,6 +42,9 @@ def _empty_events_table(app):
         db.execute("DELETE FROM event_exceptions")
         db.execute("DELETE FROM reminder_people")
         db.execute("DELETE FROM events")
+        db.execute(
+            "DELETE FROM event_colors WHERE lower(color_code) NOT IN ('cyan', 'yellow', 'orange', 'green')"
+        )
         db.execute("UPDATE household_settings SET shifts_enabled = 0 WHERE id = 1")
         db.commit()
     yield
