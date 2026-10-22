@@ -33,12 +33,13 @@ def _week_cells(start, pairs):
     return cells
 
 
-def test_default_week_is_current_until_friday():
-    assert default_week_start(date(2026, 10, 18)) == date(2026, 10, 18)  # Sunday
-    assert default_week_start(date(2026, 10, 21)) == date(2026, 10, 18)  # Wednesday
-    assert default_week_start(date(2026, 10, 22)) == date(2026, 10, 18)  # Thursday
-    assert default_week_start(date(2026, 10, 23)) == date(2026, 10, 25)  # Friday → next
-    assert default_week_start(date(2026, 10, 24)) == date(2026, 10, 25)  # Saturday → next
+def test_default_week_is_the_week_after_today():
+    assert default_week_start(date(2026, 10, 18)) == date(2026, 10, 25)  # Sunday
+    assert default_week_start(date(2026, 10, 21)) == date(2026, 10, 25)  # Wednesday
+    assert default_week_start(date(2026, 10, 22)) == date(2026, 10, 25)  # Thursday
+    assert default_week_start(date(2026, 10, 23)) == date(2026, 10, 25)  # Friday
+    assert default_week_start(date(2026, 10, 24)) == date(2026, 10, 25)  # Saturday
+    assert default_week_start(date(2026, 10, 25)) == date(2026, 11, 1)  # next Sunday
 
 
 def test_shift_migration_is_idempotent_and_keeps_rows(tmp_path):

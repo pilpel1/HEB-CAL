@@ -392,12 +392,7 @@ function initShiftSettings() {
 }
 
 function defaultShiftWeekStart(today) {
-    const start = weekStartOf(today);
-    const day = new Date(`${today}T00:00:00`).getDay();
-    if (day >= 5) {
-        return addDaysToDateStr(start, 7);
-    }
-    return start;
+    return addDaysToDateStr(weekStartOf(today), 7);
 }
 
 function formatShiftWeekLabel(weekStart) {

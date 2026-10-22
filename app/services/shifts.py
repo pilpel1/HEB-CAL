@@ -261,13 +261,10 @@ def parse_week_start(value) -> date:
 
 
 def default_week_start(today: date | None = None) -> date:
-    """השבוע הנוכחי (ראשון–חמישי). בשישי ובשבת — השבוע הבא."""
+    """השבוע שאחרי השבוע הנוכחי. ראשון עד שבת."""
     today = today or date.today()
-    offset = weekday_index(today)
-    sunday = today - timedelta(days=offset)
-    if offset >= 5:
-        return sunday + timedelta(days=7)
-    return sunday
+    sunday = today - timedelta(days=weekday_index(today))
+    return sunday + timedelta(days=7)
 
 
 def clean_shift_label(value) -> str:
