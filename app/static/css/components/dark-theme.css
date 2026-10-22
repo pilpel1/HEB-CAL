@@ -137,6 +137,16 @@
     color: var(--bs-body-color);
 }
 
+[data-bs-theme="dark"] .agenda-event.is-colored .agenda-highlight {
+    color: #111;
+    box-shadow: inset 0 0 0 100vmax rgba(255, 255, 255, 0.35);
+}
+
+[data-bs-theme="dark"] .agenda-event.is-colored .agenda-text,
+[data-bs-theme="dark"] .agenda-event.is-colored .agenda-time {
+    color: #111;
+}
+
 [data-bs-theme="dark"] .agenda-holiday .agenda-text { color: #ffa8a0; }
 [data-bs-theme="dark"] .agenda-parasha .agenda-text { color: #a5ccff; }
 [data-bs-theme="dark"] .agenda-fast .agenda-text { color: #ffc078; }

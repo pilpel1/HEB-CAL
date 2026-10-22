@@ -13,9 +13,11 @@ def test_pages_include_theme_bootstrap_and_toggle(client, path):
 
     assert "js/theme.js" in html
     if path == "/events_list":
-        assert "data-theme-toggle" in html
+        assert "data-theme-toggle" not in html
+        assert "theme_toggle.html" not in html
     if path == "/settings":
         assert "data-theme-switch" in html
+        assert "data-theme-toggle" not in html
 
 
 def test_theme_assets_are_served(client):

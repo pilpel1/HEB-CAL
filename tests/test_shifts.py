@@ -721,6 +721,19 @@ def test_calendar_and_settings_markup(client):
     assert 'data-density-switch' in settings
     assert "מצב כהה" in settings
     assert "תצוגה צפופה" in settings
+    assert "גיבוי וייבוא" in settings
+    assert 'id="exportEventsBtn"' in settings
+    assert 'id="importEventsBtn"' in settings
+    events_list = client.get("/events_list").get_data(as_text=True)
+    assert 'id="searchInput"' in events_list
+    assert 'id="addEventFromListBtn"' in events_list
+    assert "תזכורות" in events_list
+    assert "חזרה ללוח" in events_list
+    assert 'id="eventsToolsBtn"' not in events_list
+    assert "data-theme-toggle" not in events_list
+    assert 'id="exportEventsBtn"' not in events_list
+    assert 'id="pageSizeSelect"' in events_list
+    assert 'id="sortOrderSelect"' in events_list
     assert "אנשים לתזכורות" in settings
     assert 'id="chatIdHelpBtn"' in settings
     assert 'aria-label="איך משיגים מזהה צ׳אט"' in settings

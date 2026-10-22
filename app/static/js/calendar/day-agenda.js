@@ -629,18 +629,20 @@ function renderDayAgenda(dateStr) {
         const range = ev.end_date && ev.end_date > ev.gregorian_date
             ? `<span class="agenda-range">עד ${escapeHtml(formatShortGregorian(ev.end_date))}</span>`
             : '';
-        const color = typeof resolveEventColor === 'function' ? resolveEventColor(ev) : ev.color;
-        const fill = typeof eventChipFill === 'function'
-            ? eventChipFill(ev, 1)
-            : (color && typeof getColorRGBA === 'function' ? `rgba(${getColorRGBA(color, 1)})` : '');
-        const swatchStyle = fill ? ` style="background: ${fill}"` : '';
+        const swatchStyle = ev.color
+            ? ` style="background: rgba(${getColorRGBA(ev.color)})"`
+            : '';
+        const fill = typeof eventChipFill === 'function' ? eventChipFill(ev) : '';
+        const highlightStyle = fill ? ` style="background-color: ${fill}"` : '';
+        const colored = fill ? ' is-colored' : '';
         const occurrence = escapeHtml(ev.occurrence_date || ev.gregorian_date || '');
         const recurring = ev.recurrence_freq ? '1' : '0';
         const icon = typeof repeatIconHtml === 'function' ? repeatIconHtml(ev) : '';
         items.push(
-            `<li class="agenda-item agenda-event" data-event-id="${ev.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}">`
-            + `<span class="agenda-swatch${fill ? '' : ' is-empty'}"${swatchStyle}></span>`
-            + `${time}<span class="agenda-text">${icon}${escapeHtml(ev.title || '')}</span>${range}</li>`
+            `<li class="agenda-item agenda-event${colored}" data-event-id="${ev.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}">`
+            + `<span class="agenda-swatch${ev.color ? '' : ' is-empty'}"${swatchStyle}></span>`
+            + `<span class="agenda-highlight"${highlightStyle}>${time}`
+            + `<span class="agenda-text">${icon}${escapeHtml(ev.title || '')}</span></span>${range}</li>`
         );
     }
 

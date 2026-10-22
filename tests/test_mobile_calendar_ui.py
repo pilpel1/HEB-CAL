@@ -1,4 +1,4 @@
-"""צבע סמן רשימת היום, זום-פאן, וחץ כותרת — בלי דפדפן."""
+"""הדגשת שורת אירוע ביום, זום-פאן, וחץ כותרת — בלי דפדפן."""
 from __future__ import annotations
 
 import json
@@ -66,14 +66,16 @@ def test_resolve_event_color_matches_chip_and_person_shift():
     assert out[4]["fill"] == "rgba(0, 255, 255, 1)"
 
 
-def test_agenda_swatch_reuses_event_chip_color_helpers():
+def test_agenda_row_reuses_event_chip_color_helpers():
     agenda = DAY_AGENDA.read_text(encoding="utf-8")
     render = EVENT_RENDER.read_text(encoding="utf-8")
     assert "function resolveEventColor" in render
     assert "function eventChipFill" in render
-    assert "resolveEventColor(ev)" in agenda
-    assert "eventChipFill(ev, 1)" in agenda
-    assert "getColorRGBA(ev.color)" not in agenda
+    assert "eventChipFill(ev)" in agenda
+    assert "agenda-highlight" in agenda
+    # העיגול נשאר כמו קודם — רק לפי event.color
+    assert "getColorRGBA(ev.color)" in agenda
+    assert "eventChipFill(ev, 1)" not in agenda
 
 
 def test_page_zoom_skips_custom_gestures_and_allows_pan(client):
