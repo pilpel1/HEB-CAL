@@ -1,0 +1,173 @@
+"""כתיבה ליומן. האימות הוא ``clean_event_write`` / ``resolve_manual_shift``."""
+from __future__ import annotations
+
+from datetime import date
+
+from app.database import create_event, delete_event, get_event, update_event
+from app.services.event_payload import clean_event_write
+from app.services.recurrence import hebrew_display, is_recurring
+from app.services.shifts import ShiftError, resolve_manual_shift
+from app.bot.parse import InputError
+
+
+def fingerprint(event: dict) -> str:
+    end = event.get("end_date") or ""
+    return "\n".join(
+        [
+            event.get("title") or "",
+            (event.get("gregorian_date") or "")[:10],
+            event.get("time") or "",
+            event.get("description") or "",
+            end[:10] if end else "",
+        ]
+    )
+
+
+def snapshot(event: dict) -> dict:
+    end = event.get("end_date") or ""
+    return {
+        "event_id": event["id"],
+        "title": event.get("title") or "",
+        "gregorian_date": (event.get("gregorian_date") or "")[:10],
+        "time": event.get("time"),
+        "description": event.get("description") or "",
+        "end_date": end[:10] if end else None,
+        "is_shift": 1 if event.get("is_shift") else 0,
+        "shift_label": event.get("shift_label") or "",
+        "recurring": is_recurring(event),
+        "base": fingerprint(event),
+        "force": False,
+    }
+
+
+def _day(value: str) -> date:
+    try:
+        return date.fromisoformat((value or "")[:10])
+    except ValueError as exc:
+        raise InputError("התאריך לא תקין. למשל 22.10.2026.") from exc
+
+
+def _blank_end(start: str, end: str | None) -> str | None:
+    if not end or end[:10] == start:
+        return None
+    return end[:10]
+
+
+def _insert(cleaned: dict, shift=None) -> dict:
+    event_id = create_event(
+        cleaned["title"],
+        cleaned["gregorian_date"],
+        cleaned["hebrew_date"],
+        time=cleaned["time"],
+        description=cleaned["description"],
+        end_date=cleaned["end_date"],
+        color=cleaned["color"],
+        shift=shift,
+    )
+    if not event_id:
+        raise InputError("לא הצלחתי לשמור. נסו שוב.")
+    saved = get_event(event_id)
+    if saved is None:
+        raise InputError("לא הצלחתי לשמור. נסו שוב.")
+    return saved
+
+
+def create_user_event(draft: dict) -> dict:
+    day = _day(draft.get("gregorian_date") or "")
+    cleaned = clean_event_write(
+        {
+            "title": draft.get("title") or "",
+            "gregorian_date": day.isoformat(),
+            "hebrew_date": hebrew_display(day),
+            "time": draft.get("time"),
+            "description": draft.get("description") or "",
+            "end_date": _blank_end(day.isoformat(), draft.get("end_date")),
+            "color": None,
+        }
+    )
+    return _insert(cleaned)
+
+
+def create_shift(person_id: int, label: str, gregorian_date: str) -> dict:
+    day = _day(gregorian_date)
+    try:
+        resolved = resolve_manual_shift(
+            {
+                "is_shift": True,
+                "shift_person_id": person_id,
+                "shift_label": label,
+            }
+        )
+    except ShiftError:
+        raise
+    if not resolved or not resolved.get("is_shift"):
+        raise InputError("לא הצלחתי לשמור את המשמרת.")
+    cleaned = clean_event_write(
+        {
+            "title": resolved["shift_label"],
+            "gregorian_date": day.isoformat(),
+            "hebrew_date": hebrew_display(day),
+            "time": None,
+            "description": "",
+            "end_date": None,
+            "color": resolved.get("color"),
+        }
+    )
+    return _insert(
+        cleaned,
+        shift=(1, resolved["shift_person_id"], resolved["shift_label"]),
+    )
+
+
+def update_user_event(draft: dict) -> tuple[str, dict | None]:
+    """``ok`` / ``deleted`` / ``conflict`` והאירוע הרלוונטי."""
+    event_id = draft.get("event_id")
+    current = get_event(event_id)
+    if current is None:
+        return "deleted", None
+    if not draft.get("force") and fingerprint(current) != draft.get("base"):
+        return "conflict", current
+    day = _day(draft.get("gregorian_date") or "")
+    if current.get("is_shift"):
+        title = current.get("title") or draft.get("title") or ""
+        time_value = None
+        description = current.get("description") or ""
+        end = None
+    else:
+        title = draft.get("title") or ""
+        time_value = draft.get("time")
+        description = draft.get("description") or ""
+        end = _blank_end(day.isoformat(), draft.get("end_date"))
+    cleaned = clean_event_write(
+        {
+            "title": title,
+            "gregorian_date": day.isoformat(),
+            "hebrew_date": hebrew_display(day),
+            "time": time_value,
+            "description": description,
+            "end_date": end,
+            "color": current.get("color"),
+        }
+    )
+    update_event(
+        event_id,
+        cleaned["title"],
+        cleaned["gregorian_date"],
+        cleaned["hebrew_date"],
+        time=cleaned["time"],
+        description=cleaned["description"],
+        end_date=cleaned["end_date"],
+        color=current.get("color"),
+        recurrence="keep",
+        shift="keep",
+    )
+    saved = get_event(event_id)
+    if saved is None:
+        return "deleted", None
+    return "ok", saved
+
+
+def remove_event(event_id: int) -> bool:
+    if get_event(event_id) is None:
+        return False
+    return bool(delete_event(event_id))

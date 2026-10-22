@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import html
 import json
+import sys
 import urllib.error
 import urllib.request
 
@@ -35,13 +36,47 @@ def telegram_api(token: str, method: str, payload: dict | None = None, *, timeou
     return body.get("result")
 
 
-def send_message(token: str, chat_id, text: str) -> bool:
-    telegram_api(
-        token,
-        "sendMessage",
-        {"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-    )
+def send_message(token: str, chat_id, text: str, *, reply_markup: dict | None = None) -> bool:
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    telegram_api(token, "sendMessage", payload)
     return True
+
+
+def deliver_outgoing(token: str, api, outgoing: dict) -> None:
+    """שולח תשובה אחת. עריכת הודעה נכשלת? נשלחת הודעה חדשה."""
+    callback_id = outgoing.get("callback_id")
+    if callback_id:
+        payload = {"callback_query_id": callback_id}
+        toast = (outgoing.get("toast") or "").strip()
+        if toast:
+            payload["text"] = toast[:200]
+        try:
+            api(token, "answerCallbackQuery", payload)
+        except TelegramError as exc:
+            print(f"answerCallbackQuery failed: {exc}", file=sys.stderr)
+    if outgoing.get("skip") or not outgoing.get("text"):
+        return
+    body = {
+        "chat_id": outgoing["chat_id"],
+        "text": outgoing["text"],
+        "parse_mode": "HTML",
+    }
+    if outgoing.get("markup"):
+        body["reply_markup"] = outgoing["markup"]
+    edit_id = outgoing.get("edit_id")
+    if edit_id:
+        edited = dict(body)
+        edited["message_id"] = edit_id
+        try:
+            api(token, "editMessageText", edited)
+            return
+        except TelegramError as exc:
+            if "not modified" in str(exc).lower():
+                return
+            print(f"editMessageText failed: {exc}", file=sys.stderr)
+    api(token, "sendMessage", body)
 
 
 def chat_id_reply(chat_id) -> str:
@@ -72,27 +107,32 @@ def start_chat_id(update: dict):
 
 
 def consume_updates(token: str, offset: int | None, *, long_poll: int = 0, api=telegram_api) -> int | None:
-    """קורא עדכונים, עונה ל-/start, ומחזיר את ה-offset הבא."""
-    payload = {"timeout": int(long_poll), "allowed_updates": ["message"]}
+    """קורא עדכונים, מפעיל את תפריט הבוט, ומחזיר את ה-offset הבא."""
+    payload = {"timeout": int(long_poll), "allowed_updates": ["message", "callback_query"]}
     if offset is not None:
         payload["offset"] = offset
     timeout = max(10, int(long_poll) + 10)
     updates = api(token, "getUpdates", payload, timeout=timeout) or []
     next_offset = offset
-    for update in updates:
-        update_id = update.get("update_id")
-        if isinstance(update_id, int):
-            next_offset = update_id + 1
-        chat_id = start_chat_id(update)
-        if chat_id is None:
-            continue
-        api(
-            token,
-            "sendMessage",
-            {
-                "chat_id": chat_id,
-                "text": chat_id_reply(chat_id),
-                "parse_mode": "HTML",
-            },
-        )
+    if not updates:
+        return next_offset
+    from app import app as flask_app
+    from app.bot.dispatch import handle_update
+
+    with flask_app.app_context():
+        for update in updates:
+            update_id = update.get("update_id")
+            if isinstance(update_id, int):
+                next_offset = update_id + 1
+            try:
+                outgoing = handle_update(update)
+            except Exception as exc:
+                print(f"bot update failed: {exc}", file=sys.stderr)
+                continue
+            if not outgoing or outgoing.get("skip"):
+                continue
+            try:
+                deliver_outgoing(token, api, outgoing)
+            except TelegramError as exc:
+                print(f"bot send failed: {exc}", file=sys.stderr)
     return next_offset
