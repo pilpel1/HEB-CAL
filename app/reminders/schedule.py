@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import html
 import os
 import re
 from datetime import datetime, timedelta
@@ -299,15 +300,16 @@ def in_browser_window(
 
 
 def reminder_message(event: dict, offset_minutes: int, start: datetime) -> str:
-    title = (event.get("title") or "אירוע").strip() or "אירוע"
+    """טקסט תזכורת. שדות משתמש בורחים ל-HTML (send_message שולח parse_mode=HTML)."""
+    title = html.escape((event.get("title") or "אירוע").strip() or "אירוע", quote=False)
     lines = [
         f"תזכורת: {title}",
         f"{start.strftime('%Y-%m-%d %H:%M')} ({offset_label(offset_minutes)})",
     ]
-    hebrew = (event.get("hebrew_date") or "").strip()
+    hebrew = html.escape((event.get("hebrew_date") or "").strip(), quote=False)
     if hebrew:
         lines.append(hebrew)
-    description = (event.get("description") or "").strip()
+    description = html.escape((event.get("description") or "").strip(), quote=False)
     if description:
         lines.append(description)
     return "\n".join(lines)

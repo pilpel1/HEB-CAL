@@ -36,7 +36,11 @@ def telegram_api(token: str, method: str, payload: dict | None = None, *, timeou
 
 
 def send_message(token: str, chat_id, text: str) -> bool:
-    telegram_api(token, "sendMessage", {"chat_id": chat_id, "text": text})
+    telegram_api(
+        token,
+        "sendMessage",
+        {"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+    )
     return True
 
 

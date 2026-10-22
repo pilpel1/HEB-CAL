@@ -108,6 +108,8 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
         assert {"name", "telegram_chat_id", "color", "shift_allowed"} <= people
         reminders = {row[1] for row in conn.execute("PRAGMA table_info(reminders)")}
         assert {"event_id", "offset_minutes", "recipient_ids", "sent_at"} <= reminders
+        sends = {row[1] for row in conn.execute("PRAGMA table_info(reminder_sends)")}
+        assert {"reminder_id", "occurrence_date", "chat_id", "sent_at"} <= sends
         for table in (
             "events",
             "event_colors",

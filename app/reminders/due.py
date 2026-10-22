@@ -11,7 +11,7 @@ from app.reminders.repository import (
     list_people,
     load_reminder_rows,
     reminder_to_dict,
-    sent_occurrence_keys,
+    sent_chat_keys,
 )
 from app.reminders.schedule import (
     browser_body,
@@ -81,7 +81,7 @@ def _evaluated(now: datetime | None = None):
     if current.tzinfo is None:
         current = current.replace(tzinfo=tz)
     people = _people_by_id()
-    sent_keys = sent_occurrence_keys()
+    sent_keys = sent_chat_keys()
     rows = load_reminder_rows()
     from app.database import exceptions_for_events
 
@@ -107,22 +107,27 @@ def _evaluated(now: datetime | None = None):
             except (ValueError, TypeError):
                 continue
             fire = start - timedelta(minutes=int(row["offset_minutes"]))
-            occurrence_date = occ.get("occurrence_date") if recurring else None
-            if recurring:
-                already = (row["id"], occurrence_date) in sent_keys
-                if fire < current - RECURRENCE_LOOKBACK:
-                    continue
+            if fire < current - RECURRENCE_LOOKBACK:
+                continue
+            occurrence_date = occ.get("occurrence_date") or event.get("gregorian_date")
+            if not recurring and row["sent_at"]:
+                pending_chats = []
             else:
-                already = bool(row["sent_at"])
+                pending_chats = [
+                    chat_id
+                    for chat_id in chat_ids
+                    if (row["id"], occurrence_date, chat_id) not in sent_keys
+                    and (row["id"], occurrence_date, "") not in sent_keys
+                ]
             items.append({
                 "row": row,
                 "event": display,
                 "reminder": reminder,
                 "start": start,
                 "fire": fire,
-                "chat_ids": chat_ids,
+                "chat_ids": pending_chats,
                 "occurrence_date": occurrence_date,
-                "already_sent": already,
+                "already_sent": not pending_chats,
             })
     return current, items
 

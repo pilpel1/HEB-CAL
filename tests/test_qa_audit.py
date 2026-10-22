@@ -1,15 +1,9 @@
-"""אודיט QA — מקרי קצה שאושרו בקוד.
-
-הטענות כאן מתארות התנהגות סבירה. באג מאושר מסומן
-``pytest.mark.xfail`` עם סיבה, כדי ש-CI יישאר ירוק עד התיקון.
-"""
+"""אודיט QA — מקרי קצה. התיקונים חייבים להישאר ירוקים."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
-import pytest
 
 from app.reminders.due import telegram_due
 from app.reminders.schedule import fire_at, reminder_message
@@ -105,8 +99,10 @@ def test_multi_day_reminder_uses_start_not_end(client, app):
         due = telegram_due(now=datetime(2026, 8, 1, 17, 0, tzinfo=TZ))
         assert len(due) == 1
         assert "2026-08-01 18:00" in due[0]["text"]
+        still = telegram_due(now=datetime(2026, 8, 2, 10, 0, tzinfo=TZ))
+        assert still[0]["event_id"] == created.get_json()["id"]
         later = telegram_due(now=datetime(2026, 8, 5, 17, 0, tzinfo=TZ))
-        assert later[0]["event_id"] == created.get_json()["id"]
+        assert later == []
 
 
 def test_end_before_start_rejected(client):
@@ -146,10 +142,13 @@ def test_telegram_reminder_is_plain_text_not_html():
         0,
         datetime(2026, 1, 1, 9, 0, tzinfo=TZ),
     )
-    assert "<b>xss</b>" in text
+    assert "&lt;b&gt;xss&lt;/b&gt;" in text
+    assert "<b>xss</b>" not in text
+    assert "&lt;img&gt;" in text
     source = (REPO / "app" / "reminders" / "telegram.py").read_text(encoding="utf-8")
     send_fn = source.split("def send_message", 1)[1].split("def ", 1)[0]
-    assert "parse_mode" not in send_fn
+    assert "parse_mode" in send_fn
+    assert "HTML" in send_fn
 
 
 def test_calendar_chips_escape_user_title():
@@ -247,10 +246,9 @@ def test_browser_due_works_without_chat_id(client, app):
         assert [row["event_id"] for row in visible] == [event_id]
 
 
-# --- באגים מאושרים --------------------------------------------------------
+# --- ממצאי האודיט (תוקנו) ------------------------------------------------
 
 
-@pytest.mark.xfail(reason="POST מקבל תאריך לועזי לא תקין בלי end_date — אין אימות YYYY-MM-DD")
 def test_invalid_gregorian_date_is_rejected(client):
     response = _event(client, gregorian_date="2026-02-31", hebrew_date="א")
     assert response.status_code == 400
@@ -258,23 +256,25 @@ def test_invalid_gregorian_date_is_rejected(client):
     assert garbage.status_code == 400
 
 
-@pytest.mark.xfail(reason="תאריך פסול שנשמר מפיל GET /api/events?from=&to= ב-500 (RecurrenceError)")
 def test_invalid_stored_date_does_not_break_range_query(client, app):
-    created = _event(client, gregorian_date="2026-02-31", hebrew_date="א")
-    if created.status_code != 200:
-        pytest.skip("היצירה כבר נדחית — הטווח בטוח")
+    with app.app_context():
+        from app.database import get_db
+
+        db = get_db()
+        db.execute(
+            "INSERT INTO events (title, gregorian_date, hebrew_date) VALUES ('שבור', '2026-02-31', 'א')"
+        )
+        db.commit()
     ranged = client.get("/api/events?from=2026-02-01&to=2026-02-28")
     assert ranged.status_code == 200
     assert isinstance(ranged.get_json(), list)
 
 
-@pytest.mark.xfail(reason="כותרת של רווחים בלבד עוברת את בדיקת השדות החובה")
 def test_whitespace_title_is_rejected(client):
     response = _event(client, title="   ")
     assert response.status_code == 400
 
 
-@pytest.mark.xfail(reason="שעה לא תקינה נשמרת, ותזכורת נופלת בשקט ל-09:00")
 def test_invalid_time_is_rejected(client):
     response = _event(client, time="25:99")
     assert response.status_code == 400
@@ -282,13 +282,11 @@ def test_invalid_time_is_rejected(client):
     assert bad.status_code == 400
 
 
-@pytest.mark.xfail(reason="DELETE לאירוע שלא קיים מחזיר 200 — delete_event לא בודק rowcount")
 def test_delete_missing_event_is_404(client):
     response = client.delete("/api/events/999999")
     assert response.status_code == 404
 
 
-@pytest.mark.xfail(reason="כישלון בצ'אט השני לא מסמן sent, והסבב הבא שולח שוב לראשון")
 def test_partial_telegram_failure_does_not_duplicate_first_chat(client, app):
     first = _person(client, name="א", chat_id="111")
     second = _person(client, name="ב", chat_id="222")
@@ -318,7 +316,6 @@ def test_partial_telegram_failure_does_not_duplicate_first_chat(client, app):
     assert sent.count("222") >= 1
 
 
-@pytest.mark.xfail(reason="שינוי שעת אירוע אחרי שליחה לא מאפס sent_at — התזכורת לא נשלחת מחדש")
 def test_reschedule_after_send_refires(client, app):
     from app.reminders.repository import mark_reminder_sent
 
@@ -336,7 +333,7 @@ def test_reschedule_after_send_refires(client, app):
         mark_reminder_sent(due[0]["id"])
     moved = client.put(
         f"/api/events/{event_id}",
-        json={**SAMPLE, "time": "18:00"},
+        json={**SAMPLE, "gregorian_date": "2026-06-01", "time": "18:00"},
     )
     assert moved.status_code == 200
     with app.app_context():
@@ -345,7 +342,6 @@ def test_reschedule_after_send_refires(client, app):
         assert again[0]["event_id"] == event_id
 
 
-@pytest.mark.xfail(reason="החלפת נמענים באירוע חוזר לא מוחקת reminder_sends — נמען חדש מפספס מופע שכבר נשלח")
 def test_recipient_change_on_recurring_notifies_new_person(client, app):
     from app.reminders.repository import mark_reminder_sent
 
@@ -384,7 +380,6 @@ def test_recipient_change_on_recurring_notifies_new_person(client, app):
         assert "555" in chats
 
 
-@pytest.mark.xfail(reason="תזכורת על אירוע חד-פעמי מלפני שנים נשלחת מיד כשה-worker חוזר")
 def test_stale_one_off_reminder_is_not_due_years_later(client, app):
     person = _person(client, chat_id="666")
     created = _event(
@@ -400,7 +395,6 @@ def test_stale_one_off_reminder_is_not_due_years_later(client, app):
         assert due == []
 
 
-@pytest.mark.xfail(reason="שמירת רשת משמרות ומשמרת ידנית לא בודקות household_settings.shifts_enabled")
 def test_shift_writes_rejected_when_feature_disabled(client):
     assert client.get("/api/shifts/settings").get_json()["enabled"] is False
     person = _person(client, name="אביחי", color="cyan")
@@ -419,13 +413,11 @@ def test_shift_writes_rejected_when_feature_disabled(client):
     assert manual.status_code == 400
 
 
-@pytest.mark.xfail(reason="/api/calendar/<year>/<month> לא מאמת חודש — 13 מחזיר 500")
 def test_calendar_month_rejects_invalid_month(client):
     response = client.get("/api/calendar/2026/13")
     assert response.status_code == 400
 
 
-@pytest.mark.xfail(reason="חיפוש לפי טווח תאריכים לא מרחיב מופעים — 28.2 של סדרת 31.1 לא נמצא")
 def test_search_finds_future_occurrence_date(client):
     created = _event(
         client,
@@ -443,7 +435,6 @@ def test_search_finds_future_occurrence_date(client):
     assert "יום הולדת אודיט" in titles
 
 
-@pytest.mark.xfail(reason="מחיקת אדם משאירה recipient_ids ומשמרות יתומות בלי FK")
 def test_delete_person_strips_recipient_ids(client):
     person = _person(client, chat_id="777")
     created = _event(
@@ -457,20 +448,17 @@ def test_delete_person_strips_recipient_ids(client):
     assert person["id"] not in leftover
 
 
-@pytest.mark.xfail(reason="רשימת האירועים מזריקה title/description ל-innerHTML בלי escapeHtml")
 def test_events_list_escapes_user_text():
     html = (REPO / "app" / "templates" / "events_list.html").read_text(encoding="utf-8")
     assert "escapeHtml(event.title)" in html
     assert "escapeHtml(event.description)" in html
 
 
-@pytest.mark.xfail(reason="צ'יפי חיפוש מתקדם מזריקים title/description ל-innerHTML")
 def test_filter_chips_escape_search_text():
     html = (REPO / "app" / "templates" / "events_list.html").read_text(encoding="utf-8")
     assert "escapeHtml(searchParams.title)" in html
 
 
-@pytest.mark.xfail(reason="ייבוא לא מאמת פורמט תאריך — אותה פרצה כמו POST")
 def test_import_rejects_invalid_gregorian_date(client):
     response = client.post(
         "/api/events/import?mode=merge",
@@ -488,13 +476,11 @@ def test_import_rejects_invalid_gregorian_date(client):
     assert "יבוא שבור" not in titles
 
 
-@pytest.mark.xfail(reason="אין מגבלת אורך לכותרת/תיאור אירוע (לאדם יש מגבלה 80)")
 def test_overlong_title_is_rejected(client):
     response = _event(client, title="א" * 2001)
     assert response.status_code == 400
 
 
-@pytest.mark.xfail(reason="PUT scope=occurrence בולע reminders בלי שגיאה ובלי לשמור")
 def test_occurrence_update_rejects_or_applies_reminders(client):
     person = _person(client)
     created = _event(
@@ -520,7 +506,6 @@ def test_occurrence_update_rejects_or_applies_reminders(client):
     assert response.status_code == 400
 
 
-@pytest.mark.xfail(reason="חיפוש מתקדם משתמש ב-datetime.now() נאיבי, לא ב-Asia/Jerusalem")
 def test_advanced_search_uses_jerusalem_today():
     source = (REPO / "app" / "api" / "events.py").read_text(encoding="utf-8")
     assert "reminder_timezone" in source

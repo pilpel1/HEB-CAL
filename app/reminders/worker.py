@@ -52,8 +52,15 @@ def process_due_reminders(*, now=None, send=None, token: str | None = None) -> i
                     f"reminder {item['id']} chat {chat_id} failed: {exc}",
                     file=sys.stderr,
                 )
+                continue
+            mark_reminder_sent(
+                item["id"],
+                occurrence_date=item.get("occurrence_date"),
+                chat_id=str(chat_id),
+            )
         if ok:
-            mark_reminder_sent(item["id"], occurrence_date=item.get("occurrence_date"))
+            if not item.get("occurrence_date"):
+                mark_reminder_sent(item["id"])
             delivered += 1
             print(f"sent reminder {item['id']} for event {item['event_id']}")
     return delivered

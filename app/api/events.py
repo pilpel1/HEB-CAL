@@ -17,9 +17,10 @@ from app.database import (
     update_event,
     upsert_exception,
 )
-from app.reminders.repository import people_ids, replace_event_reminders
-from app.reminders.schedule import OffsetError, parse_reminders_payload
-from app.services.shifts import ShiftError, resolve_manual_shift
+from app.reminders.repository import clear_reminder_delivery, people_ids, replace_event_reminders
+from app.reminders.schedule import OffsetError, parse_reminders_payload, reminder_timezone
+from app.services.event_payload import EventPayloadError, clean_event_write
+from app.services.shifts import ShiftError, resolve_manual_shift, shifts_enabled
 from app.services.recurrence import (
     RecurrenceError,
     clean_recurrence,
@@ -53,27 +54,11 @@ def _validate_event_payload(data):
             jsonify({"error": f"Missing required fields: {missing_fields}", "success": False}),
             400,
         )
-
-    end_date = data.get("end_date") or None
-    gregorian_date = data.get("gregorian_date")
-    if end_date:
-        try:
-            start = datetime.strptime(gregorian_date, "%Y-%m-%d").date()
-            end = datetime.strptime(end_date, "%Y-%m-%d").date()
-        except (TypeError, ValueError):
-            return (
-                jsonify({"error": "Invalid date format. Expected YYYY-MM-DD", "success": False}),
-                400,
-            )
-        if end < start:
-            return (
-                jsonify({
-                    "error": "תאריך הסיום חייב להיות זהה או מאוחר מתאריך ההתחלה",
-                    "success": False,
-                }),
-                400,
-            )
-
+    try:
+        cleaned = clean_event_write(data)
+    except EventPayloadError as exc:
+        return jsonify({"error": str(exc), "success": False}), 400
+    data.update(cleaned)
     return None
 
 
@@ -198,7 +183,10 @@ def get_events():
 
     rows = []
     for event in get_all_events():
-        rows.extend(expand_event(event, event.get("exceptions") or [], start, end))
+        try:
+            rows.extend(expand_event(event, event.get("exceptions") or [], start, end))
+        except RecurrenceError:
+            continue
     return jsonify(rows)
 
 
@@ -281,6 +269,8 @@ def add_event():
         return recurrence_error
     if rule == "keep" or (shift != "keep" and shift[0]):
         rule = None
+    if shift != "keep" and shift[0] and not shifts_enabled():
+        return jsonify({"error": "המשמרות כבויות בבית הזה", "success": False}), 400
 
     event_id = create_event(
         title=data['title'],
@@ -317,6 +307,8 @@ def update_single_event(event_id):
         return jsonify({"error": "Event not found", "success": False}), 404
 
     scope = (data.get("scope") or "all").strip()
+    if scope == "occurrence" and "reminders" in data:
+        return jsonify({"error": "תזכורות נשמרות על כל הסדרה", "success": False}), 400
     if scope == "occurrence" and data.get("is_shift"):
         return jsonify({"error": "משמרת נשמרת על האירוע כולו", "success": False}), 400
     if scope == "occurrence":
@@ -368,6 +360,14 @@ def update_single_event(event_id):
         return recurrence_error
     if marking_shift:
         rule = None
+    if marking_shift and not shifts_enabled():
+        return jsonify({"error": "המשמרות כבויות בבית הזה", "success": False}), 400
+
+    if (
+        (existing.get("gregorian_date") or "") != data["gregorian_date"]
+        or (existing.get("time") or None) != (data.get("time") or None)
+    ):
+        clear_reminder_delivery(event_id)
 
     clear_exceptions = _identity_changed(existing, data["gregorian_date"], rule) or marking_shift
     success = update_event(
@@ -418,19 +418,29 @@ def delete_single_event(event_id):
     return jsonify({"error": "Failed to delete event", "success": False}), 404
 
 
+def _text_matches(value, needle):
+    if not needle:
+        return True
+    return needle.casefold() in (value or "").casefold()
+
+
+def _search_date(raw):
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(str(raw)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
 @api.route('/events/search')
 def search_events():
     search_term = request.args.get('query', '').strip()
-    db = get_db()
-    rows = db.execute(
-        '''
-        SELECT * FROM events
-        WHERE title LIKE ?
-        ORDER BY gregorian_date
-        ''',
-        (f'%{search_term}%',),
-    ).fetchall()
-    return jsonify(_serialize_rows(rows))
+    events = [
+        event for event in get_all_events()
+        if not search_term or search_term.casefold() in (event.get("title") or "").casefold()
+    ]
+    return jsonify(events)
 
 
 @api.route('/events/advanced-search')
@@ -444,52 +454,72 @@ def advanced_search_events():
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid advanced_search payload"}), 400
 
-    query = 'SELECT * FROM events WHERE 1=1'
-    params = []
+    title = (search_params.get("title") or "").strip()
+    description = (search_params.get("description") or "").strip()
+    color = search_params.get("color")
+    range_from = _search_date(search_params.get("startDate"))
+    range_to = _search_date(search_params.get("endDate"))
+    time_filter = search_params.get("timeFilter")
+    today = datetime.now(reminder_timezone()).date()
 
-    if search_params.get('title'):
-        query += ' AND title LIKE ?'
-        params.append(f'%{search_params["title"]}%')
+    events = []
+    for event in get_all_events():
+        if title and not _text_matches(event.get("title"), title):
+            continue
+        if description and not _text_matches(event.get("description"), description):
+            continue
+        if color:
+            if color == "null":
+                if event.get("color") is not None:
+                    continue
+            elif event.get("color") != color:
+                continue
+        events.append(event)
 
-    if search_params.get('description'):
-        query += ' AND description LIKE ?'
-        params.append(f'%{search_params["description"]}%')
+    if range_from or range_to:
+        window_start = range_from or date.min
+        window_end = range_to or date.max
+        expanded = []
+        for event in events:
+            try:
+                expanded.extend(
+                    expand_event(event, event.get("exceptions") or [], window_start, window_end)
+                )
+            except RecurrenceError:
+                continue
+        events = expanded
 
-    if search_params.get('startDate'):
-        query += ' AND (gregorian_date >= ? OR (end_date IS NOT NULL AND end_date >= ?))'
-        params.extend([search_params['startDate'], search_params['startDate']])
+    if time_filter == "past":
+        kept = []
+        for event in events:
+            start = _search_date(event.get("gregorian_date"))
+            end = _search_date(event.get("end_date")) or start
+            until = _search_date(event.get("recurrence_until"))
+            recurring = bool(event.get("recurrence_freq"))
+            if recurring and not range_from and not range_to:
+                if until and until < today and (not end or end < today) and start and start < today:
+                    kept.append(event)
+                continue
+            if start and start < today and (not end or end < today):
+                kept.append(event)
+        events = kept
+    elif time_filter == "future":
+        kept = []
+        for event in events:
+            start = _search_date(event.get("gregorian_date"))
+            end = _search_date(event.get("end_date")) or start
+            until = _search_date(event.get("recurrence_until"))
+            recurring = bool(event.get("recurrence_freq"))
+            if recurring and not range_from and not range_to:
+                if until is None or until >= today:
+                    kept.append(event)
+                continue
+            if (start and start >= today) or (end and end >= today):
+                kept.append(event)
+        events = kept
 
-    if search_params.get('endDate'):
-        query += ' AND (gregorian_date <= ? OR (end_date IS NOT NULL AND gregorian_date <= ?))'
-        params.extend([search_params['endDate'], search_params['endDate']])
-
-    today = datetime.now().strftime('%Y-%m-%d')
-    if search_params.get('timeFilter') == 'past':
-        # סדרה שעדיין רצה לא נחשבת "עבר" רק כי העוגן כבר היה
-        query += (
-            ' AND (gregorian_date < ? AND (end_date IS NULL OR end_date < ?)'
-            ' AND (recurrence_freq IS NULL OR recurrence_freq = \'\''
-            ' OR (recurrence_until IS NOT NULL AND recurrence_until < ?)))'
-        )
-        params.extend([today, today, today])
-    elif search_params.get('timeFilter') == 'future':
-        query += (
-            ' AND (gregorian_date >= ? OR (end_date IS NOT NULL AND end_date >= ?)'
-            ' OR (recurrence_freq IS NOT NULL AND recurrence_freq != \'\''
-            ' AND (recurrence_until IS NULL OR recurrence_until >= ?)))'
-        )
-        params.extend([today, today, today])
-
-    if search_params.get('color'):
-        if search_params['color'] == 'null':
-            query += ' AND color IS NULL'
-        else:
-            query += ' AND color = ?'
-            params.append(search_params['color'])
-
-    query += ' ORDER BY gregorian_date'
-    rows = get_db().execute(query, params).fetchall()
-    return jsonify(_serialize_rows(rows))
+    events.sort(key=lambda item: (item.get("gregorian_date") or "", item.get("time") or "", item.get("id") or 0))
+    return jsonify(events)
 
 
 @api.route('/events/test', methods=['GET'])

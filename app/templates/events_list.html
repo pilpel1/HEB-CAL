@@ -836,7 +836,10 @@ function buildEventRowHtml(event) {
         : event.recurrence_freq === 'monthly'
             ? (event.recurrence_calendar === 'hebrew' ? 'כל חודש · עברי' : 'כל חודש · לועזי')
             : '';
-    const metaBits = [event.gregorian_date, event.hebrew_date, event.time, repeatNote].filter(Boolean);
+    const safeTitle = escapeHtml(event.title);
+    const metaBits = [event.gregorian_date, event.hebrew_date, event.time, repeatNote]
+        .filter(Boolean)
+        .map((bit) => escapeHtml(bit));
 
     return `
         <tr id="row-${event.id}" class="${meta.rowClass}">
@@ -845,18 +848,18 @@ function buildEventRowHtml(event) {
                     <span class="event-status-badge ${meta.badgeClass}">${meta.badgeText}</span>
                     ${event.color ?
                         `<span style="background-color: ${color}; padding: 4px 8px; border-radius: 4px;">
-                            ${event.title}
+                            ${safeTitle}
                         </span>` :
-                        event.title
+                        safeTitle
                     }
                     ${repeatNote ? `<span class="event-repeat-badge">${repeatNote}</span>` : ''}
                 </div>
                 <div class="event-meta-line">${metaBits.join(' · ')}</div>
             </td>
-            <td>${event.gregorian_date}</td>
-            <td>${event.hebrew_date}</td>
-            <td>${event.time || ''}</td>
-            <td>${event.description || ''}</td>
+            <td>${escapeHtml(event.gregorian_date)}</td>
+            <td>${escapeHtml(event.hebrew_date)}</td>
+            <td>${escapeHtml(event.time || '')}</td>
+            <td>${escapeHtml(event.description)}</td>
             <td>
                 <div class="btn-group" role="group">
                     <button class="btn btn-outline-primary btn-sm" onclick="editEvent(${event.id})" title="ערוך אירוע">
@@ -1199,7 +1202,7 @@ function updateFilterChips(searchParams) {
         if (searchParams.title) {
             chipsHtml += `
                 <div class="filter-chip" data-filter="title">
-                    שם: ${searchParams.title}
+                    שם: ${escapeHtml(searchParams.title)}
                     <span class="remove-filter" onclick="removeFilter('title')">
                         <i class="bi bi-x"></i>
                     </span>
@@ -1209,7 +1212,7 @@ function updateFilterChips(searchParams) {
         if (searchParams.description) {
             chipsHtml += `
                 <div class="filter-chip" data-filter="description">
-                    תיאור: ${searchParams.description}
+                    תיאור: ${escapeHtml(searchParams.description)}
                     <span class="remove-filter" onclick="removeFilter('description')">
                         <i class="bi bi-x"></i>
                     </span>
@@ -1249,7 +1252,7 @@ function updateFilterChips(searchParams) {
             const colorText = colorTranslations[searchParams.color] || searchParams.color;
             chipsHtml += `
                 <div class="filter-chip" data-filter="color">
-                    צבע: ${colorText}
+                    צבע: ${escapeHtml(colorText)}
                     <span class="remove-filter" onclick="removeFilter('color')">
                         <i class="bi bi-x"></i>
                     </span>
