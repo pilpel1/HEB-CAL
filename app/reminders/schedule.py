@@ -4,13 +4,17 @@
 ו-``now`` לא מזיז אותו. באירוע חוזר ``occurrence_start`` מחזירה את המופע
 הבא (אחרי חריגות) שזמן ההתחלה שלו לא עבר. שליחה per-occurrence נרשמת
 ב-``reminder_sends``, לא ב-``sent_at``.
+
+ההפרש של התזכורת מחושב ב-UTC (דקות אמיתיות), לא בשעון הקיר. במעבר שעון
+של ישראל חיסור על datetime מודע סוטה בשעה. התצוגה נשארת בשעה מקומית.
+``sent_at`` נשמר ב-UTC בנפרד (``repository.mark_reminder_sent``).
 """
 from __future__ import annotations
 
 import html
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 MAX_OFFSET_MINUTES = 365 * 24 * 60
@@ -209,10 +213,56 @@ def _aware(now: datetime, tz: ZoneInfo) -> datetime:
     return now.astimezone(tz)
 
 
+def _to_utc(moment: datetime, tz: ZoneInfo) -> datetime:
+    """רגע ב-UTC. ערך נאיבי נקרא כשעון מקומי, לא כ-UTC."""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=tz)
+    return moment.astimezone(timezone.utc)
+
+
+def _localize(year: int, month: int, day: int, hour: int, minute: int, tz: ZoneInfo) -> datetime:
+    """שעת קיר → רגע אמיתי באזור ``tz``.
+
+    שעה כפולה (סתיו, 01:00–02:00): ``fold=0``, הפעם הראשונה שהשעון מראה אותה.
+    שעה שלא קיימת (אביב, 02:00–03:00): ``fold=0`` ואז נרמול דרך UTC. הרגע
+    נשאר, והשעון המוצג זז קדימה אל השעה שבאמת קיימת (02:30 → 03:30).
+    """
+    wall = datetime(year, month, day, hour, minute)
+    attached = wall.replace(tzinfo=tz, fold=0)
+    normalized = attached.astimezone(timezone.utc).astimezone(tz)
+    same_clock = (
+        normalized.fold == 0
+        and normalized.year == wall.year
+        and normalized.month == wall.month
+        and normalized.day == wall.day
+        and normalized.hour == wall.hour
+        and normalized.minute == wall.minute
+    )
+    if same_clock:
+        return attached
+    return normalized
+
+
+def apply_offset(start: datetime, offset_minutes: int) -> datetime:
+    """מחסיר דקות בזמן מוחלט ומחזיר את הרגע באזור של ``start``.
+
+    ``start - timedelta`` על datetime עם ZoneInfo הוא חשבון שעון-קיר:
+    חלון שחוצה את החזרת השעון (25.10) או את הקדמתו (סוף מרץ) נדלק
+    שעה מוקדם או מאוחר. כאן החיסור הוא על UTC.
+    """
+    zone = start.tzinfo or reminder_timezone()
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=zone)
+    fired = start.astimezone(timezone.utc) - timedelta(minutes=int(offset_minutes))
+    return fired.astimezone(zone)
+
+
 def event_start(event: dict, *, tz: ZoneInfo | None = None, default_time: str | None = None) -> datetime:
     """תחילת האירוע באזור הזמן המקומי.
 
     בלי שעה (או שעה לא תקינה) — ``default_time``, ברירת מחדל 09:00.
+    שעה כפולה במעבר סתיו נלקחת בפעם הראשונה (``fold=0``). שעה בחור
+    של האביב מוזזת קדימה לשעה המקומית שקיימת.
     """
     tz = tz or reminder_timezone()
     default_time = default_time if default_time is not None else reminder_default_time()
@@ -222,7 +272,7 @@ def event_start(event: dict, *, tz: ZoneInfo | None = None, default_time: str | 
     date_value = datetime.strptime(date_raw, "%Y-%m-%d").date()
     parsed = _parse_hhmm(event.get("time")) or _parse_hhmm(default_time) or (9, 0)
     hour, minute = parsed
-    return datetime(date_value.year, date_value.month, date_value.day, hour, minute, tzinfo=tz)
+    return _localize(date_value.year, date_value.month, date_value.day, hour, minute, tz)
 
 
 def occurrence_start(
@@ -236,6 +286,7 @@ def occurrence_start(
 
     בלי חזרה — תאריך האירוע, בלי קשר ל-``now``.
     עם חזרה — המופע הבא שתחילתו >= ``now`` (ברירת מחדל: עכשיו).
+    ההשוואה ב-UTC: בשעה כפולה ``==`` של אותו ZoneInfo מתעלם מ-``fold``.
     """
     tz = tz or reminder_timezone()
     anchor = event_start(event, tz=tz, default_time=default_time)
@@ -255,7 +306,7 @@ def occurrence_start(
             tz=tz,
             default_time=default_time,
         )
-        if start >= current:
+        if _to_utc(start, tz) >= _to_utc(current, tz):
             return start
     return anchor
 
@@ -269,14 +320,14 @@ def fire_at(
     default_time: str | None = None,
 ) -> datetime:
     start = occurrence_start(event, now, tz=tz, default_time=default_time)
-    return start - timedelta(minutes=int(offset_minutes))
+    return apply_offset(start, offset_minutes)
 
 
 def is_due(fire: datetime, now: datetime, sent_at) -> bool:
     if sent_at:
         return False
-    tz = fire.tzinfo or reminder_timezone()
-    return fire <= _aware(now, tz)
+    zone = fire.tzinfo or reminder_timezone()
+    return _to_utc(fire, zone) <= _to_utc(now, zone)
 
 
 def in_browser_window(
@@ -289,12 +340,14 @@ def in_browser_window(
     """חלון להתראת דפדפן: קצת לפני המועד, ועוד קצת אחריו.
 
     לא תלוי ב-``sent_at`` של הטלגרם. הטאב שומר אצלו מה כבר הוצג.
+    הגבולות בדקות אמיתיות (UTC), לא בשעון הקיר.
     """
-    tz = fire.tzinfo or reminder_timezone()
-    current = _aware(now, tz)
+    zone = fire.tzinfo or reminder_timezone()
+    current = _to_utc(now, zone)
+    instant = _to_utc(fire, zone)
     return (
         current - timedelta(seconds=grace_seconds)
-        <= fire
+        <= instant
         <= current + timedelta(seconds=within_seconds)
     )
 
@@ -316,9 +369,8 @@ def reminder_message(event: dict, offset_minutes: int, start: datetime) -> str:
 
 
 def browser_body(event: dict, offset_minutes: int, start: datetime, fire: datetime, now: datetime) -> str:
-    tz = fire.tzinfo or reminder_timezone()
-    current = _aware(now, tz)
-    when = "עכשיו" if fire <= current else "בקרוב"
+    zone = fire.tzinfo or reminder_timezone()
+    when = "עכשיו" if _to_utc(fire, zone) <= _to_utc(now, zone) else "בקרוב"
     clock = start.strftime("%H:%M")
     date_label = start.strftime("%Y-%m-%d")
     return f"{when} · {offset_label(offset_minutes)} · {date_label} {clock}"
