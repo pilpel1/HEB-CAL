@@ -2,6 +2,11 @@
 
 חודש 1 = ניסן, 12 = אדר (או אדר א׳ בשנה מעוברת), 13 = אדר ב׳.
 בשנה לא מעוברת אין חודש 13. חשוון וכסלו הם 29 או 30 לפי השנה (pyluach).
+
+רשימת החודשים בבורר תלויה בשנה: שנה פשוטה — «אדר» אחד; שנה מעוברת —
+«אדר א׳» ו«אדר ב׳». כשמחליפים שנה (``from_year``), אדר פשוט עובר לאדר ב׳,
+ואדר א׳ או אדר ב׳ עוברים לאדר. יום שלא קיים בחודש היעד נחתך
+(ל׳ אדר א׳ בבורר → כ״ט אדר). כלל החזרה השנתית (א׳ ניסן) חי ב-recurrence.py.
 """
 from __future__ import annotations
 
@@ -62,8 +67,19 @@ def gregorian_to_hebrew(day: date) -> dict:
     return _describe(hebrew.year, hebrew.month, hebrew.day, day, False)
 
 
-def hebrew_to_gregorian(year: int, month: int, day: int) -> dict:
-    """ממיר בחירה מהבורר. אדר ב׳ בשנה פשוטה הופך לאדר, ויום מעבר לאורך החודש נחתך."""
+def _leap_year(year: int) -> bool:
+    try:
+        return Year(year).leap
+    except Exception as exc:
+        raise HebrewDateError("שנה עברית לא תקינה") from exc
+
+
+def hebrew_to_gregorian(year: int, month: int, day: int, from_year=None) -> dict:
+    """ממיר בחירה מהבורר. אדר ב׳ בשנה פשוטה הופך לאדר, ויום מעבר לאורך החודש נחתך.
+
+    ``from_year`` הוא השנה שאליה שייכת רשימת החודשים שעל המסך. בלי זה אי אפשר
+    להבדיל בין אדר פשוט לאדר א׳ — שניהם חודש 12.
+    """
     if isinstance(year, bool) or isinstance(month, bool) or isinstance(day, bool):
         raise HebrewDateError("תאריך עברי לא תקין")
     try:
@@ -80,6 +96,20 @@ def hebrew_to_gregorian(year: int, month: int, day: int) -> dict:
         raise HebrewDateError("שנה עברית לא תקינה") from exc
 
     adjusted = False
+    if from_year not in (None, ""):
+        if isinstance(from_year, bool):
+            raise HebrewDateError("שנה עברית לא תקינה")
+        try:
+            src_year = int(from_year)
+        except (TypeError, ValueError) as exc:
+            raise HebrewDateError("שנה עברית לא תקינה") from exc
+        if src_year < 1:
+            raise HebrewDateError("שנה עברית לא תקינה")
+        # אדר פשוט (12 בשנה לא מעוברת) → אדר ב׳ כשהיעד מעוברת.
+        # אדר א׳ נשאר 12, ובשנה פשוטה זה כבר «אדר».
+        if (not _leap_year(src_year)) and heb_year.leap and month == 12:
+            month = 13
+            adjusted = True
     if month == 13 and not heb_year.leap:
         month = 12
         adjusted = True

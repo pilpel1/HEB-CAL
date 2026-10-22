@@ -67,12 +67,17 @@ def get_hebrew_date(date_str):
 
 @api.route('/gregorian-from-hebrew')
 def gregorian_from_hebrew():
-    """יום / חודש / שנה עבריים → תאריך לועזי, כולל אדר א׳/ב׳ ואורך חודש."""
+    """יום / חודש / שנה עבריים → תאריך לועזי, כולל אדר לפי סוג השנה.
+
+    ``from_year`` אופציונלי: השנה של הרשימה שעל המסך, כדי למפות אדר
+    כשמחליפים בין שנה פשוטה למעוברת.
+    """
     try:
         payload = hebrew_to_gregorian(
             request.args.get('year'),
             request.args.get('month'),
             request.args.get('day'),
+            request.args.get('from_year'),
         )
     except HebrewDateError as exc:
         return jsonify({'error': str(exc)}), 400

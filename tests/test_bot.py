@@ -215,6 +215,26 @@ def test_parse_rejects_impossible_dates_and_times():
         assert "חודש" in str(exc)
 
 
+def test_plain_adar_follows_the_hebrew_year():
+    """«אדר» בלי א׳/ב׳: בשנה מעוברת אדר ב׳, בשנה פשוטה אדר."""
+    from pyluach.dates import HebrewDate
+
+    def greg(year, month, day):
+        converted = HebrewDate(year, month, day).to_greg()
+        return date(converted.year, converted.month, converted.day)
+
+    assert parse_user_date("יד אדר תשפז", TODAY) == greg(5787, 13, 14)
+    assert parse_user_date("יד אדר תשפח", TODAY) == greg(5788, 12, 14)
+    assert parse_user_date("יד אדר א תשפז", TODAY) == greg(5787, 12, 14)
+    assert parse_user_date("יד אדר ב תשפח", TODAY) == greg(5788, 12, 14)
+    assert parse_user_date("א׳ אדר א׳ תשפ״ז", TODAY) == greg(5787, 12, 1)
+    try:
+        parse_user_date("ל אדר א תשפח", TODAY)
+        raise AssertionError("30 Adar does not exist in a plain year")
+    except InputError as exc:
+        assert "לא קיים" in str(exc)
+
+
 def test_start_unlinked_is_only_the_chat_id(app):
     reply = _go(app, _msg("/start"))
     assert reply["text"] == (
