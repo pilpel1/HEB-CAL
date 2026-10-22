@@ -782,7 +782,9 @@ def test_calendar_and_settings_markup(client):
     events_list = client.get("/events_list").get_data(as_text=True)
     assert 'id="searchInput"' in events_list
     assert 'id="addEventFromListBtn"' in events_list
-    assert "תזכורות" in events_list
+    assert '>תזכורות</a>' not in events_list
+    assert 'aria-label="הגדרות תזכורות"' in events_list
+    assert 'href="/settings#settings-reminders"' in events_list
     assert "חזרה ללוח" in events_list
     assert 'id="eventsToolsBtn"' not in events_list
     assert "data-theme-toggle" not in events_list

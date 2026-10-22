@@ -34,8 +34,8 @@ function buildDayCell(year, month, day) {
     if (day.is_hebrew_month_start) {
         cell.classList.add('heb-month-start');
     }
-    if (typeof isCompactCalendar === 'function'
-        && isCompactCalendar()
+    if (typeof showsDayAgenda === 'function'
+        && showsDayAgenda()
         && infiniteCalendar.agendaDate === dateStr) {
         cell.classList.add('is-agenda-day');
     }

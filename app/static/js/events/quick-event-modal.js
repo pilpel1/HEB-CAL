@@ -559,10 +559,14 @@ function initQuickEventModal() {
         calendarRoot.addEventListener('click', (event) => {
             const cell = event.target.closest('td[data-date]');
             const compact = typeof isCompactCalendar === 'function' && isCompactCalendar();
+            const desktopAgenda = typeof isDesktopAgenda === 'function' && isDesktopAgenda();
             // בטלפון כל לחיצה על היום (כולל צ'יפ ו-"+N") רק בוחרת אותו. הוספה: "הוסף" בפאנל.
-            if (cell && compact) {
+            // בדסקטופ לחיצה על היום בוחרת אותו בפאנל; לחיצה על אירוע ממשיכה לעריכה.
+            if (cell && (compact || desktopAgenda)) {
                 // בלי גלילה: הזזת השורה בין שני הקליקים של דאבל-קליק מפספסת את הצ'יפ
                 selectAgendaDay(cell.getAttribute('data-date'));
+            }
+            if (cell && compact) {
                 return;
             }
             const eventItem = event.target.closest('.event-item[data-event-id]');
