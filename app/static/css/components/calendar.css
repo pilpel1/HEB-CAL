@@ -909,7 +909,8 @@
         overflow: hidden;
     }
 
-    /* כותרת הצ'יפ עד שתי שורות. "+N" מגיע רק כשהגובה נגמר. */
+    /* כותרת הצ'יפ עד שתי שורות. "+N" מגיע רק כשהגובה נגמר.
+       is-one-line: החריג היחיד — הצ'יפ הראשון כששתי שורות ועוד "+N" לא נכנסים. */
     .day-content .event-item {
         white-space: normal;
         height: auto;
@@ -923,6 +924,20 @@
         white-space: normal;
         overflow-wrap: break-word;
         word-break: normal;
+    }
+
+    .day-content .event-item.is-one-line {
+        white-space: nowrap;
+    }
+
+    .day-content .event-item.is-one-line .event-title {
+        display: block;
+        -webkit-line-clamp: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        overflow-wrap: normal;
+        word-break: normal;
+        text-overflow: ellipsis;
     }
 
     .multi-day-rail .event-item {
