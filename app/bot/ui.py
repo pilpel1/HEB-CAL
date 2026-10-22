@@ -10,6 +10,10 @@ from app.services.shifts import WEEKDAY_NAMES, hebrew_day_month, week_heading, w
 
 SHIFT_LABELS = {"m": "בוקר", "e": "ערב", "n": "לילה"}
 PRESET_TIMES = ("09:00", "12:00", "18:00", "21:00")
+MENU_TITLE = "📅 לוח השנה המשותף — מה להציג?"
+BTN_MENU = "🏠 תפריט ראשי"
+BTN_ADD = "➕ הוספת אירוע"
+LIST_HINT = "לחצו על אירוע לפרטים, עריכה או מחיקה."
 
 
 def kb(rows: list[list[tuple[str, str]]]) -> dict:
@@ -24,7 +28,7 @@ def kb(rows: list[list[tuple[str, str]]]) -> dict:
         if buttons:
             inline.append(buttons)
     if not inline:
-        inline = [[{"text": "תפריט", "callback_data": "home"}]]
+        inline = [[{"text": BTN_MENU, "callback_data": "home"}]]
     return {"inline_keyboard": inline}
 
 
@@ -43,15 +47,15 @@ def _pairs(items: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
 
 def menu_rows() -> list[list[tuple[str, str]]]:
     return [
-        [("היום", "today"), ("השבוע", "week")],
-        [("הקרובים", "soon"), ("משמרות", "shifts")],
-        [("לפי אדם", "who"), ("חיפוש", "find")],
-        [("אירוע חדש", "add"), ("הגדרות", "set")],
+        [("📆 אירועי היום", "today"), ("🗓 השבוע הקרוב", "week")],
+        [("⏭ אירועים קרובים", "soon"), ("👷 משמרות", "shifts")],
+        [("👤 לפי אדם", "who"), ("🔍 חיפוש אירוע", "find")],
+        [(BTN_ADD, "add"), ("⚙️ הגדרות", "set")],
     ]
 
 
 def _exit(*extra: tuple[str, str]) -> list[tuple[str, str]]:
-    return [*extra, ("תפריט", "home")]
+    return [*extra, (BTN_MENU, "home")]
 
 
 def _back_cancel(back: str) -> list[tuple[str, str]]:
@@ -94,13 +98,16 @@ def home_screen(chat_id, linked: list[dict], *, note: str = "") -> tuple[str, di
 
         lines.append(chat_id_reply(chat_id))
         return "\n".join(lines), kb([[("חיבור כאן", "set:link")]])
-    lines.append("מה עושים?")
+    lines.append(MENU_TITLE)
     return "\n".join(lines), kb(menu_rows())
 
 
 def _filter_row(mode: str) -> list[tuple[str, str]]:
     labels = (("all", "הכל", "flt:all"), ("ev", "אירועים", "flt:ev"), ("sh", "משמרות", "flt:sh"))
-    return [(f"• {label}" if mode == key else label, data) for key, label, data in labels]
+    return [
+        (f"הצג: {label} ✓" if mode == key else f"הצג: {label}", data)
+        for key, label, data in labels
+    ]
 
 
 def _count_line(count: int) -> str:
@@ -196,7 +203,7 @@ def list_screen(
         for event in chunk:
             lines.append(_event_line(event, people, with_date=with_date))
         lines.append("")
-        lines.append("לחצו על אירוע כדי לפתוח.")
+        lines.append(LIST_HINT)
     buttons = [[item] for item in _unique_buttons(chunk, people, with_date=with_date)]
     nav = []
     if page > 0:
@@ -208,12 +215,12 @@ def list_screen(
     if kind != "shifts":
         buttons.append(_filter_row(mode))
     if kind == "shifts":
-        buttons.append([("משמרת חדשה", "sh:new"), ("תפריט", "home")])
+        buttons.append([("➕ משמרת חדשה", "sh:new"), (BTN_MENU, "home")])
     elif kind == "find":
-        buttons.append([("חיפוש אחר", "find"), ("אירוע חדש", "add")])
-        buttons.append([("תפריט", "home")])
+        buttons.append([("🔍 חיפוש אחר", "find"), (BTN_ADD, "add")])
+        buttons.append([(BTN_MENU, "home")])
     else:
-        buttons.append([("אירוע חדש", "add"), ("תפריט", "home")])
+        buttons.append([(BTN_ADD, "add"), (BTN_MENU, "home")])
     return "\n".join(lines).strip(), kb(buttons)
 
 
@@ -308,7 +315,7 @@ def shifts_off_screen() -> tuple[str, dict]:
     return text, kb(
         [
             [("הדלקת משמרות", "set:sh:1")],
-            [("תפריט", "home")],
+            [(BTN_MENU, "home")],
         ]
     )
 
@@ -342,7 +349,6 @@ def event_screen(event: dict, people: dict, focus: date | None = None) -> tuple[
     if description:
         short = description if len(description) <= 400 else description[:399] + "…"
         lines.append(esc(short))
-    lines.append(f"מזהה: {code(event.get('id'))}")
     recurring = bool(event.get("recurrence_freq"))
     if recurring:
         lines.append("אירוע חוזר. עריכה ומחיקה כאן חלות על כל הסדרה.")
@@ -350,10 +356,10 @@ def event_screen(event: dict, people: dict, focus: date | None = None) -> tuple[
     lines.append("אפשר לערוך, למחוק, או לחזור לרשימה.")
     event_id = event.get("id")
     if event.get("is_shift"):
-        actions = [[("שינוי תאריך", f"ed:{event_id}"), ("מחיקה", f"rm:{event_id}")]]
+        actions = [[("📅 שינוי תאריך", f"ed:{event_id}"), ("🗑 מחיקה", f"rm:{event_id}")]]
     else:
-        actions = [[("עריכה", f"ed:{event_id}"), ("מחיקה", f"rm:{event_id}")]]
-    actions.append([("חזרה לרשימה", "back:list"), ("תפריט", "home")])
+        actions = [[("✏️ עריכה", f"ed:{event_id}"), ("🗑 מחיקה", f"rm:{event_id}")]]
+    actions.append([("↩️ חזרה לרשימה", "back:list"), (BTN_MENU, "home")])
     return "\n".join(lines), kb(actions)
 
 
@@ -366,7 +372,7 @@ def _safe_greg(value: str) -> str:
 
 def missing_event_screen() -> tuple[str, dict]:
     text = "האירוע כבר לא ביומן.\nאפשר לחזור לרשימה."
-    return text, kb([[("חזרה לרשימה", "back:list"), ("תפריט", "home")]])
+    return text, kb([[("↩️ חזרה לרשימה", "back:list"), (BTN_MENU, "home")]])
 
 
 def delete_screen(event: dict) -> tuple[str, dict]:
@@ -688,7 +694,7 @@ def settings_screen(
             rows.append([("מי עובד במשמרות", "set:workers")])
         else:
             rows.append([("הדלקת משמרות", "set:sh:1")])
-    rows.append([("תפריט", "home")])
+    rows.append([(BTN_MENU, "home")])
     return "\n".join(lines), kb(rows)
 
 
@@ -777,7 +783,7 @@ def workers_screen(people: list[dict], page: int = 0) -> tuple[str, dict]:
         nav.append(("הבא", f"set:wp:{page + 1}"))
     if nav:
         rows.append(nav)
-    rows.append([("חזרה", "set"), ("תפריט", "home")])
+    rows.append([("חזרה", "set"), (BTN_MENU, "home")])
     return "\n".join(lines), kb(rows)
 
 
@@ -799,7 +805,7 @@ def person_picker(people: list[dict], page: int) -> tuple[str, dict]:
         rows.append(nav)
     if not people:
         rows.append([("הגדרות", "set")])
-    rows.append([("תפריט", "home")])
+    rows.append([(BTN_MENU, "home")])
     return "\n".join(lines), kb(rows)
 
 
@@ -883,4 +889,4 @@ def shift_date_text_screen(today: date) -> tuple[str, dict]:
 
 def deleted_note_screen(title: str) -> tuple[str, dict]:
     text = f"«{esc(title)}» נמחק."
-    return text, kb([[("חזרה לרשימה", "back:list"), ("תפריט", "home")]])
+    return text, kb([[("↩️ חזרה לרשימה", "back:list"), (BTN_MENU, "home")]])

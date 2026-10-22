@@ -1,5 +1,9 @@
 """סבב שליחה: תזכורות שהגיע זמנן + תפריט הבוט (כפתורים ופקודות).
 
+תזכורות ולחיצות רצות בלולאות נפרדות. לחיצה לא מחכה לסבב התזכורות:
+``getUpdates`` עם long poll של 25 שניות רץ ברצף, ו-``answerCallbackQuery``
+יוצא לפני בניית המסך.
+
 הרצה מהשורש של הריפו:
 
     python scripts/reminder_worker.py
@@ -10,6 +14,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import threading
 import time
 
 from app.reminders.due import telegram_due
@@ -66,6 +71,10 @@ def process_due_reminders(*, now=None, send=None, token: str | None = None) -> i
     return delivered
 
 
+# Telegram מחזיר getUpdates ברגע שיש עדכון, או אחרי timeout השניות האלה.
+UPDATE_LONG_POLL_SECONDS = 25
+
+
 def run_once(*, long_poll: int = 0, offset: int | None = None) -> int | None:
     process_due_reminders()
     token = bot_token()
@@ -79,24 +88,65 @@ def run_once(*, long_poll: int = 0, offset: int | None = None) -> int | None:
         return offset
 
 
-def run_loop(interval: int | None = None) -> None:
-    interval = poll_seconds() if interval is None else max(30, min(int(interval), 60))
-    offset = None
-    print(f"reminder worker started, interval {interval}s")
-    while True:
+def _reminder_loop(stop: threading.Event, interval: int, process) -> None:
+    while not stop.is_set():
         started = time.monotonic()
-        process_due_reminders()
-        token = bot_token()
-        if token:
-            # ה-long-poll מחזיק את הסבב פתוח: /start נענה תוך כדי, ו-due נבדק שוב אחריו
-            try:
-                offset = consume_updates(token, offset, long_poll=min(50, interval))
-            except TelegramError as exc:
-                print(f"telegram updates failed: {exc}", file=sys.stderr)
-        elapsed = time.monotonic() - started
-        remaining = interval - elapsed
-        if remaining > 0:
-            time.sleep(remaining)
+        try:
+            process()
+        except Exception as exc:
+            print(f"reminder check failed: {exc}", file=sys.stderr)
+        remaining = interval - (time.monotonic() - started)
+        if stop.wait(max(0.0, remaining)):
+            return
+
+
+def _update_loop(stop: threading.Event, *, consume, token_fn) -> None:
+    """long poll רצוף. בלי שינה של סבב התזכורות בין לחיצה ללחיצה."""
+    offset = None
+    while not stop.is_set():
+        token = token_fn()
+        if not token:
+            if stop.wait(2):
+                return
+            continue
+        try:
+            offset = consume(token, offset, long_poll=UPDATE_LONG_POLL_SECONDS)
+        except TelegramError as exc:
+            print(f"telegram updates failed: {exc}", file=sys.stderr)
+            if stop.wait(1):
+                return
+        except Exception as exc:
+            print(f"telegram updates failed: {exc}", file=sys.stderr)
+            if stop.wait(1):
+                return
+
+
+def run_loop(
+    interval: int | None = None,
+    *,
+    stop_event: threading.Event | None = None,
+    consume=consume_updates,
+    process=process_due_reminders,
+    token_fn=bot_token,
+) -> None:
+    """תזכורות במחזור שלהן. לחיצות בשרשור נפרד, לא מחכות ל-process."""
+    interval = poll_seconds() if interval is None else max(30, min(int(interval), 60))
+    stop = stop_event or threading.Event()
+    updater = threading.Thread(
+        target=_update_loop,
+        args=(stop,),
+        kwargs={"consume": consume, "token_fn": token_fn},
+        name="telegram-updates",
+        daemon=True,
+    )
+    print(f"reminder worker started, reminders every {interval}s, updates long-poll {UPDATE_LONG_POLL_SECONDS}s")
+    updater.start()
+    try:
+        _reminder_loop(stop, interval, process)
+    finally:
+        stop.set()
+        # ה-long poll התקוע ננטש ביציאה. השרשור daemon לא מחזיק את התהליך.
+        updater.join(timeout=1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         "--interval",
         type=int,
         default=None,
-        help="שניות בין סבבים (30–60, ברירת מחדל REMINDER_POLL_SECONDS או 45)",
+        help="שניות בין בדיקות תזכורות (30–60, ברירת מחדל REMINDER_POLL_SECONDS או 45). לחיצות נענות בנפרד",
     )
     args = parser.parse_args(argv)
 
