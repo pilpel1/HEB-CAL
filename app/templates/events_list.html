@@ -292,10 +292,6 @@
                                             <select class="form-control" id="colorSearch">
                                                 <option value="">כל הצבעים</option>
                                                 <option value="null">ללא צבע</option>
-                                                <option value="cyan">ציאן</option>
-                                                <option value="yellow">צהוב</option>
-                                                <option value="orange">כתום</option>
-                                                <option value="green">ירוק</option>
                                             </select>
                                         </div>
                                     </div>
@@ -330,32 +326,6 @@
                 <button type="button" class="btn btn-primary btn-sm" id="addEventFromListBtn">הוסף אירוע</button>
                 <a href="/settings" class="btn btn-outline-secondary btn-sm">תזכורות</a>
                 <a href="/" class="btn btn-outline-secondary btn-sm calendar-events-list-btn">חזרה ללוח</a>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm" type="button" id="eventsToolsBtn"
-                            data-bs-toggle="dropdown" aria-expanded="false" title="כלים וגיבוי">
-                        <i class="bi bi-tools" aria-hidden="true"></i>
-                        <span class="visually-hidden">כלים</span>
-                    </button>
-                    <div class="dropdown-menu dropdown-menu-start p-3 events-tools-menu" aria-labelledby="eventsToolsBtn">
-                        <div class="fw-semibold mb-2">גיבוי ושחזור</div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mb-2" id="exportEventsBtn">
-                            ייצוא רשימה
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 mb-2" id="importEventsBtn">
-                            ייבוא רשימה
-                        </button>
-                        <input type="file" id="importEventsFile" accept=".json,application/json" hidden>
-                        <label for="importMode" class="form-label small mb-1">מצב ייבוא</label>
-                        <select id="importMode" class="form-select form-select-sm">
-                            <option value="merge" selected>ייבוא במיזוג (בלי כפילויות)</option>
-                            <option value="replace">ייבוא במקום הקיים</option>
-                        </select>
-                        <small class="text-muted d-block mt-2">
-                            מיזוג מזהה אירוע לפי מזהה, או לפי כותרת+תאריך+שעה, או לפי תאריך+שעה אם יש התאמה יחידה.
-                        </small>
-                    </div>
-                </div>
-                {% with theme_toggle_class='btn-sm' %}{% include 'partials/theme_toggle.html' %}{% endwith %}
             </div>
         </div>
         <div class="active-filters">
@@ -594,31 +564,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
-    const exportEventsBtn = document.getElementById('exportEventsBtn');
-    const importEventsBtn = document.getElementById('importEventsBtn');
-    const importEventsFile = document.getElementById('importEventsFile');
-    const importMode = document.getElementById('importMode');
-    const toolsMenu = document.querySelector('.events-tools-menu');
+
     const searchInput = document.getElementById('searchInput');
     const advancedSearchBtn = document.getElementById('advancedSearchBtn');
     const advancedSearchPanel = document.getElementById('advancedSearchPanel');
     const advancedSearchForm = document.getElementById('advancedSearchForm');
     const resetAdvancedSearch = document.getElementById('resetAdvancedSearch');
 
-    if (toolsMenu) {
-        // לא לסגור את תפריט הכלים בלחיצה בפנים (select/קובץ)
-        toolsMenu.addEventListener('click', (e) => e.stopPropagation());
-    }
-    exportEventsBtn.addEventListener('click', exportEvents);
-    importEventsBtn.addEventListener('click', () => importEventsFile.click());
-    importEventsFile.addEventListener('change', async function() {
-        if (this.files && this.files[0]) {
-            await importEventsFromFile(this.files[0], importMode.value);
-            this.value = '';
-        }
-    });
-    
     // מאזין לכפתור החיפוש המתקדם
     advancedSearchBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -699,68 +651,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
-
-async function exportEvents() {
-    try {
-        const response = await fetch('/api/events/export');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'heb-cal-events.json';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-        showMessage('קובץ הגיבוי ירד בהצלחה (heb-cal-events.json)');
-    } catch (error) {
-        console.error('שגיאה ביצוא האירועים:', error);
-        alert('שגיאה בייצוא האירועים');
-    }
-}
-
-async function importEventsFromFile(file, mode) {
-    const operationText = mode === 'replace' ? 'להחליף את כל הנתונים הקיימים' : 'למזג את הנתונים לתוך הקיימים';
-    if (!confirm(`האם לבצע ייבוא ול${operationText}?`)) {
-        return;
-    }
-
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('mode', mode);
-
-        const response = await fetch('/api/events/import', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || 'שגיאה בייבוא האירועים');
-        }
-
-        await loadAllEvents();
-        const inserted = result.inserted_events || 0;
-        const updated = result.updated_events || 0;
-        const colors = result.imported_colors || 0;
-        const modeLabel = mode === 'replace' ? 'החלפה מלאה' : 'מיזוג';
-        alert(
-            `הייבוא הושלם (${modeLabel})\n\n` +
-            `אירועים חדשים שנוספו: ${inserted}\n` +
-            `אירועים קיימים שעודכנו: ${updated}\n` +
-            `צבעים חדשים שנוספו: ${colors}\n\n` +
-            `לחץ אישור כדי להמשיך.`
-        );
-    } catch (error) {
-        console.error('שגיאה ביבוא האירועים:', error);
-        alert(error.message || 'שגיאה בייבוא האירועים');
-    }
-}
 
 function searchEvents(query) {
     console.log('=== מתחיל חיפוש אירועים ===');

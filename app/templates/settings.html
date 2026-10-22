@@ -30,6 +30,50 @@
             <p class="text-muted small mb-0">בטלפון, תצוגה צפופה מקטינה את ימי הלוח כדי להראות יותר שבועות. שני המתגים נשמרים במכשיר.</p>
         </div>
     </section>
+
+    <section class="card mb-3" id="settingsColors" aria-labelledby="settings-colors-title">
+        <div class="card-body">
+            <h2 class="h5" id="settings-colors-title">צבעים</h2>
+            <p class="text-muted">צבעי האירועים בלוח. ארבעת ברירת המחדל אי אפשר למחוק.</p>
+            <ul id="settingsColorsList" class="settings-colors-list"></ul>
+            <form id="settingsColorForm" class="row g-2 align-items-end mt-2">
+                <input type="hidden" id="settingsColorId" value="">
+                <div class="col-12 col-md-5">
+                    <label for="settingsColorName" class="form-label">שם</label>
+                    <input type="text" class="form-control" id="settingsColorName" maxlength="40" required>
+                </div>
+                <div class="col-auto">
+                    <label for="settingsColorHex" class="form-label">צבע</label>
+                    <input type="color" class="form-control form-control-color" id="settingsColorHex" value="#8899aa" title="בחירת צבע">
+                </div>
+                <div class="col-auto d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" id="settingsColorSave">הוספה</button>
+                    <button type="button" class="btn btn-outline-secondary" id="settingsColorCancel" hidden>ביטול</button>
+                </div>
+            </form>
+            <p id="settingsColorError" class="reminder-form-error mt-2" hidden></p>
+        </div>
+    </section>
+
+    <section class="card mb-3" id="settingsBackup" aria-labelledby="settings-backup-title">
+        <div class="card-body">
+            <h2 class="h5" id="settings-backup-title">גיבוי וייבוא</h2>
+            <p class="text-muted">ייצוא כל האירועים לקובץ JSON, או ייבוא מקובץ גיבוי.</p>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button type="button" class="btn btn-outline-secondary" id="exportEventsBtn">ייצוא רשימה</button>
+                <button type="button" class="btn btn-outline-secondary" id="importEventsBtn">ייבוא רשימה</button>
+            </div>
+            <input type="file" id="importEventsFile" accept=".json,application/json" hidden>
+            <label for="importMode" class="form-label">מצב ייבוא</label>
+            <select id="importMode" class="form-select">
+                <option value="merge" selected>ייבוא במיזוג (בלי כפילויות)</option>
+                <option value="replace">ייבוא במקום הקיים</option>
+            </select>
+            <small class="text-muted d-block mt-2">
+                מיזוג מזהה אירוע לפי מזהה, או לפי כותרת+תאריך+שעה, או לפי תאריך+שעה אם יש התאמה יחידה.
+            </small>
+        </div>
+    </section>
     <script>
         (function () {
             var themeInput = document.getElementById('themeSwitch');

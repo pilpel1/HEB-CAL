@@ -707,6 +707,8 @@ def test_calendar_and_settings_markup(client):
     assert 'aria-label="רשימת אירועים"' in calendar
     assert 'aria-label="הזן משמרות"' in calendar
     assert 'id="header-collapse"' in calendar
+    assert 'header-collapse-chevron' in calendar
+    assert 'header-collapse-grip' not in calendar
     assert 'heb-cal-header-collapsed' in calendar
     assert 'id="current-month"' in calendar
     assert 'id="shiftEntryModal"' in calendar
@@ -719,6 +721,22 @@ def test_calendar_and_settings_markup(client):
     assert 'data-density-switch' in settings
     assert "מצב כהה" in settings
     assert "תצוגה צפופה" in settings
+    assert "גיבוי וייבוא" in settings
+    assert 'id="exportEventsBtn"' in settings
+    assert 'id="importEventsBtn"' in settings
+    assert "צבעים" in settings
+    assert 'id="settingsColors"' in settings
+    assert settings.count("data-theme-switch") == 1
+    events_list = client.get("/events_list").get_data(as_text=True)
+    assert 'id="searchInput"' in events_list
+    assert 'id="addEventFromListBtn"' in events_list
+    assert "תזכורות" in events_list
+    assert "חזרה ללוח" in events_list
+    assert 'id="eventsToolsBtn"' not in events_list
+    assert "data-theme-toggle" not in events_list
+    assert 'id="exportEventsBtn"' not in events_list
+    assert 'id="pageSizeSelect"' in events_list
+    assert 'id="sortOrderSelect"' in events_list
     assert "אנשים לתזכורות" in settings
     assert 'id="chatIdHelpBtn"' in settings
     assert 'aria-label="איך משיגים מזהה צ׳אט"' in settings

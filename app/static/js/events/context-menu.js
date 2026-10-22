@@ -131,6 +131,9 @@ function initCalendarContextMenu(calendarBody) {
     }
 
     calendarBody.addEventListener('contextmenu', (event) => {
+        if (typeof isPageZoomed === 'function' && isPageZoomed()) {
+            return;
+        }
         // במגע contextmenu מגיע לפני pointerup. פותחים רק בשחרור, אחרת התפריט נסגר מהקליק.
         if (press) {
             event.preventDefault();
@@ -145,6 +148,9 @@ function initCalendarContextMenu(calendarBody) {
 
     // נפתח ב-pointerup, לא בזמן שהאצבע למטה — אחרת השחרור לוחץ על הפריט הראשון
     calendarBody.addEventListener('pointerdown', (event) => {
+        if (typeof isPageZoomed === 'function' && isPageZoomed()) {
+            return;
+        }
         if (event.pointerType === 'mouse' || !event.target.closest('td[data-date]')) {
             return;
         }

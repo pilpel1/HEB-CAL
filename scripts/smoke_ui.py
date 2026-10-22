@@ -46,7 +46,9 @@ GLOBAL_NAMES = [
     "extractTimeFromTitle", "applyTimeFromTitlePrefix", "fillQuickEventForm",
     "getQuickEventFormData", "openQuickEventModal", "openEditEventModal",
     "initCalendarContextMenu", "initQuickEventModal", "updateEvent", "deleteEvent",
-    "goToToday", "getColorRGBA", "isDateInRange", "isMultiDayEvent",
+    "goToToday", "getColorRGBA", "resolveEventColor", "eventChipFill",
+    "isPageZoomed", "exportEvents", "importEventsFromFile",
+    "isDateInRange", "isMultiDayEvent",
     "addDaysToDateStr", "getEventDurationDays", "getMultiDaySegmentRole",
     "assignMultiDayLanes", "buildEventItemHtml", "renderMultiDayRail",
     "getCachedEvents", "paintCellEvents",
@@ -228,7 +230,8 @@ def check_events_list(page: Page, base: str, snap: dict) -> None:
     page.dispatch_event("#searchInput", "input")
     expect(page.locator("#eventsTable")).to_contain_text("רשימה בטא")
 
-    page.click("#eventsToolsBtn")
+    page.goto(base + "/settings")
+    expect(page.locator("#settingsBackup")).to_be_visible()
     with page.expect_download() as dl:
         page.click("#exportEventsBtn")
     path = dl.value.path()
@@ -236,8 +239,9 @@ def check_events_list(page: Page, base: str, snap: dict) -> None:
     titles = sorted(e["title"] for e in exported.get("events", exported if isinstance(exported, list) else []))
     assert {"רשימה אלפא", "רשימה בטא", "רשימה גמא"} <= set(titles), titles
     snap["export_filename"] = dl.value.suggested_filename
-    print(f"  export: OK ({dl.value.suggested_filename}, {len(titles)} events)")
-    page.keyboard.press("Escape")
+    print(f"  export from settings: OK ({dl.value.suggested_filename}, {len(titles)} events)")
+    page.goto(base + "/events_list")
+    page.wait_for_selector("#eventsTable tr")
 
     # עריכה מהטבלה (editEvent של הדף → openEditEventModal מ-script.js)
     page.locator(f'#eventsTable button[onclick="editEvent({created["id"]})"]').click()
