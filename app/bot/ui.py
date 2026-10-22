@@ -6,7 +6,13 @@ from datetime import date, timedelta
 from app.bot.query import PAGE_SIZE, PEOPLE_PAGE, clamp_page
 from app.bot.textutil import clip, code, esc
 from app.services.recurrence import hebrew_display
-from app.services.shifts import WEEKDAY_NAMES, hebrew_day_month, week_heading, weekday_index
+from app.services.shifts import (
+    WEEKDAY_NAMES,
+    hebrew_day_month,
+    week_heading,
+    week_parasha,
+    weekday_index,
+)
 
 SHIFT_LABELS = {"m": "בוקר", "e": "ערב", "n": "לילה"}
 PRESET_TIMES = ("09:00", "12:00", "18:00", "21:00")
@@ -14,6 +20,8 @@ MENU_TITLE = "📅 לוח השנה המשותף — מה להציג?"
 BTN_MENU = "🏠 תפריט ראשי"
 BTN_ADD = "➕ הוספת אירוע"
 LIST_HINT = "לחצו על אירוע לפרטים, עריכה או מחיקה."
+DAY_LETTERS = ("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳")
+SHIFTS_PER_ROW = 3
 
 
 def kb(rows: list[list[tuple[str, str]]]) -> dict:
@@ -303,6 +311,90 @@ def _event_line(event: dict, people: dict, *, with_date: bool) -> str:
         bits.append("חוזר")
     extra = " · ".join(bits)
     return f"• <b>{title}</b>\n  {extra}"
+
+
+def _day_letter(day: date) -> str:
+    return DAY_LETTERS[weekday_index(day)]
+
+
+def _shift_face(event: dict) -> str:
+    """סוג המשמרת. כותרת חופשית שונה מהסוג מוצגת כמו שהיא."""
+    label = str(event.get("shift_label") or "").strip()
+    title = str(event.get("title") or "").strip()
+    if title and title != label:
+        return title
+    return label or title or "משמרת"
+
+
+def _shift_bit(event: dict, people: dict) -> str:
+    return f"{_person_name(people, event.get('shift_person_id'))} {_shift_face(event)}"
+
+
+def _week_header(start: date, today: date) -> str:
+    this_sunday = today - timedelta(days=weekday_index(today))
+    delta = (start - this_sunday).days // 7
+    name = {0: "השבוע", 1: "שבוע הבא", -1: "שבוע קודם"}.get(delta)
+    if name is None:
+        end = start + timedelta(days=6)
+        name = f"{start.day}.{start.month}–{end.day}.{end.month}"
+    try:
+        parasha = week_parasha(start + timedelta(days=6))
+    except Exception:
+        parasha = None
+    if parasha:
+        return f"{name} · פרשת {esc(parasha)}"
+    return name
+
+
+def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> tuple[str, dict]:
+    """שבוע נוכחי והבא, שורה אחת ליום, וכפתורי היום באותה שורה."""
+    by_day: dict[str, list[dict]] = {}
+    for event in rows:
+        raw = (event.get("gregorian_date") or "")[:10]
+        by_day.setdefault(raw, []).append(event)
+    lines: list[str] = []
+    buttons: list[list[tuple[str, str]]] = []
+    used: set[str] = set()
+    for start in (anchor, anchor + timedelta(days=7)):
+        lines.append(_week_header(start, today))
+        found = False
+        for offset in range(7):
+            day = start + timedelta(days=offset)
+            items = by_day.get(day.isoformat()) or []
+            if not items:
+                continue
+            found = True
+            items.sort(
+                key=lambda event: (
+                    _person_name(people, event.get("shift_person_id")),
+                    _shift_face(event),
+                    event.get("id") or 0,
+                )
+            )
+            bits = " · ".join(_shift_bit(event, people) for event in items)
+            lines.append(f"{_day_letter(day)} {day.day}.{day.month} · {esc(bits)}")
+            day_buttons: list[tuple[str, str]] = []
+            for event in items:
+                label = f"{_day_letter(day)} {_shift_bit(event, people)}"
+                if label in used:
+                    label = f"{label} #{event.get('id')}"
+                used.add(label)
+                day_buttons.append((label, f"ev:{event.get('id')}:{ymd(day)}"))
+            for index in range(0, len(day_buttons), SHIFTS_PER_ROW):
+                buttons.append(day_buttons[index : index + SHIFTS_PER_ROW])
+        if not found:
+            lines.append("אין משמרות עדיין")
+        lines.append("")
+    previous = anchor - timedelta(days=7)
+    following = anchor + timedelta(days=7)
+    buttons.append(
+        [
+            ("◀ שבוע קודם", f"sw:{ymd(previous)}"),
+            ("שבוע הבא ▶", f"sw:{ymd(following)}"),
+        ]
+    )
+    buttons.append([("➕ משמרת חדשה", "sh:new"), (BTN_MENU, "home")])
+    return "\n".join(lines).strip(), kb(buttons)
 
 
 def shifts_off_screen() -> tuple[str, dict]:

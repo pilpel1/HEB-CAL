@@ -10,7 +10,6 @@ from app.services.shifts import weekday_index
 PAGE_SIZE = 5
 PEOPLE_PAGE = 6
 SOON_DAYS = 30
-SHIFT_DAYS = 14
 PERSON_DAYS = 60
 FIND_BACK = 30
 FIND_AHEAD = 365
@@ -21,6 +20,18 @@ def week_bounds(today: date) -> tuple[date, date]:
     """ראשון עד שבת, כמו רשת המשמרות."""
     start = today - timedelta(days=weekday_index(today))
     return start, start + timedelta(days=6)
+
+
+def shift_anchor(value, today: date) -> date:
+    """ראשון של השבוע הראשון בלוח המשמרות. ערך ריק או שבור → השבוע של היום."""
+    day = today
+    if value:
+        try:
+            day = date.fromisoformat(str(value)[:10])
+        except ValueError:
+            day = today
+    start, _end = week_bounds(day)
+    return start
 
 
 def _sort_key(row: dict):
@@ -108,7 +119,9 @@ def range_for(kind: str, today: date) -> tuple[date, date] | None:
     if kind == "soon":
         return today, today + timedelta(days=SOON_DAYS)
     if kind == "shifts":
-        return today, today + timedelta(days=SHIFT_DAYS - 1)
+        # ברירת המחדל של המסך: השבוע (ראשון) ועוד שבוע. הדפדוף זז דרך sw:.
+        start, _end = week_bounds(today)
+        return start, start + timedelta(days=13)
     if kind == "person":
         return today, today + timedelta(days=PERSON_DAYS)
     return None

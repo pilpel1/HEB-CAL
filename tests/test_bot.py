@@ -735,6 +735,67 @@ def test_all_day_word_and_shift_disabled_blocks_create(app):
         assert get_all_events()[0]["time"] is None
 
 
+def test_shifts_board_is_two_weeks_and_start_stays_the_menu(app):
+    from app.services.shifts import set_shifts_enabled
+
+    with app.app_context():
+        set_shifts_enabled(True)
+    avihai = _person(app, "אביחי", chat=42, works_shifts=1)
+    shira = _person(app, "שירה", works_shifts=1)
+    sunday = TODAY - timedelta(days=weekday_index(TODAY))
+    next_sunday = sunday + timedelta(days=7)
+    monday = next_sunday + timedelta(days=1)
+    _event(app, "בוקר", next_sunday, shift=(1, avihai["id"], "בוקר"))
+    _event(app, "ערב", next_sunday, shift=(1, shira["id"], "ערב"))
+    _event(app, "בוקר מוקדם", monday, shift=(1, avihai["id"], "בוקר"))
+    for label in ("בוקר", "ערב", "לילה"):
+        _event(app, label, monday, shift=(1, shira["id"], label))
+    _event(app, "לפני", sunday - timedelta(days=1), shift=(1, avihai["id"], "לילה"))
+    later = sunday + timedelta(days=14)
+    _event(app, "אחר כך", later, shift=(1, avihai["id"], "בוקר"))
+
+    listed = _go(app, _cb("shifts"))
+    assert "השבוע · פרשת לך לך" in listed["text"]
+    assert "שבוע הבא · פרשת וירא" in listed["text"]
+    assert "אין משמרות עדיין" in listed["text"]
+    assert "א׳ 25.10 · אביחי בוקר · שירה ערב" in listed["text"]
+    assert "ב׳ 26.10 · אביחי בוקר מוקדם · שירה בוקר · שירה לילה · שירה ערב" in listed["text"]
+    assert "כל היום" not in listed["text"]
+    assert "משמרת ·" not in listed["text"]
+    assert "לפני" not in listed["text"]
+    assert "אחר כך" not in listed["text"]
+    assert "עמוד " not in listed["text"]
+    keyboard = listed["markup"]["inline_keyboard"]
+    sunday_rows = [
+        row
+        for row in keyboard
+        if row and all("א׳" in button["text"] for button in row)
+    ]
+    assert len(sunday_rows) == 1 and len(sunday_rows[0]) == 2
+    monday_rows = [row for row in keyboard if row and all("ב׳" in button["text"] for button in row)]
+    assert [len(row) for row in monday_rows] == [3, 1]
+    assert [button["text"] for button in keyboard[-1]] == ["➕ משמרת חדשה", "🏠 תפריט ראשי"]
+    assert [button["text"] for button in keyboard[-2]] == ["◀ שבוע קודם", "שבוע הבא ▶"]
+
+    card = _press(app, listed, "א׳ אביחי בוקר")
+    assert "<b>בוקר</b>" in card["text"]
+    assert "אביחי" in card["text"]
+
+    nxt = _press(app, listed, "שבוע הבא")
+    assert "שבוע הבא · פרשת וירא" in nxt["text"]
+    assert "השבוע · פרשת לך לך" not in nxt["text"]
+    assert "אחר כך" in nxt["text"] or "אביחי בוקר" in nxt["text"]
+    assert "1.11" in nxt["text"]
+    back = _press(app, nxt, "שבוע קודם")
+    assert "השבוע · פרשת לך לך" in back["text"]
+    assert "אחר כך" not in back["text"]
+
+    home = _go(app, _msg("/start"))
+    assert home["text"] == "📅 לוח השנה המשותף — מה להציג?"
+    assert "פרשת" not in home["text"]
+    assert "👷 משמרות" in [button["text"] for button in _buttons(home)]
+
+
 def test_callback_ack_is_before_the_screen_and_under_a_second(app, monkeypatch):
     """שעון החול נעצר לפני בניית המסך, לא אחריה."""
     import time

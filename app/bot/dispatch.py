@@ -265,7 +265,10 @@ class Bot:
         if data == "soon":
             return self.show_list("soon", clear_flow=True)
         if data == "shifts":
+            self.session["list"]["shift_sunday"] = ""
             return self.show_list("shifts", clear_flow=True)
+        if data.startswith("sw:"):
+            return self._open_shift_week(data[3:])
         if data == "who":
             self._clear_flow()
             return self.out(*ui.person_picker(self.people, self.session.get("who_page") or 0))
@@ -580,6 +583,7 @@ class Bot:
                     text, markup = ui.shifts_off_screen()
                     return self.out(_with_error(text, note), markup)
                 return self.out(*ui.shifts_off_screen())
+            return self._shifts_board(note)
         if kind == "person" and not person_id:
             return self.out(*ui.person_picker(self.people, self.session.get("who_page") or 0))
         if kind == "find" and not clean_line(query or ""):
@@ -621,6 +625,32 @@ class Bot:
             note=note,
         )
         return self.out(text, markup)
+
+    def _shifts_board(self, note: str) -> dict:
+        anchor = lists.shift_anchor(self.session["list"].get("shift_sunday"), self.today)
+        self.session["list"].update(
+            {
+                "kind": "shifts",
+                "page": 0,
+                "person_id": None,
+                "query": "",
+                "shift_sunday": anchor.isoformat(),
+            }
+        )
+        end = anchor + timedelta(days=13)
+        rows = [row for row in lists.events_between(anchor, end) if row.get("is_shift")]
+        text, markup = ui.shifts_board(rows, self.by_id, self.today, anchor)
+        if note:
+            text = esc(note).rstrip() + "\n\n" + text
+        return self.out(text, markup)
+
+    def _open_shift_week(self, stamp: str) -> dict:
+        day = ui.parse_ymd(stamp)
+        if day is None:
+            self.toast = "הכפתור לא מוכר"
+            return self.go_home()
+        self.session["list"]["shift_sunday"] = lists.shift_anchor(day, day).isoformat()
+        return self.show_list("shifts")
 
     def _page(self, data: str) -> dict:
         try:
