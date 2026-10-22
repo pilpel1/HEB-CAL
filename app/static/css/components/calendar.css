@@ -650,7 +650,7 @@
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
-    touch-action: manipulation;
+    touch-action: pan-x pan-y pinch-zoom;
 }
 
 .day-agenda,
@@ -702,6 +702,22 @@
         user-select: none;
         background: transparent;
         color: #64748b;
+    }
+
+    html.is-page-zoomed .infinite-calendar,
+    html.is-page-zoomed .calendar-stream-frame,
+    html.is-page-zoomed .calendar-stream,
+    html.is-page-zoomed .calendar-table td[data-date],
+    html.is-page-zoomed .agenda-resize,
+    html.is-page-zoomed .day-agenda,
+    html.is-page-zoomed .day-agenda-list {
+        touch-action: pan-x pan-y pinch-zoom;
+    }
+
+    /* בזום הגלילה הפנימית גונבת את הפאן. הקשה עדיין עובדת. */
+    html.is-page-zoomed .calendar-stream,
+    html.is-page-zoomed .day-agenda-list {
+        overflow: hidden;
     }
 
     .agenda-resize-grip {
@@ -767,10 +783,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 100%;
+        width: 40px;
         height: 28px;
         min-height: 28px;
-        margin: 0;
+        margin: 0 auto;
         padding: 0;
         border: 0;
         background: transparent;
@@ -778,30 +794,18 @@
         cursor: pointer;
     }
 
-    .header-collapse-grip {
-        width: 40px;
-        height: 4px;
-        border-radius: 999px;
-        background: #c5c9d1;
-    }
-
-    .header-collapse-arrow {
-        display: none;
-        width: 36px;
-        height: 22px;
-        border-radius: 999px;
-        background: #e8eef8;
-        color: #1d4ed8;
+    .header-collapse-chevron {
+        display: inline-flex;
         align-items: center;
         justify-content: center;
+        width: 28px;
+        height: 22px;
+        color: #475569;
+        transform: none;
     }
 
-    .calendar-toolbar.is-collapsed .header-collapse-grip {
-        display: none;
-    }
-
-    .calendar-toolbar.is-collapsed .header-collapse-arrow {
-        display: inline-flex;
+    .calendar-toolbar.is-collapsed .header-collapse-chevron {
+        transform: rotate(180deg);
     }
 
     .header-collapse:focus-visible {
@@ -1180,6 +1184,10 @@
     align-self: center;
     background: transparent;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.agenda-swatch:not(.is-empty) {
+    box-shadow: none;
 }
 
 .agenda-swatch.is-empty {

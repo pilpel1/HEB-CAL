@@ -4,6 +4,19 @@ function isCompactCalendar() {
     return window.matchMedia('(max-width: 480px)').matches;
 }
 
+/** זום דפדפן (פינץ'), לא זום של האפליקציה. מעל 1 — גרירה אחת מפנה את העמוד. */
+function isPageZoomed() {
+    const vv = window.visualViewport;
+    if (!vv || !Number.isFinite(vv.scale)) {
+        return false;
+    }
+    return vv.scale > 1.01;
+}
+
+function syncPageZoomState() {
+    document.documentElement.classList.toggle('is-page-zoomed', isPageZoomed());
+}
+
 function densityDivisor() {
     try {
         return localStorage.getItem('heb-cal-density') === 'compact' ? 9 : 6;
@@ -219,6 +232,9 @@ function bindAgendaResize() {
         if (event.button !== undefined && event.button !== 0) {
             return;
         }
+        if (isPageZoomed()) {
+            return;
+        }
         handle.setPointerCapture(event.pointerId);
         handle.dataset.agendaDragging = '1';
         drag = {
@@ -317,6 +333,11 @@ function bindAgendaResize() {
 function syncCalendarFrame() {
     const cal = document.querySelector('.calendar-container.infinite-calendar');
     if (!cal) {
+        return;
+    }
+    syncPageZoomState();
+    // בזום לא מצמצמים לגובה ה-visualViewport — זה מבטל את הפאן של הדפדפן
+    if (isPageZoomed()) {
         return;
     }
     if (!isCompactCalendar()) {
@@ -608,15 +629,17 @@ function renderDayAgenda(dateStr) {
         const range = ev.end_date && ev.end_date > ev.gregorian_date
             ? `<span class="agenda-range">עד ${escapeHtml(formatShortGregorian(ev.end_date))}</span>`
             : '';
-        const swatchStyle = ev.color
-            ? ` style="background: rgba(${getColorRGBA(ev.color)})"`
-            : '';
+        const color = typeof resolveEventColor === 'function' ? resolveEventColor(ev) : ev.color;
+        const fill = typeof eventChipFill === 'function'
+            ? eventChipFill(ev, 1)
+            : (color && typeof getColorRGBA === 'function' ? `rgba(${getColorRGBA(color, 1)})` : '');
+        const swatchStyle = fill ? ` style="background: ${fill}"` : '';
         const occurrence = escapeHtml(ev.occurrence_date || ev.gregorian_date || '');
         const recurring = ev.recurrence_freq ? '1' : '0';
         const icon = typeof repeatIconHtml === 'function' ? repeatIconHtml(ev) : '';
         items.push(
             `<li class="agenda-item agenda-event" data-event-id="${ev.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}">`
-            + `<span class="agenda-swatch${ev.color ? '' : ' is-empty'}"${swatchStyle}></span>`
+            + `<span class="agenda-swatch${fill ? '' : ' is-empty'}"${swatchStyle}></span>`
             + `${time}<span class="agenda-text">${icon}${escapeHtml(ev.title || '')}</span>${range}</li>`
         );
     }
@@ -647,7 +670,12 @@ function initDayAgenda() {
 
     initCalendarChrome();
     bindAgendaResize();
+    syncPageZoomState();
     const onViewport = () => {
+        syncPageZoomState();
+        if (isPageZoomed()) {
+            return;
+        }
         applyHeaderCollapsed(readHeaderCollapsed());
         syncCalendarFrame();
         syncWeekRowHeight();

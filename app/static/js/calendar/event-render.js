@@ -1,14 +1,59 @@
 // ציור אירועים בתא: חגים, פס אירועים רב-יומיים, אירועי יום
 
-// פונקציה להמרת שם צבע ל-RGBA
-function getColorRGBA(color) {
-    const colorMap = {
-        'cyan': '0, 255, 255, 0.4',
-        'yellow': '255, 255, 0, 0.4',
-        'orange': '255, 165, 0, 0.4',
-        'green': '0, 128, 0, 0.4'
-    };
-    return colorMap[color] || '0, 0, 0, 0';
+const EVENT_COLOR_RGB = {
+    cyan: [0, 255, 255],
+    yellow: [255, 255, 0],
+    orange: [255, 165, 0],
+    green: [0, 128, 0],
+};
+
+function parseColorRGB(color) {
+    if (color == null || color === '') {
+        return null;
+    }
+    const raw = String(color).trim();
+    const named = EVENT_COLOR_RGB[raw.toLowerCase()];
+    if (named) {
+        return named;
+    }
+    const hex = raw[0] === '#' ? raw.slice(1) : raw;
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+        return [0, 1, 2].map((index) => parseInt(hex[index] + hex[index], 16));
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+        return [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16));
+    }
+    return null;
+}
+
+/** צבע הצ'יפ בלוח: event.color, או צבע האדם למשמרת. */
+function resolveEventColor(event, people) {
+    if (!event) {
+        return '';
+    }
+    if (event.color) {
+        return event.color;
+    }
+    if (!event.is_shift || event.shift_person_id == null || event.shift_person_id === '') {
+        return '';
+    }
+    const list = people || (typeof shiftUiState !== 'undefined' ? shiftUiState.people : null) || [];
+    const person = list.find((item) => String(item.id) === String(event.shift_person_id));
+    return (person && person.color) || '';
+}
+
+function getColorRGBA(color, alpha) {
+    const rgb = parseColorRGB(color);
+    const a = alpha === undefined ? 0.4 : alpha;
+    if (!rgb) {
+        return '0, 0, 0, 0';
+    }
+    return `${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a}`;
+}
+
+function eventChipFill(event, alpha, people) {
+    const color = resolveEventColor(event, people);
+    return color ? `rgba(${getColorRGBA(color, alpha)})` : '';
 }
 
 function getMultiDaySegmentRole(dateStr, event, weekDates) {
@@ -114,13 +159,12 @@ function eventTimeLabel(event) {
 
 function buildEventItemHtml(event, extraClasses = []) {
     const classes = ['event-item', ...extraClasses];
-    if (!event.color) {
+    const fill = eventChipFill(event);
+    if (!fill) {
         classes.push('event-uncolored');
     }
 
-    const style = event.color
-        ? `background-color: rgba(${getColorRGBA(event.color)})`
-        : '';
+    const style = fill ? `background-color: ${fill}` : '';
     const label = escapeHtml(eventTimeLabel(event));
     const timeHtml = event.time
         ? `<span class="event-time">${escapeHtml(event.time)}</span><span class="event-sep"> - </span>`

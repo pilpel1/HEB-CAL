@@ -707,6 +707,8 @@ def test_calendar_and_settings_markup(client):
     assert 'aria-label="רשימת אירועים"' in calendar
     assert 'aria-label="הזן משמרות"' in calendar
     assert 'id="header-collapse"' in calendar
+    assert 'header-collapse-chevron' in calendar
+    assert 'header-collapse-grip' not in calendar
     assert 'heb-cal-header-collapsed' in calendar
     assert 'id="current-month"' in calendar
     assert 'id="shiftEntryModal"' in calendar

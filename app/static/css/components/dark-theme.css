@@ -123,13 +123,8 @@
     color: #cbd5e1;
 }
 
-[data-bs-theme="dark"] .header-collapse-grip {
-    background: #64748b;
-}
-
-[data-bs-theme="dark"] .header-collapse-arrow {
-    background: #1e293b;
-    color: #93c5fd;
+[data-bs-theme="dark"] .header-collapse-chevron {
+    color: #cbd5e1;
 }
 
 [data-bs-theme="dark"] .header-collapse:focus-visible {
