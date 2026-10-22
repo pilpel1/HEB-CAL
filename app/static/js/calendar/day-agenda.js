@@ -592,6 +592,15 @@ function ensureAgendaDayVisible(dateStr) {
     stream.scrollTop += delta;
 }
 
+/** תיאור בשורה אחת. ריק / רווחים בלבד — בלי תוספת, השורה נשארת כמו שהייתה. */
+function agendaDescriptionHtml(event) {
+    const text = String((event && event.description) || '').replace(/\s+/g, ' ').trim();
+    if (!text) {
+        return '';
+    }
+    return `<span class="agenda-desc"> • ${escapeHtml(text)}</span>`;
+}
+
 function renderDayAgenda(dateStr) {
     const title = document.getElementById('day-agenda-title');
     const list = document.getElementById('day-agenda-list');
@@ -638,11 +647,13 @@ function renderDayAgenda(dateStr) {
         const occurrence = escapeHtml(ev.occurrence_date || ev.gregorian_date || '');
         const recurring = ev.recurrence_freq ? '1' : '0';
         const icon = typeof repeatIconHtml === 'function' ? repeatIconHtml(ev) : '';
+        const descHtml = agendaDescriptionHtml(ev);
+        const textClass = descHtml ? 'agenda-text has-desc' : 'agenda-text';
         items.push(
             `<li class="agenda-item agenda-event${colored}" data-event-id="${ev.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}">`
             + `<span class="agenda-swatch${ev.color ? '' : ' is-empty'}"${swatchStyle}></span>`
             + `<span class="agenda-highlight"${highlightStyle}>${time}`
-            + `<span class="agenda-text">${icon}${escapeHtml(ev.title || '')}</span></span>${range}</li>`
+            + `<span class="${textClass}">${icon}${escapeHtml(ev.title || '')}${descHtml}</span></span>${range}</li>`
         );
     }
 

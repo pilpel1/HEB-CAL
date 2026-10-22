@@ -667,6 +667,13 @@
         overflow: hidden;
     }
 
+    /* בזום השורש לא נשאר נעול, כדי שפאן ה-visual viewport לא ייחסם */
+    html.is-page-zoomed:has(.infinite-calendar),
+    html.is-page-zoomed body:has(.infinite-calendar) {
+        overflow: visible;
+        touch-action: pan-x pan-y pinch-zoom;
+    }
+
     body:has(.infinite-calendar) .container {
         margin-top: 0 !important;
         margin-bottom: 0;
@@ -704,9 +711,11 @@
         color: #64748b;
     }
 
+    html.is-page-zoomed .container,
     html.is-page-zoomed .infinite-calendar,
     html.is-page-zoomed .calendar-stream-frame,
     html.is-page-zoomed .calendar-stream,
+    html.is-page-zoomed .calendar-table,
     html.is-page-zoomed .calendar-table td[data-date],
     html.is-page-zoomed .agenda-resize,
     html.is-page-zoomed .day-agenda,
@@ -714,10 +723,18 @@
         touch-action: pan-x pan-y pinch-zoom;
     }
 
-    /* בזום הגלילה הפנימית גונבת את הפאן. הקשה עדיין עובדת. */
+    /*
+     * הסטרים הוא scrollport (overflow-x:hidden). contain בולע גם את הציר
+     * שהוא לא יכול לגלול, אז אחרי פינץ' גרירה שמאלה/ימינה לא מזיזה כלום.
+     * auto משרשר את מה שנשאר אל פאן ה-visual viewport.
+     * לא clip: clip מאפס scrollTop והלוח קופץ שנים.
+     */
     html.is-page-zoomed .calendar-stream,
+    html.is-page-zoomed .calendar-stream-frame,
+    html.is-page-zoomed .day-agenda,
     html.is-page-zoomed .day-agenda-list {
         overflow: hidden;
+        overscroll-behavior: auto;
     }
 
     .agenda-resize-grip {
@@ -1163,6 +1180,8 @@
     gap: 0.35rem;
     min-width: 0;
     flex: 1 1 auto;
+    max-width: 100%;
+    overflow: hidden;
     padding: 0.05em 0.4em;
     border-radius: 0.3rem;
 }
@@ -1178,6 +1197,19 @@
 .agenda-text {
     min-width: 0;
     flex: 1 1 auto;
+}
+
+/* תיאור באותה שורה אחרי הכותרת. בלי תיאור השורה נשארת כמו שהייתה */
+.agenda-text.has-desc {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agenda-desc {
+    font-weight: 300;
+    /* אפור כהה — עדיין קריא על הפסטל של ההדגשה (אלפא 0.4) ועל לבן */
+    color: #4b5563;
 }
 
 .agenda-range {

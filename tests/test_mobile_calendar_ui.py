@@ -78,6 +78,40 @@ def test_agenda_row_reuses_event_chip_color_helpers():
     assert "eventChipFill(ev, 1)" not in agenda
 
 
+def test_agenda_description_is_inline_after_title():
+    agenda = DAY_AGENDA.read_text(encoding="utf-8")
+    render = EVENT_RENDER.read_text(encoding="utf-8")
+    css = CALENDAR_CSS.read_text(encoding="utf-8")
+    start = render.index("function escapeHtml")
+    end = render.index("const REPEAT_ICON_SVG")
+    script = (
+        render[start:end]
+        + agenda[agenda.index("function agendaDescriptionHtml"):agenda.index("function renderDayAgenda")]
+        + """
+const cases = [
+  { description: '' },
+  { description: '   \\n  ' },
+  { description: 'פגישה קצרה' },
+  { description: 'שורה\\nשנייה  <b>x</b>' },
+];
+const out = cases.map((ev) => agendaDescriptionHtml(ev));
+process.stdout.write(JSON.stringify(out));
+"""
+    )
+    result = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    empty, spaces, short, multiline = json.loads(result.stdout)
+    assert empty == ""
+    assert spaces == ""
+    assert short == '<span class="agenda-desc"> • פגישה קצרה</span>'
+    assert multiline == '<span class="agenda-desc"> • שורה שנייה &lt;b&gt;x&lt;/b&gt;</span>'
+    assert "agenda-text has-desc" in agenda
+    assert "agendaDescriptionHtml(ev)" in agenda
+    assert ".agenda-text.has-desc" in css
+    assert "text-overflow: ellipsis" in css
+    assert ".agenda-desc" in css
+    assert "font-weight: 300" in css
+
+
 def test_page_zoom_skips_custom_gestures_and_allows_pan(client):
     agenda = DAY_AGENDA.read_text(encoding="utf-8")
     menu = CONTEXT_MENU.read_text(encoding="utf-8")
@@ -92,6 +126,14 @@ def test_page_zoom_skips_custom_gestures_and_allows_pan(client):
     assert "isPageZoomed()" in menu
     assert "touch-action: pan-x pan-y pinch-zoom" in css
     assert "html.is-page-zoomed .agenda-resize" in css
+    # PR #21 השאיר overscroll-behavior:contain על הסטרים, וזה בלע את הפאן האופקי
+    assert "overscroll-behavior: auto" in css
+    assert "overflow: clip" not in css
+    assert "html.is-page-zoomed:has(.infinite-calendar)" in css
+    assert "html.is-page-zoomed body:has(.infinite-calendar)" in css
+    assert 'name="viewport" content="width=device-width, initial-scale=1.0"' in html
+    assert "user-scalable=no" not in html
+    assert "maximum-scale" not in html
     assert "header-collapse-chevron" in html
     assert "header-collapse-grip" not in html
     assert "header-collapse-arrow" not in html
