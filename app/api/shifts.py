@@ -9,6 +9,7 @@ from app.services.shifts import (
     save_shift_week,
     set_shifts_enabled,
     shifts_enabled,
+    validate_shift_week,
     week_view,
 )
 
@@ -79,6 +80,7 @@ def put_shift_week():
         return error
     try:
         start = parse_week_start(data.get("week_start"))
+        validate_shift_week(person, start, data.get("cells"))
         result = save_shift_week(person, start, data.get("cells"))
     except ShiftError as exc:
         return _shift_error(exc)

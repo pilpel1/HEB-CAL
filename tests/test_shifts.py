@@ -193,7 +193,7 @@ def test_week_save_is_idempotent_and_only_removes_shifts(client):
     assert sorted(body["kept"]) == sorted(created_ids)
     assert len(client.get("/api/events").get_json()) == 3
 
-    # כותרת שנערכה ידנית לא מורידה את הסימון, ולא נדרסת בשמירה חוזרת
+    # עריכת הכותרת לא מורידה את הסימון. בתצוגה ובשמירה חוזרת הכותרת היא רק «בוקר».
     edited = client.put(f"/api/events/{sunday['id']}", json={
         "title": "אביחי בבוקר מוקדם",
         "gregorian_date": sunday["gregorian_date"],
@@ -201,6 +201,9 @@ def test_week_save_is_idempotent_and_only_removes_shifts(client):
         "color": "cyan",
     })
     assert edited.status_code == 200
+    shown = client.get(f"/api/events/{sunday['id']}").get_json()
+    assert shown["title"] == "בוקר"
+    assert shown["is_shift"] == 1
     again = client.put("/api/shifts/week", json={
         "person_id": avihai["id"],
         "week_start": week.isoformat(),
@@ -208,7 +211,7 @@ def test_week_save_is_idempotent_and_only_removes_shifts(client):
     })
     assert again.get_json()["created"] == []
     kept_title = client.get(f"/api/events/{sunday['id']}").get_json()
-    assert kept_title["title"] == "אביחי בבוקר מוקדם"
+    assert kept_title["title"] == "בוקר"
     assert kept_title["is_shift"] == 1
 
     manual = client.post("/api/events", json={
@@ -403,6 +406,127 @@ def test_export_import_round_trip_keeps_shift_flag_and_toggle(client):
     assert client.get("/api/shifts/settings").get_json()["enabled"] is True
     old_event = next(row for row in client.get("/api/events").get_json() if row["title"] == "ישן")
     assert old_event["is_shift"] == 0
+
+
+def test_new_disallowed_cell_is_rejected_in_hebrew(client):
+    person = _person(client, name="אביחי", color="cyan", shift_allowed=_allowed({
+        "בוקר": [0, 1, 2, 3, 4],
+        "ערב": [0, 1, 2, 3, 4],
+        "לילה": [],
+    }))
+    blocked = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-23", "label": "בוקר"}],
+    })
+    assert blocked.status_code == 400
+    error = blocked.get_json()["error"]
+    assert "בוקר" in error
+    assert "שישי" in error
+    assert "אביחי" in error
+    assert client.get("/api/events").get_json() == []
+
+    night = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-20", "label": "לילה"}],
+    })
+    assert night.status_code == 400
+    assert "לילה" in night.get_json()["error"]
+    assert "שלישי" in night.get_json()["error"]
+
+    ok = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-21", "label": "בוקר"}],
+    })
+    assert ok.status_code == 200, ok.get_json()
+    event = client.get(f"/api/events/{ok.get_json()['created'][0]}").get_json()
+    assert event["title"] == "בוקר"
+    assert event["color"] == "cyan"
+
+
+def test_week_header_has_hebrew_range_and_parasha(client):
+    from app.services.shifts import hebrew_day_month, week_parasha
+
+    person = _person(client, name="אביחי", shift_allowed=_allowed({
+        "בוקר": [0, 1, 2, 3, 4],
+        "ערב": [0, 1, 2, 3, 4],
+        "לילה": [],
+    }))
+    view = client.get(
+        f"/api/shifts/week?person_id={person['id']}&week_start=2026-10-18"
+    ).get_json()
+    assert view["hebrew_range"] == f"{hebrew_day_month(date(2026, 10, 18))} – {hebrew_day_month(date(2026, 10, 24))}"
+    parasha = week_parasha(date(2026, 10, 24))
+    assert parasha
+    assert view["parasha"] == parasha
+    assert view["week_title"] == f"{view['hebrew_range']} · פרשת {parasha}"
+    sunday = view["days"][0]
+    assert sunday["hebrew"]
+    assert sunday["hebrew_day"]
+    assert sunday["hebrew_month"]
+    assert sunday["hebrew"] == f"{sunday['hebrew_day']} {sunday['hebrew_month']}"
+    friday = next(day for day in view["days"] if day["date"] == "2026-10-23")
+    assert friday["allowed"] == []
+    wednesday = next(day for day in view["days"] if day["date"] == "2026-10-21")
+    assert wednesday["allowed"] == ["בוקר", "ערב"]
+
+
+def test_shift_color_follows_person_even_when_the_row_has_none(client):
+    person = _person(client, name="אביחי", shift_allowed=_allowed({"בוקר": [0, 1, 2, 3, 4]}))
+    saved = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-21", "label": "בוקר"}],
+    })
+    shift_id = saved.get_json()["created"][0]
+    bare = client.get(f"/api/events/{shift_id}").get_json()
+    assert bare["title"] == "בוקר"
+    assert bare["color"] in (None, "")
+
+    client.put(f"/api/reminder-people/{person['id']}", json={"name": "אביחי", "color": "orange"})
+    painted = client.get(f"/api/events/{shift_id}").get_json()
+    assert painted["color"] == "orange"
+    assert painted["title"] == "בוקר"
+    ranged = client.get("/api/events?from=2026-10-18&to=2026-10-24").get_json()
+    chip = next(row for row in ranged if row["id"] == shift_id)
+    assert chip["title"] == "בוקר"
+    assert chip["color"] == "orange"
+
+
+def test_normalize_rewrites_old_shift_title_and_copies_color(client):
+    person = _person(client, name="אביחי", color="cyan", shift_allowed=_allowed({"בוקר": [0]}))
+    saved = client.put("/api/shifts/week", json={
+        "person_id": person["id"],
+        "week_start": "2026-10-18",
+        "cells": [{"date": "2026-10-18", "label": "בוקר"}],
+    })
+    shift_id = saved.get_json()["created"][0]
+    with client.application.app_context():
+        from app.database import get_db
+        from app.services.shifts import normalize_shift_events
+
+        db = get_db()
+        db.execute(
+            "UPDATE events SET title = ?, color = NULL WHERE id = ?",
+            ("אביחי — בוקר", shift_id),
+        )
+        db.execute(
+            "INSERT INTO events (title, gregorian_date, hebrew_date, is_shift) VALUES ('יום הולדת', '2026-01-01', 'א', 0)"
+        )
+        db.commit()
+        normalize_shift_events(db)
+        normalize_shift_events(db)
+        db.commit()
+        row = db.execute("SELECT title, color FROM events WHERE id = ?", (shift_id,)).fetchone()
+        assert row["title"] == "בוקר"
+        assert row["color"] == "cyan"
+        plain = db.execute("SELECT title FROM events WHERE title = 'יום הולדת'").fetchone()
+        assert plain["title"] == "יום הולדת"
+    shown = client.get(f"/api/events/{shift_id}").get_json()
+    assert shown["title"] == "בוקר"
+    assert shown["color"] == "cyan"
 
 
 def test_calendar_and_settings_markup(client):

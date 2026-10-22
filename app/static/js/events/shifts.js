@@ -9,6 +9,10 @@ const shiftUiState = {
     personId: null,
     weekStart: null,
     saving: false,
+    filling: false,
+    rulesDirty: false,
+    rulesSaving: false,
+    rulesAgain: false,
 };
 
 function shiftLabelNames() {
@@ -139,6 +143,7 @@ function buildShiftMatrix(root, options) {
                 boxes.forEach((box) => {
                     box.checked = !allOn;
                 });
+                noteShiftRulesEdited();
             });
             th.append(button);
         }
@@ -153,6 +158,7 @@ function buildShiftMatrix(root, options) {
             input.dataset.shiftLabel = label;
             input.dataset.shiftDay = String(day);
             input.setAttribute('aria-label', `${label} ${letters[day]}`);
+            input.addEventListener('change', () => noteShiftRulesEdited());
             wrap.append(input);
             td.append(wrap);
             tr.append(td);
@@ -215,27 +221,131 @@ function syncShiftSettingsVisibility() {
 }
 
 function resetPersonShiftFields() {
-    setPersonColor(suggestPersonColor());
-    writeShiftMatrix(document.getElementById('personShiftMatrix'), defaultShiftAllowed());
+    shiftUiState.filling = true;
+    try {
+        setPersonColor(suggestPersonColor());
+        writeShiftMatrix(document.getElementById('personShiftMatrix'), defaultShiftAllowed());
+    } finally {
+        shiftUiState.filling = false;
+    }
 }
 
 function fillPersonShiftFields(person) {
-    setPersonColor(person.color || '');
-    writeShiftMatrix(
-        document.getElementById('personShiftMatrix'),
-        person.shift_allowed || defaultShiftAllowed(),
-    );
+    shiftUiState.filling = true;
+    clearShiftRulesDraft();
+    try {
+        setPersonColor(person.color || '');
+        writeShiftMatrix(
+            document.getElementById('personShiftMatrix'),
+            person.shift_allowed || defaultShiftAllowed(),
+        );
+    } finally {
+        shiftUiState.filling = false;
+    }
+}
+
+function clearShiftRulesDraft() {
+    shiftUiState.rulesDirty = false;
+    shiftUiState.rulesAgain = false;
 }
 
 function personShiftPayload() {
-    const fields = document.getElementById('personShiftFields');
-    if (!fields || fields.hidden) {
+    if (!shiftUiState.enabled) {
+        return {};
+    }
+    const matrix = document.getElementById('personShiftMatrix');
+    if (!matrix || !matrix.querySelector('input[type="checkbox"][data-shift-label]')) {
         return {};
     }
     return {
         color: shiftUiState.personColor || null,
-        shift_allowed: readShiftMatrix(document.getElementById('personShiftMatrix')),
+        shift_allowed: readShiftMatrix(matrix),
     };
+}
+
+function noteShiftRulesEdited() {
+    if (shiftUiState.filling) {
+        return;
+    }
+    shiftUiState.rulesDirty = true;
+    const id = document.getElementById('reminderPersonId')?.value;
+    if (!id || !shiftUiState.enabled) {
+        return;
+    }
+    if (shiftUiState.rulesSaving) {
+        shiftUiState.rulesAgain = true;
+        return;
+    }
+    shiftUiState.rulesSave = persistEditedShiftRules(id);
+}
+
+async function persistEditedShiftRules(personId) {
+    const id = document.getElementById('reminderPersonId')?.value;
+    if (!id || String(id) !== String(personId) || !shiftUiState.enabled) {
+        return;
+    }
+    const name = document.getElementById('reminderPersonName')?.value.trim();
+    if (!name) {
+        return;
+    }
+    let chatId = document.getElementById('reminderPersonChat')?.value.trim() || null;
+    if (typeof cleanChatId === 'function') {
+        chatId = cleanChatId(document.getElementById('reminderPersonChat')?.value);
+        if (chatId === null) {
+            return;
+        }
+    }
+    const extra = personShiftPayload();
+    if (!extra.shift_allowed) {
+        return;
+    }
+    shiftUiState.rulesSaving = true;
+    shiftUiState.rulesAgain = false;
+    try {
+        const response = await fetch(`/api/reminder-people/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+            body: JSON.stringify({
+                name,
+                telegram_chat_id: chatId || null,
+                ...extra,
+            }),
+        });
+        const saved = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (typeof setReminderPersonError === 'function') {
+                setReminderPersonError(saved.error || 'שמירת המשמרות נכשלה');
+            }
+            return;
+        }
+        const current = (shiftUiState.people || []).find((person) => String(person.id) === String(id));
+        if (current) {
+            Object.assign(current, saved);
+        }
+        if (typeof setReminderPersonError === 'function') {
+            setReminderPersonError('');
+        }
+    } finally {
+        shiftUiState.rulesSaving = false;
+        if (shiftUiState.rulesAgain && document.getElementById('reminderPersonId')?.value) {
+            shiftUiState.rulesSave = persistEditedShiftRules(document.getElementById('reminderPersonId').value);
+        } else if (!shiftUiState.rulesAgain) {
+            shiftUiState.rulesDirty = false;
+        }
+    }
+}
+
+async function flushShiftRulesSave() {
+    if (!shiftUiState.rulesSaving && shiftUiState.rulesDirty) {
+        const id = document.getElementById('reminderPersonId')?.value;
+        if (id) {
+            shiftUiState.rulesSave = persistEditedShiftRules(id);
+        }
+    }
+    while (shiftUiState.rulesSaving && shiftUiState.rulesSave) {
+        await shiftUiState.rulesSave;
+    }
 }
 
 function initShiftSettings() {
@@ -250,6 +360,7 @@ function initShiftSettings() {
             return;
         }
         setPersonColor(button.dataset.color || '');
+        noteShiftRulesEdited();
     });
     toggle.addEventListener('change', async () => {
         const enabled = toggle.checked;
@@ -265,7 +376,7 @@ function initShiftSettings() {
         shiftUiState.enabled = enabled;
         shiftUiState.promise = Promise.resolve({ enabled });
         syncShiftSettingsVisibility();
-        if (!document.getElementById('reminderPersonId')?.value) {
+        if (!document.getElementById('reminderPersonId')?.value && !shiftUiState.rulesDirty) {
             resetPersonShiftFields();
         }
         if (typeof loadReminderPeople === 'function') {
@@ -274,7 +385,7 @@ function initShiftSettings() {
     });
     ensureShiftSettings().then(() => {
         syncShiftSettingsVisibility();
-        if (!document.getElementById('reminderPersonId')?.value) {
+        if (!document.getElementById('reminderPersonId')?.value && !shiftUiState.rulesDirty) {
             resetPersonShiftFields();
         }
     });
@@ -324,17 +435,61 @@ function updateShiftPersonDot() {
     dot.classList.add(`color-${person.color}`);
 }
 
+function selectedShiftPerson() {
+    const select = document.getElementById('shiftPersonSelect');
+    const id = select ? select.value : String(shiftUiState.personId || '');
+    return (shiftUiState.people || []).find((person) => String(person.id) === String(id)) || null;
+}
+
+function personAllowsLabel(person, dateStr, label) {
+    const rules = person && person.shift_allowed;
+    if (!rules || typeof rules !== 'object') {
+        return true;
+    }
+    const days = rules[label];
+    if (!Array.isArray(days)) {
+        return false;
+    }
+    return days.map(Number).includes(new Date(`${dateStr}T00:00:00`).getDay());
+}
+
+function renderShiftWeekLabel(payload) {
+    const label = document.getElementById('shiftWeekLabel');
+    if (!label) {
+        return;
+    }
+    label.replaceChildren();
+    const heb = document.createElement('div');
+    heb.className = 'shift-week-heb';
+    heb.textContent = payload.hebrew_range || payload.week_title || '';
+    label.append(heb);
+    if (payload.parasha) {
+        const parasha = document.createElement('div');
+        parasha.className = 'shift-week-parasha';
+        parasha.textContent = `פרשת ${payload.parasha}`;
+        label.append(parasha);
+    }
+    const greg = document.createElement('div');
+    greg.className = 'shift-week-greg';
+    greg.textContent = formatShiftWeekLabel(payload.week_start);
+    label.append(greg);
+}
+
 function renderShiftGrid(payload) {
     const grid = document.getElementById('shiftGrid');
     if (!grid) {
         return;
     }
+    shiftUiState.weekDays = payload.days || [];
+    const person = selectedShiftPerson();
     const letters = shiftDayLetters();
     const table = document.createElement('table');
     table.className = 'shift-matrix';
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
-    headRow.append(document.createElement('th'));
+    const corner = document.createElement('th');
+    corner.className = 'shift-label-cell';
+    headRow.append(corner);
     payload.days.forEach((day) => {
         const th = document.createElement('th');
         const letter = document.createElement('div');
@@ -342,7 +497,13 @@ function renderShiftGrid(payload) {
         const num = document.createElement('div');
         num.className = 'shift-day-num';
         num.textContent = String(Number(day.date.slice(8)));
-        th.append(letter, num);
+        const hebDay = document.createElement('div');
+        hebDay.className = 'shift-day-heb';
+        hebDay.textContent = day.hebrew_day || '';
+        const hebMonth = document.createElement('div');
+        hebMonth.className = 'shift-day-heb-month';
+        hebMonth.textContent = day.hebrew_month || '';
+        th.append(letter, num, hebDay, hebMonth);
         headRow.append(th);
     });
     thead.append(headRow);
@@ -362,15 +523,22 @@ function renderShiftGrid(payload) {
             input.type = 'checkbox';
             input.dataset.date = day.date;
             input.dataset.label = label;
-            const allowed = day.allowed.includes(label);
+            const serverAllowed = !day.allowed || day.allowed.includes(label);
+            const allowed = serverAllowed && personAllowsLabel(person, day.date, label);
             const checked = day.checked.includes(label);
+            if (!allowed && !checked) {
+                wrap.classList.add('is-blocked');
+                wrap.textContent = '–';
+                wrap.title = 'לא מותר לאדם הזה';
+                td.append(wrap);
+                tr.append(td);
+                return;
+            }
             input.checked = checked;
             input.disabled = !allowed;
             if (!allowed) {
                 wrap.classList.add('is-disabled');
-                input.title = checked
-                    ? 'המשמרת הזו כבר בלוח, אבל היא לא מותרת יותר. מוחקים אותה מעריכת האירוע'
-                    : 'לא מותר לאדם הזה';
+                input.title = 'המשמרת הזו כבר בלוח, אבל היא לא מותרת יותר';
             }
             input.setAttribute('aria-label', `${personName} ${label} ${letters[day.weekday]} ${day.date}`);
             wrap.append(input);
@@ -381,10 +549,7 @@ function renderShiftGrid(payload) {
     });
     table.append(thead, tbody);
     grid.replaceChildren(table);
-    const label = document.getElementById('shiftWeekLabel');
-    if (label) {
-        label.textContent = formatShiftWeekLabel(payload.week_start);
-    }
+    renderShiftWeekLabel(payload);
 }
 
 async function loadShiftWeek() {
@@ -436,6 +601,7 @@ async function openShiftEntry() {
     if (!modalEl || !window.bootstrap) {
         return;
     }
+    await flushShiftRulesSave();
     setShiftEntryError('');
     window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
     const empty = document.getElementById('shiftEntryEmpty');

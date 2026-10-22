@@ -790,7 +790,9 @@ def get_event(event_id):
             return None
         data = _with_recurrence(dict(event))
         data["hebrew_date"] = normalize_hebrew_date_text(data.get("hebrew_date"))
-        return _attach_related([data])[0]
+        from app.services.shifts import annotate_shift_events
+
+        return annotate_shift_events(_attach_related([data]))[0]
     except sqlite3.Error as e:
         print(f"Error getting event: {e}")
         return None
@@ -804,7 +806,9 @@ def get_all_events():
             data = _with_recurrence(dict(event))
             data["hebrew_date"] = normalize_hebrew_date_text(data.get("hebrew_date"))
             result.append(data)
-        return _attach_related(result)
+        from app.services.shifts import annotate_shift_events
+
+        return annotate_shift_events(_attach_related(result))
     except sqlite3.Error as e:
         print(f"Error getting all events: {e}")
         return []

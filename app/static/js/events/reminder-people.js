@@ -38,6 +38,9 @@ function resetReminderPersonForm() {
         cancel.hidden = true;
     }
     setReminderPersonError('');
+    if (typeof clearShiftRulesDraft === 'function') {
+        clearShiftRulesDraft();
+    }
     if (typeof resetPersonShiftFields === 'function') {
         resetPersonShiftFields();
     }
@@ -75,7 +78,9 @@ function renderReminderPeople(people) {
     people.forEach((person) => {
         const row = document.createElement('div');
         row.className = 'reminder-person-row';
+        row.dataset.personId = String(person.id);
         const text = document.createElement('div');
+        text.className = 'reminder-person-text';
         const name = document.createElement('div');
         name.textContent = person.name;
         const chat = document.createElement('div');
@@ -113,7 +118,9 @@ async function loadReminderPeople() {
         return;
     }
     renderReminderPeople(await response.json());
-    if (!document.getElementById('reminderPersonId')?.value && typeof resetPersonShiftFields === 'function') {
+    const editing = document.getElementById('reminderPersonId')?.value;
+    const dirty = typeof shiftUiState !== 'undefined' && shiftUiState.rulesDirty;
+    if (!editing && !dirty && typeof resetPersonShiftFields === 'function') {
         resetPersonShiftFields();
     }
 }
