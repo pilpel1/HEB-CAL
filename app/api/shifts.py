@@ -56,6 +56,11 @@ def _person_or_404(person_id):
     person = get_person(person_id)
     if person is None:
         return None, (jsonify({"error": "האדם לא נמצא", "success": False}), 404)
+    if not person.get("works_shifts"):
+        return None, (
+            jsonify({"error": "האדם לא משובץ למשמרות", "success": False}),
+            400,
+        )
     return person, None
 
 

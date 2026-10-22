@@ -138,7 +138,7 @@ def _parsed_reminders(data):
     if "reminders" not in data:
         return None, None
     try:
-        parsed = parse_reminders_payload(data.get("reminders"), people_ids())
+        parsed = parse_reminders_payload(data.get("reminders"), people_ids(role="reminders"))
     except OffsetError as exc:
         return None, (jsonify({"error": str(exc), "success": False}), 400)
     return parsed, None

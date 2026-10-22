@@ -17,9 +17,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # גרסה 1: טבלאות בסיס, תזכורות, חזרות, וסכמת משמרות.
 # גרסה 2: יישור כותרת וצבע של משמרות קיימות, בתוך אותו מנעול (אידמפוטנטי).
 # גרסה 3: reminder_sends לפי צ'אט (כדי שלא יישלח שוב אחרי כשל חלקי).
+# גרסה 4: דגלי receives_reminders / works_shifts על reminder_people, עם backfill.
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
@@ -190,6 +191,9 @@ def apply_pending_migrations(db) -> None:
         ensure_reminder_schema(db)
         ensure_recurrence_schema(db)
         ensure_shift_schema(db)
+        from app.reminders.repository import backfill_people_role_flags
+
+        backfill_people_role_flags(db)
         _write_user_version(db, SCHEMA_VERSION)
 
 
@@ -379,7 +383,7 @@ def _apply_imported_reminders(event_id, raw_reminders):
     if not isinstance(raw_reminders, list):
         raise ValueError("'reminders' must be an array")
     try:
-        parsed = parse_reminders_payload(raw_reminders, people_ids())
+        parsed = parse_reminders_payload(raw_reminders, people_ids(role="reminders"))
     except OffsetError as exc:
         raise ValueError(str(exc)) from exc
     sent_by_offset = {}

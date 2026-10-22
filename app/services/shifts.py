@@ -208,6 +208,8 @@ def resolve_manual_shift(data: dict):
     person = get_person(person_id)
     if person is None:
         raise ShiftError("האדם לא נמצא")
+    if not person.get("works_shifts"):
+        raise ShiftError("האדם לא משובץ למשמרות")
     return {
         "is_shift": 1,
         "shift_person_id": person_id,
@@ -349,6 +351,12 @@ def ensure_shift_schema(db) -> None:
         if "reminder_people" in tables:
             _add_column_if_missing(db, "reminder_people", "color", "TEXT")
             _add_column_if_missing(db, "reminder_people", "shift_allowed", "TEXT")
+            _add_column_if_missing(
+                db, "reminder_people", "receives_reminders", "INTEGER NOT NULL DEFAULT 0"
+            )
+            _add_column_if_missing(
+                db, "reminder_people", "works_shifts", "INTEGER NOT NULL DEFAULT 0"
+            )
 
         _schema_execute(
             db,

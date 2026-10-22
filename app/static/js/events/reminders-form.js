@@ -253,7 +253,7 @@ async function fillReminderFields(reminders) {
 
     let people = [];
     try {
-        const response = await fetch('/api/reminder-people');
+        const response = await fetch('/api/reminder-people?role=reminders');
         if (response.ok) {
             people = await response.json();
         }

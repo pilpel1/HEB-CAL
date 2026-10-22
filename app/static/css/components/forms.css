@@ -600,11 +600,46 @@
 }
 
 #personShiftFields[hidden],
+#shiftPeoplePanel[hidden],
 .shift-week-nav[hidden],
 .shift-person-row[hidden],
 #shiftGrid[hidden],
 #shiftEntryEmpty[hidden] {
     display: none !important;
+}
+
+.person-edit-context {
+    margin: 0 0 0.75rem;
+    font-weight: 700;
+}
+
+.person-edit-context.is-existing {
+    color: var(--primary-color, #2563eb);
+}
+
+.person-saved-flag {
+    margin: 0;
+    font-weight: 700;
+    color: #157347;
+}
+
+#shiftPersonSave,
+#reminderPersonSave {
+    min-height: 44px;
+    min-width: 7.5rem;
+    font-weight: 700;
+}
+
+.shift-person-editor {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.reminder-person-row.is-editing {
+    background: rgba(37, 99, 235, 0.08);
+    margin-inline: -0.35rem;
+    padding-inline: 0.35rem;
+    border-radius: 0.5rem;
 }
 
 .shift-person-meta {

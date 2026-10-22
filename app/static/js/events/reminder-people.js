@@ -88,6 +88,28 @@ function setReminderPersonError(message) {
     node.hidden = !message;
 }
 
+function setReminderPersonSaved(visible) {
+    const node = document.getElementById('reminderPersonSaved');
+    if (!node) {
+        return;
+    }
+    node.hidden = !visible;
+}
+
+function setReminderPersonContext(person) {
+    const node = document.getElementById('reminderPersonContext');
+    if (!node) {
+        return;
+    }
+    if (person && person.id) {
+        node.textContent = `עריכת ${person.name || 'אדם'} לתזכורות`;
+        node.classList.add('is-existing');
+        return;
+    }
+    node.textContent = 'אדם חדש לתזכורות';
+    node.classList.remove('is-existing');
+}
+
 function resetReminderPersonForm() {
     const form = document.getElementById('reminderPersonForm');
     if (form) {
@@ -106,12 +128,8 @@ function resetReminderPersonForm() {
         cancel.hidden = true;
     }
     setReminderPersonError('');
-    if (typeof clearShiftRulesDraft === 'function') {
-        clearShiftRulesDraft();
-    }
-    if (typeof resetPersonShiftFields === 'function') {
-        resetPersonShiftFields();
-    }
+    setReminderPersonSaved(false);
+    setReminderPersonContext(null);
 }
 
 function startEditReminderPerson(person) {
@@ -121,10 +139,16 @@ function startEditReminderPerson(person) {
     document.getElementById('reminderPersonSave').textContent = 'שמירה';
     document.getElementById('reminderPersonCancel').hidden = false;
     setReminderPersonError('');
-    if (typeof fillPersonShiftFields === 'function') {
-        fillPersonShiftFields(person);
-    }
+    setReminderPersonSaved(false);
+    setReminderPersonContext(person);
     document.getElementById('reminderPersonName').focus();
+    highlightReminderPersonRow(person.id);
+}
+
+function highlightReminderPersonRow(personId) {
+    document.querySelectorAll('#reminderPeopleList .reminder-person-row').forEach((row) => {
+        row.classList.toggle('is-editing', String(row.dataset.personId) === String(personId || ''));
+    });
 }
 
 function renderReminderPeople(people) {
@@ -132,21 +156,23 @@ function renderReminderPeople(people) {
     if (!list) {
         return;
     }
-    if (typeof noteShiftPeople === 'function') {
-        noteShiftPeople(people);
-    }
+    const reminderPeople = (people || []).filter((person) => person.receives_reminders);
     list.replaceChildren();
-    if (!people.length) {
+    if (!reminderPeople.length) {
         const empty = document.createElement('p');
         empty.className = 'text-muted mb-0';
-        empty.textContent = 'עדיין אין אנשים.';
+        empty.textContent = 'עדיין אין אנשים לתזכורות.';
         list.append(empty);
         return;
     }
-    people.forEach((person) => {
+    const editingId = document.getElementById('reminderPersonId')?.value;
+    reminderPeople.forEach((person) => {
         const row = document.createElement('div');
         row.className = 'reminder-person-row';
         row.dataset.personId = String(person.id);
+        if (editingId && String(person.id) === String(editingId)) {
+            row.classList.add('is-editing');
+        }
         const text = document.createElement('div');
         text.className = 'reminder-person-text';
         const name = document.createElement('div');
@@ -155,9 +181,6 @@ function renderReminderPeople(people) {
         chat.className = 'reminder-person-chat text-muted small';
         chat.textContent = person.telegram_chat_id || 'בלי מזהה צ׳אט';
         text.append(name, chat);
-        if (typeof appendShiftPersonMeta === 'function') {
-            appendShiftPersonMeta(text, person);
-        }
         const actions = document.createElement('div');
         actions.className = 'd-flex gap-2';
         const edit = document.createElement('button');
@@ -185,11 +208,17 @@ async function loadReminderPeople() {
         setReminderPersonError('לא הצלחנו לטעון את האנשים');
         return;
     }
-    renderReminderPeople(await response.json());
-    const editing = document.getElementById('reminderPersonId')?.value;
-    const dirty = typeof shiftUiState !== 'undefined' && shiftUiState.rulesDirty;
-    if (!editing && !dirty && typeof resetPersonShiftFields === 'function') {
-        resetPersonShiftFields();
+    const people = await response.json();
+    const list = Array.isArray(people) ? people : [];
+    if (typeof noteShiftPeople === 'function') {
+        noteShiftPeople(list);
+    }
+    renderReminderPeople(list);
+    if (typeof renderShiftPeopleList === 'function') {
+        renderShiftPeopleList(list);
+    }
+    if (typeof fillShiftPersonSource === 'function') {
+        fillShiftPersonSource(list);
     }
 }
 
@@ -217,9 +246,10 @@ async function saveReminderPerson(event) {
         return;
     }
     const id = document.getElementById('reminderPersonId').value;
-    const payload = { name, telegram_chat_id: chatId || null };
-    if (typeof personShiftPayload === 'function') {
-        Object.assign(payload, personShiftPayload());
+    const payload = {
+        name,
+        telegram_chat_id: chatId || null,
+        receives_reminders: true,
     }
     const response = await fetch(id ? `/api/reminder-people/${id}` : '/api/reminder-people', {
         method: id ? 'PUT' : 'POST',
@@ -231,18 +261,47 @@ async function saveReminderPerson(event) {
         setReminderPersonError(result.error || 'שמירה נכשלה');
         return;
     }
-    resetReminderPersonForm();
+    setReminderPersonSaved(true);
+    if (id) {
+        startEditReminderPerson(result);
+    } else {
+        resetReminderPersonForm();
+    }
     await loadReminderPeople();
+    if (id) {
+        highlightReminderPersonRow(result.id);
+        setReminderPersonContext(result);
+    }
     if (typeof showMessage === 'function') {
-        showMessage(id ? 'האדם עודכן' : 'האדם נוסף');
+        showMessage('נשמר');
     }
 }
 
 async function deleteReminderPerson(person) {
-    if (!confirm(`למחוק את ${person.name}?`)) {
+    const alsoShifts = Boolean(person.works_shifts);
+    const question = alsoShifts
+        ? `להסיר את ${person.name} מאנשי התזכורות? המשמרות יישארו.`
+        : `למחוק את ${person.name}?`;
+    if (!confirm(question)) {
         return;
     }
-    const response = await fetch(`/api/reminder-people/${person.id}`, { method: 'DELETE' });
+    let response;
+    if (alsoShifts) {
+        response = await fetch(`/api/reminder-people/${person.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: person.name,
+                telegram_chat_id: person.telegram_chat_id || null,
+                color: person.color,
+                shift_allowed: person.shift_allowed,
+                works_shifts: true,
+                receives_reminders: false,
+            }),
+        });
+    } else {
+        response = await fetch(`/api/reminder-people/${person.id}`, { method: 'DELETE' });
+    }
     if (!response.ok) {
         setReminderPersonError('מחיקה נכשלה');
         return;

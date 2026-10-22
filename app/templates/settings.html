@@ -87,21 +87,11 @@
         })();
     </script>
 
-    <div class="card mb-3" id="shiftSettings">
-        <div class="card-body">
-            <h2 class="h5">משמרות</h2>
-            <div class="form-check form-switch mb-2">
-                <input class="form-check-input" type="checkbox" role="switch" id="shiftsEnabled">
-                <label class="form-check-label" for="shiftsEnabled">הפעלת משמרות בבית הזה</label>
-            </div>
-            <p class="text-muted small mb-0">כשזה דלוק, בלוח מופיע כפתור «הזן משמרות». כל משמרת נשמרת כאירוע רגיל של יום שלם — בוקר, ערב או לילה, בלי שעות — בצבע של האדם. אפשר לערוך או למחוק אותו כמו כל אירוע, וגם להוסיף לו תזכורת.</p>
-        </div>
-    </div>
-
     <div class="card mb-3">
         <div class="card-body">
             <h2 class="h5">אנשים לתזכורות</h2>
-            <p class="mb-3">כל אדם כאן יכול לקבל תזכורת בטלגרם. בלי מזהה צ׳אט עדיין אפשר להזכיר בדפדפן כשהלוח פתוח. כשמשמרות דלוקות, לאותו אדם יש גם צבע ומשמרות מותרות.</p>
+            <p class="mb-3">שם ומזהה צ׳אט בטלגרם. בלי מזהה עדיין אפשר להזכיר בדפדפן כשהלוח פתוח. משמרות מוגדרות בנפרד למטה.</p>
+            <p id="reminderPersonContext" class="person-edit-context">אדם חדש לתזכורות</p>
             <form id="reminderPersonForm" class="row g-2 align-items-end">
                 <input type="hidden" id="reminderPersonId" value="">
                 <div class="col-12 col-md-4">
@@ -132,7 +122,37 @@
                     <button type="submit" class="btn btn-primary" id="reminderPersonSave">הוספה</button>
                     <button type="button" class="btn btn-outline-secondary" id="reminderPersonCancel" hidden>ביטול</button>
                 </div>
-                <div class="col-12" id="personShiftFields" hidden>
+            </form>
+            <p id="reminderPersonError" class="reminder-form-error mt-2" hidden></p>
+            <p id="reminderPersonSaved" class="person-saved-flag mt-2" hidden>נשמר</p>
+            <div id="reminderPeopleList" class="mt-3"></div>
+        </div>
+    </div>
+
+    <div class="card mb-3" id="shiftSettings">
+        <div class="card-body">
+            <h2 class="h5">משמרות</h2>
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="shiftsEnabled">
+                <label class="form-check-label" for="shiftsEnabled">הפעלת משמרות בבית הזה</label>
+            </div>
+            <p class="text-muted small">כשזה דלוק, בלוח מופיע כפתור «הזן משמרות». כל משמרת נשמרת כאירוע רגיל של יום שלם — בוקר, ערב או לילה, בלי שעות — בצבע של האדם.</p>
+            <div id="shiftPeoplePanel" hidden>
+                <p class="text-muted">בחרו מי עובד משמרות, צבע, וימים מותרים. בלי שמירה השינויים לא נכתבים.</p>
+                <div id="shiftPeopleList"></div>
+                <form id="shiftPersonForm" class="shift-person-editor mt-3">
+                    <input type="hidden" id="shiftPersonEditId" value="">
+                    <p id="shiftPersonContext" class="person-edit-context">אדם חדש למשמרות</p>
+                    <div class="mb-2" id="shiftPersonSourceWrap">
+                        <label for="shiftPersonSource" class="form-label">בחירה מאנשי התזכורות</label>
+                        <select id="shiftPersonSource" class="form-select">
+                            <option value="">אדם חדש למשמרות</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="shiftPersonName" class="form-label">שם</label>
+                        <input type="text" class="form-control" id="shiftPersonName" maxlength="80">
+                    </div>
                     <div class="form-label mb-1">צבע בלוח</div>
                     <div class="quick-color-picker mb-2" id="personColorPicker" role="radiogroup" aria-label="צבע האדם">
                         <button type="button" class="quick-color-swatch is-none is-selected" data-color="" title="ללא צבע" aria-label="ללא צבע"></button>
@@ -144,10 +164,14 @@
                     <div class="form-label mb-1">משמרות מותרות</div>
                     <p class="text-muted small mb-1">בלי שעות. אפשר לסמן רק חלק מהימים — למשל בלי שישי-שבת, או בלי לילה.</p>
                     <div id="personShiftMatrix"></div>
-                </div>
-            </form>
-            <p id="reminderPersonError" class="reminder-form-error mt-2" hidden></p>
-            <div id="reminderPeopleList" class="mt-3"></div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                        <button type="submit" class="btn btn-primary" id="shiftPersonSave">שמור</button>
+                        <button type="button" class="btn btn-outline-secondary" id="shiftPersonCancel" hidden>ביטול</button>
+                        <span id="shiftPersonSaved" class="person-saved-flag" hidden>נשמר</span>
+                    </div>
+                    <p id="shiftPersonError" class="reminder-form-error mt-2" hidden></p>
+                </form>
+            </div>
         </div>
     </div>
 
