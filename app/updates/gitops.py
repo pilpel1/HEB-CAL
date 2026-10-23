@@ -14,7 +14,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.updates.config import UpdateConfig
+from app.updates.envconfig import UpdateConfig
 from app.updates.errors import UpdateError, redact
 from app.updates.store import read_json, write_status
 from app.updates.version import valid_slug, validate_sha, validate_tag

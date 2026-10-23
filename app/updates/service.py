@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.database import BASE_DIR
-from app.updates.config import describe_mode, load_config
+from app.updates.envconfig import describe_mode, load_config
 from app.updates.errors import UpdateError
 from app.updates.gitops import assert_not_shallow, assert_worktree_clean, is_git_checkout, run_argv
 from app.updates.github_api import fetch_latest, release_view

@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import jsonify, request
 
 from app.api import api
-from app.updates.config import load_config
+from app.updates.envconfig import load_config
 from app.updates.errors import UpdateError
 from app.updates.security import login_admin, logout_admin, require_admin, require_csrf
 from app.updates.service import badge, check_for_updates, read_public_status, start_apply, summary

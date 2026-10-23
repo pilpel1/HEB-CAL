@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from app.updates.config import load_config
+from app.updates.envconfig import load_config
 from app.updates.errors import UpdateError
 from app.updates.flow import Plan, execute_update
 from app.updates.gitops import LiveOps
