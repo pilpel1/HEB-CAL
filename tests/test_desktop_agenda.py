@@ -98,3 +98,50 @@ def test_settings_hints_are_inline_and_events_list_drops_reminders_link(client):
     head = client.get("/").get_data(as_text=True).split("</head>", 1)[0]
     assert "heb-cal-density" in head
     assert "data-cal-density" in head
+
+
+def test_desktop_agenda_collapse_is_stored_and_stays_collapsed_on_select(client):
+    css = CALENDAR_CSS.read_text(encoding="utf-8")
+    html = client.get("/").get_data(as_text=True)
+    agenda = AGENDA_JS.read_text(encoding="utf-8")
+    dark = (REPO / "app/static/css/components/dark-theme.css").read_text(encoding="utf-8")
+
+    side = css.split("@media (min-width: 992px)", 1)[1].split("@media", 1)[0]
+    assert ".day-agenda-toggle" in side
+    assert "is-agenda-collapsed" in side
+    assert "--agenda-panel: 0px" in side
+    assert "rotate(-90deg)" in side
+    assert "rotate(90deg)" in side
+    assert "height: 60px" in side
+    assert "width: 18px" in side
+    assert "top: 50%" in side
+    assert "translateY(-50%)" in side
+    assert ".day-agenda-toggle:hover" in css
+    assert ".day-agenda-toggle:hover" in dark
+    assert "day-agenda-heb" in side
+    assert "day-agenda-greg" in side
+    assert ":hover" not in side
+
+    phone = css.split("@media (max-width: 480px)", 1)[1].split("@media", 1)[0]
+    assert "day-agenda-toggle" not in phone
+    assert "is-agenda-collapsed" not in phone
+
+    assert 'id="day-agenda-toggle"' in html
+    assert 'aria-controls="day-agenda"' in html
+    assert 'aria-label="הסתר אירועי היום"' in html
+    assert "heb-cal-agenda-collapsed" in html
+    assert "day-agenda-heb" in html
+    assert "day-agenda-greg" in html
+
+    assert "function setAgendaCollapsed" in agenda
+    assert "function applyAgendaCollapsed" in agenda
+    assert "heb-cal-agenda-collapsed" in agenda
+    assert "animateAgendaPanel" in agenda
+    select = agenda.split("function selectAgendaDay", 1)[1].split("function initDayAgenda", 1)[0]
+    assert "setAgendaCollapsed" not in select
+    assert "is-agenda-collapsed" not in select
+    assert "heb-cal-agenda-collapsed" not in select
+
+    assert ".day-agenda-toggle" in dark
+    assert ".day-agenda-greg" in dark
+    assert "is-agenda-collapsed .day-agenda-toggle" in dark

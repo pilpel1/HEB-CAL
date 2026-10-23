@@ -111,6 +111,11 @@
             </table>
         </div>
         <div id="calendar-boot-status" class="calendar-boot-status" aria-live="polite">טוען לוח…</div>
+        <button type="button" id="day-agenda-toggle" class="day-agenda-toggle" aria-expanded="true" aria-controls="day-agenda" aria-label="הסתר אירועי היום">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M3.2 10.2 8 5.4l4.8 4.8-1.1 1.1L8 7.6 4.3 11.3z"/>
+            </svg>
+        </button>
     </div>
     <div id="agenda-resize" class="agenda-resize" role="separator" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" aria-valuetext="20 אחוז לפאנל" aria-label="שינוי גודל הפאנל" aria-controls="day-agenda" tabindex="0">
         <span class="agenda-resize-grip" aria-hidden="true"></span>
@@ -122,12 +127,32 @@
     </div>
     <section id="day-agenda" class="day-agenda" aria-label="אירועי היום הנבחר">
         <div class="day-agenda-head">
-            <h3 id="day-agenda-title" class="day-agenda-title"></h3>
+            <h3 id="day-agenda-title" class="day-agenda-title"><span id="day-agenda-heb" class="day-agenda-heb"></span><span class="day-agenda-sep" aria-hidden="true"> · </span><span id="day-agenda-greg" class="day-agenda-greg"></span></h3>
             <button type="button" class="btn btn-outline-primary btn-sm" id="day-agenda-add" title="הוסף אירוע" aria-label="הוסף אירוע"><i class="fa-solid fa-plus day-agenda-add-icon" aria-hidden="true"></i><span class="day-agenda-add-label">הוסף</span></button>
         </div>
         <ul id="day-agenda-list" class="day-agenda-list"></ul>
     </section>
 </div>
+<script>
+    (function () {
+        try {
+            if (localStorage.getItem('heb-cal-agenda-collapsed') !== '1') return;
+            if (!window.matchMedia('(min-width: 992px)').matches) return;
+            var cal = document.querySelector('.infinite-calendar');
+            var toggle = document.getElementById('day-agenda-toggle');
+            var agenda = document.getElementById('day-agenda');
+            if (cal) cal.classList.add('is-agenda-collapsed');
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.setAttribute('aria-label', 'הצג אירועי היום');
+            }
+            if (agenda) {
+                agenda.setAttribute('aria-hidden', 'true');
+                agenda.setAttribute('inert', '');
+            }
+        } catch (e) {}
+    })();
+</script>
 
 {% include 'partials/quick_event_modal.html' %}
 {% include 'partials/shift_entry_modal.html' %}

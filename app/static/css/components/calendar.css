@@ -1248,8 +1248,17 @@
 .agenda-fast .agenda-text { color: #d35400; font-weight: 700; }
 
 .infinite-calendar.is-booting .day-agenda,
-.infinite-calendar.is-booting .agenda-resize {
+.infinite-calendar.is-booting .agenda-resize,
+.infinite-calendar.is-booting .day-agenda-toggle {
     visibility: hidden;
+}
+
+.day-agenda-toggle {
+    display: none;
+}
+
+.day-agenda-title.is-single .day-agenda-sep {
+    display: none;
 }
 
 /*
@@ -1259,9 +1268,14 @@
 @media (min-width: 992px) {
     .calendar-container.infinite-calendar {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) clamp(280px, 25%, 380px);
+        /* --agenda-panel נקבע רק בזמן סגירה/פתיחה. בלי זה נשאר clamp */
+        grid-template-columns: minmax(0, 1fr) var(--agenda-panel, clamp(280px, 25%, 380px));
         grid-template-rows: auto minmax(0, 1fr);
         align-items: stretch;
+    }
+
+    .infinite-calendar.is-agenda-collapsed {
+        --agenda-panel: 0px;
     }
 
     .infinite-calendar .calendar-toolbar {
@@ -1281,22 +1295,131 @@
         flex-direction: column;
         grid-column: 2;
         grid-row: 2;
+        z-index: 1;
         min-width: 0;
         min-height: 0;
         overflow: hidden;
         margin: 0;
-        background: #f8fafc;
-        border-inline-start: 1px solid #e5e7eb;
-        padding-inline-start: 0.75rem;
+        background:
+            linear-gradient(to left, rgba(15, 23, 42, 0.045), transparent 22px),
+            #f4f7fb;
+        border-inline-start: 1px solid #d5dee8;
+        padding-block: 0.55rem 0.4rem;
+        padding-inline: 0.95rem 0.7rem;
+        transition: padding 180ms ease, border-color 180ms ease;
+    }
+
+    .infinite-calendar.is-agenda-collapsed .day-agenda {
+        padding: 0;
+        border-inline-start-color: transparent;
+    }
+
+    .day-agenda-head,
+    .day-agenda-list {
+        transition: opacity 120ms ease;
+    }
+
+    .infinite-calendar.is-agenda-collapsed .day-agenda-head,
+    .infinite-calendar.is-agenda-collapsed .day-agenda-list {
+        opacity: 0;
+    }
+
+    /* ידית דקה באמצע גובה הלוח. פתוח: חץ שמאלה (לסגור). סגור: אותה ידית בקצה, חץ ימינה. */
+    .day-agenda-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        z-index: 4;
+        top: 50%;
+        inset-inline-end: -9px;
+        width: 18px;
+        height: 60px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid #c5d0de;
+        border-radius: 999px;
+        background: #fff;
+        color: #334155;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+        cursor: pointer;
+        transform: translateY(-50%);
+        transition: inset-inline-end 180ms ease, background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .day-agenda-toggle svg {
+        display: block;
+        width: 16px;
+        height: 16px;
+        transform: rotate(-90deg);
+        transition: transform 180ms ease;
+    }
+
+    .infinite-calendar.is-agenda-collapsed .day-agenda-toggle {
+        inset-inline-end: 0;
+        background: #eef3fb;
+        color: #1d4ed8;
+        border-color: #c5d4e8;
+    }
+
+    .infinite-calendar.is-agenda-collapsed .day-agenda-toggle svg {
+        transform: rotate(90deg);
+    }
+
+    .day-agenda-toggle:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
     }
 
     .day-agenda-head {
-        padding: 0.1rem 0.15rem 0.35rem 0;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.05rem 0.1rem 0.5rem;
+        margin-bottom: 0.15rem;
+        border-bottom: 1px solid #e1e8f0;
     }
 
     .day-agenda-title {
-        font-size: 0.95rem;
-        line-height: 1.35;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.05rem;
+        min-width: 0;
+        font-size: 0.98rem;
+        line-height: 1.25;
+    }
+
+    .day-agenda-sep {
+        display: none;
+    }
+
+    .day-agenda-heb,
+    .day-agenda-greg {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .day-agenda-greg {
+        font-size: 0.78rem;
+        font-weight: 500;
+        line-height: 1.2;
+        color: #64748b;
+    }
+
+    html[data-cal-density="compact"] .day-agenda {
+        padding-block: 0.4rem 0.3rem;
+        padding-inline: 0.8rem 0.55rem;
+    }
+
+    html[data-cal-density="compact"] .day-agenda-head {
+        padding-bottom: 0.35rem;
+        margin-bottom: 0.05rem;
+    }
+
+    html[data-cal-density="compact"] .day-agenda-heb {
+        font-size: 0.9rem;
     }
 
     .day-agenda #day-agenda-add {
@@ -1319,6 +1442,7 @@
 
     .day-agenda-list {
         padding-inline-end: 0.15rem;
+        padding-top: 0.28rem;
     }
 }
 
@@ -1416,5 +1540,30 @@
         color: var(--bs-btn-color);
         background-color: rgba(37, 99, 235, 0.14);
         border-color: var(--bs-btn-border-color);
+    }
+}
+
+@media (min-width: 992px) and (hover: hover) {
+    .day-agenda-toggle:hover {
+        background: #f8fafc;
+        color: #1d4ed8;
+        border-color: #94a3b8;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
+    }
+
+    .infinite-calendar.is-agenda-collapsed .day-agenda-toggle:hover {
+        background: #e4ecf8;
+        color: #1d4ed8;
+        border-color: #93b0d6;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .day-agenda,
+    .day-agenda-head,
+    .day-agenda-list,
+    .day-agenda-toggle,
+    .day-agenda-toggle svg {
+        transition: none;
     }
 }

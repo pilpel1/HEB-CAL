@@ -98,8 +98,43 @@
 
 [data-bs-theme="dark"] .day-agenda {
     border-top-color: var(--bs-border-color);
-    border-inline-start-color: var(--bs-border-color);
+    border-inline-start-color: #3d4a5c;
+    background:
+        linear-gradient(to left, rgba(255, 255, 255, 0.05), transparent 22px),
+        var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .day-agenda-head {
+    border-bottom-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .day-agenda-greg {
+    color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .day-agenda-toggle {
     background: var(--bs-body-bg);
+    color: #e2e8f0;
+    border-color: #3d4a5c;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+[data-bs-theme="dark"] .infinite-calendar.is-agenda-collapsed .day-agenda-toggle {
+    background: #1e293b;
+    color: #93c5fd;
+    border-color: #3d4a5c;
+}
+
+[data-bs-theme="dark"] .day-agenda-toggle:focus-visible {
+    outline-color: #93c5fd;
+}
+
+[data-bs-theme="dark"] .day-agenda-toggle:hover,
+[data-bs-theme="dark"] .infinite-calendar.is-agenda-collapsed .day-agenda-toggle:hover {
+    background: #243044;
+    color: #bfdbfe;
+    border-color: #64748b;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 
 [data-bs-theme="dark"] .agenda-resize {
