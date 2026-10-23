@@ -14,6 +14,8 @@ if load_dotenv is not None:
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # אתחול בסיס הנתונים
 with app.app_context():
@@ -41,4 +43,6 @@ def events_list():
 
 @app.route('/settings')
 def settings():
-    return render_template('settings.html')
+    from app.updates.version import installed_version
+
+    return render_template('settings.html', app_version=installed_version())

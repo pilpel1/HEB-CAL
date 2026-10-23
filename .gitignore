@@ -50,6 +50,7 @@ htmlcov/
 *.sqlite3-*
 data/*
 !data/.gitkeep
+backups/
 
 # IDE specific files
 .idea/

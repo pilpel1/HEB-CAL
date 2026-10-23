@@ -1130,6 +1130,7 @@
 }
 
 .calendar-nav > .settings-gear-btn {
+    position: relative;
     --bs-btn-hover-color: var(--bs-btn-color);
     --bs-btn-hover-bg: transparent;
     --bs-btn-hover-border-color: var(--bs-btn-border-color);
@@ -1148,6 +1149,18 @@
     background-image: none;
     border-color: var(--bs-btn-border-color);
     box-shadow: none;
+}
+
+.update-nav-badge {
+    position: absolute;
+    top: 5px;
+    inset-inline-start: 5px;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    border-radius: 50%;
+    background: #d97706;
+    box-shadow: 0 0 0 2px var(--bs-body-bg, #fff);
 }
 
 .day-agenda-list {

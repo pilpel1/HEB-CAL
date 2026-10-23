@@ -50,9 +50,15 @@ REMINDER_TIMEZONE=Asia/Jerusalem
 REMINDER_DEFAULT_TIME=09:00
 REMINDER_POLL_SECONDS=45
 BOT_TOKEN=
+ADMIN_PASSWORD=
+HEB_CAL_RESTART_COMMAND=
+HEB_CAL_UPDATE_MODE=auto
+HEB_CAL_GITHUB_REPO=
+HEB_CAL_GITHUB_TOKEN=
+HEB_CAL_UPDATE_AUTOCHECK=1
 ```
 
-`TELEGRAM_BOT_TOKEN` הוא הטוקן היחיד שה-worker קורא. `BOT_TOKEN` נשאר שמור ולא בשימוש. לא לשמור טוקן אמיתי בגיט.
+`TELEGRAM_BOT_TOKEN` הוא הטוקן היחיד שה-worker קורא. `BOT_TOKEN` נשאר שמור ולא בשימוש. לא לשמור טוקן אמיתי בגיט. `ADMIN_PASSWORD` ו-`HEB_CAL_GITHUB_TOKEN` גם הם רק ב-`.env`.
 
 ## הרצה
 
@@ -95,6 +101,86 @@ python scripts/reminder_worker.py
 ### התראות בדפדפן
 
 כשהאפליקציה פתוחה (אנדרואיד או מחשב) היא שואבת את `GET /api/reminders/due` ומציגה `Notification`. זה לא עובד כשהדפדפן סגור. Web Push ברקע דורש HTTPS ו־PWA ומיועד להתווסף אחר כך על אותו payload (`title`, `body`, `tag`), בלי לשנות את חישוב ה-offset.
+
+## עדכון גרסה
+
+הגרסה המותקנת כתובה ב-`VERSION` (למשל `1.0.0`). יומן קצר בעברית: `CHANGELOG.md`. «יש עדכון» נקבע לפי release או tag ב-GitHub, לא לפי הקובץ המקומי. תג של גרסה נראה כמו `v1.2.0` או `1.2.0`, והשורות הראשונות בגוף ה-release הן מה שמופיע במסך.
+
+בהגדרות רואים את הגרסה, כפתור «בדוק עדכונים», ואם יש חדשה — המספר, עיקרי השינויים, וכפתור אחד: «עדכן עכשיו». בדיקה אוטומטית פעם ביום (אפשר לכבות עם `HEB_CAL_UPDATE_AUTOCHECK=0`) מדליקה נקודה כתומה על גלגל השיניים. הנקודה לא מתקינה כלום.
+
+### מי יכול ללחוץ
+
+רק מנהל של העותק הזה. ב-`.env`:
+
+```env
+ADMIN_PASSWORD=בחרו-סיסמה-ארוכה
+```
+
+בלי זה הכפתורים חסומים. הסיסמה נשארת בקובץ ההגדרות, לא בקוד ולא בלוג. אחרי כניסה הבקשות נשלחות עם אסימון שנשמר בעוגייה של הדפדפן (CSRF). אי אפשר לשלוח מהבקשה פקודת מסוף, נתיב, או טוקן — השרת מתעלם מהם.
+
+### מה קורה בלחיצה על «עדכן עכשיו»
+
+נפתח תהליך נפרד, והוא נשאר בחיים גם כשהאפליקציה יורדת. המסך בהגדרות שואל כל שנייה וחצי איפה זה עומד, ומרענן כשנגמר.
+
+1. גיבוי של קובץ ה-SQLite לתיקייה `backups/` (אפשר להחליף עם `HEB_CAL_BACKUP_DIR`).
+2. הורדת התג מ-GitHub ב-HTTPS, ומעבר אליו. רק אם אין שינויים מקומיים בקוד, ורק אם התג הוא המשך ישיר (fast-forward). אין `reset --hard`.
+3. `pip install -r requirements.txt`
+4. מיגרציות (אותן מיגרציות שרצות בהפעלה).
+5. הפעלה מחדש לפי `HEB_CAL_RESTART_COMMAND`.
+6. בדיקה ש-`HEB_CAL_HEALTH_URL` עונה, ושהגרסה שם היא הגרסה החדשה.
+
+אם משהו נכשל אחרי שכבר נגענו בקוד או במסד: חוזרים לקומיט הקודם, מתקינים שוב את החבילות הישנות, עוצרים את האפליקציה, משחזרים את מסד הנתונים מהגיבוי, ומפעילים מחדש. במסך מופיעה הודעה בעברית. הגיבוי נשאר בתיקייה גם כשהחזרה הצליחה.
+
+ההורדה לא משתמשת ב-remote של git (לפעמים שמור בו טוקן בכתובת). היא פונה אל `https://github.com/owner/name.git`. עותק shallow (`--depth 1`) נחסם — צריך clone מלא.
+
+בשרת הבית שמים `FLASK_DEBUG=0`. רילודר של פיתוח קם באמצע החלפת קבצים ומבלבל את הבדיקה.
+
+### שרת בבית, בלי systemd ובלי sudo
+
+מעתיקים את `scripts/restart.example.sh` לשם אחר, מתאימים פורט אם צריך, ונותנים הרשאת הרצה:
+
+```bash
+cp scripts/restart.example.sh scripts/restart.sh
+chmod +x scripts/restart.sh
+```
+
+ב-`.env`, נתיב מלא:
+
+```env
+HEB_CAL_RESTART_COMMAND=/home/you/HEB-CAL/scripts/restart.sh
+```
+
+הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית. כשהעדכון משחזר גיבוי הוא מריץ את אותה פקודה עם `HEB_CAL_UPDATE_ACTION=stop` — הדוגמה אז רק עוצרת. אחר כך היא רצה שוב בלי המשתנה הזה ומעלה את האפליקציה ואת worker התזכורות.
+
+### מאגר פרטי
+
+```env
+HEB_CAL_GITHUB_REPO=owner/name
+HEB_CAL_GITHUB_TOKEN=טוקן-קריאה
+```
+
+בלי טוקן משתמשים ב-API הציבורי. הטוקן נשלח רק ככותרת ל-GitHub ול-`git fetch`, לא כארגומנט בשורת הפקודה, ולא נכתב לקובץ המצב או ללוג.
+
+### Docker, או סקריפט משלכם
+
+`HEB_CAL_UPDATE_MODE=auto` בוחר `docker` אם קיים `/.dockerenv` או ש-`HEB_CAL_DOCKER=1`. אחרת `git`.
+
+במצב Docker המסך לא עושה checkout. אם יש גרסה חדשה הוא מראה:
+
+```text
+docker compose pull && docker compose up -d
+```
+
+אפשר אחר כך לחבר סקריפט. `HEB_CAL_UPDATE_HOOK` הוא נתיב מלא לקובץ ניתן להרצה, בלי רווחים ובלי ארגומנטים (ארגומנטים שמים בתוך הסקריפט). הממשק רק מפעיל את הקובץ הזה, אחרי גיבוי, עם משתנה `HEB_CAL_TARGET_VERSION`. הפקודה עצמה לא מגיעה מהדפדפן.
+
+```env
+HEB_CAL_UPDATE_MODE=hook
+HEB_CAL_UPDATE_HOOK=/home/you/HEB-CAL/scripts/update-hook.sh
+```
+
+במצב `docker` עם hook מוגדר מופיעים גם המשפט על `docker compose` וגם הכפתור, שמריץ את הסקריפט.
+
+`HEB_CAL_UPDATE_MODE=off` משאיר את מספר הגרסה ומכבה את העדכון.
 
 ## מצב נוכחי
 
