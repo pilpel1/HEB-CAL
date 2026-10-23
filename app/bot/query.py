@@ -72,6 +72,8 @@ def _master_row(event: dict) -> dict:
         "is_shift": 1 if event.get("is_shift") else 0,
         "shift_person_id": event.get("shift_person_id"),
         "shift_label": event.get("shift_label"),
+        "gcal_source_id": event.get("gcal_source_id"),
+        "gcal_readonly": bool(event.get("gcal_source_id")),
         "reminders": event.get("reminders") or [],
     }
 

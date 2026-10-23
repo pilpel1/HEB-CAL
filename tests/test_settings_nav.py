@@ -73,6 +73,18 @@ def test_settings_nav_sticks_and_anchor_stays_clear(live_server, width, height):
         page.evaluate(
             "() => document.getElementById('settings-reminders').scrollIntoView({block: 'start'})"
         )
+        # Bootstrap שם scroll-behavior:smooth על :root, אז scrollIntoView הוא אנימציה.
+        # העמוד ארוך יותר אחרי בלוק יומן גוגל; מחכים שהעוגן ינחת מתחת לפס.
+        page.wait_for_function(
+            """() => {
+                const nav = document.querySelector('.settings-top');
+                const anchor = document.getElementById('settings-reminders');
+                if (!nav || !anchor) return false;
+                const gap = anchor.getBoundingClientRect().top - nav.getBoundingClientRect().bottom;
+                return gap >= -1 && gap <= 20;
+            }""",
+            timeout=4000,
+        )
         landed = _layout(page)
         assert landed["sticky"] == "sticky"
         assert landed["nav"]["top"] <= 1, landed

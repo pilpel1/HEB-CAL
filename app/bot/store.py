@@ -120,11 +120,13 @@ def create_shift(person_id: int, label: str, gregorian_date: str) -> dict:
 
 
 def update_user_event(draft: dict) -> tuple[str, dict | None]:
-    """``ok`` / ``deleted`` / ``conflict`` והאירוע הרלוונטי."""
+    """``ok`` / ``deleted`` / ``conflict`` / ``readonly`` והאירוע הרלוונטי."""
     event_id = draft.get("event_id")
     current = get_event(event_id)
     if current is None:
         return "deleted", None
+    if current.get("gcal_source_id"):
+        return "readonly", current
     if not draft.get("force") and fingerprint(current) != draft.get("base"):
         return "conflict", current
     day = _day(draft.get("gregorian_date") or "")
@@ -168,6 +170,7 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
 
 
 def remove_event(event_id: int) -> bool:
-    if get_event(event_id) is None:
+    event = get_event(event_id)
+    if event is None or event.get("gcal_source_id"):
         return False
     return bool(delete_event(event_id))

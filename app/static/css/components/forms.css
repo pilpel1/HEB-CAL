@@ -634,6 +634,53 @@
     margin: 0;
 }
 
+.gcal-steps {
+    padding-inline-start: 1.2rem;
+    margin-bottom: 0.75rem;
+}
+
+.gcal-steps li + li {
+    margin-top: 0.2rem;
+}
+
+.gcal-source-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.gcal-source {
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+}
+
+.gcal-source-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.gcal-source-url {
+    direction: ltr;
+    margin: 0.25rem 0;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+.gcal-source-sync {
+    margin-bottom: 0.35rem;
+    font-size: 0.85rem;
+}
+
+.gcal-readonly-note {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    background: rgba(66, 133, 244, 0.14);
+    font-weight: 600;
+}
+
 .settings-page {
     max-width: 40rem;
     margin-inline: auto;

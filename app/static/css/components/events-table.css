@@ -146,6 +146,14 @@ td span[style*="background-color"] {
     white-space: nowrap;
 }
 
+.event-gcal-list-note {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #1a73e8;
+    white-space: nowrap;
+}
+
 .event-status-badge {
     display: inline-block;
     font-size: 0.7rem;

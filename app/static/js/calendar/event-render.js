@@ -134,6 +134,17 @@ function eventInstanceKey(event) {
     return String(event && event.id);
 }
 
+function isGoogleEvent(event) {
+    return !!(event && event.gcal_source_id != null && event.gcal_source_id !== '');
+}
+
+function googleBadgeHtml(event) {
+    if (!isGoogleEvent(event)) {
+        return '';
+    }
+    return '<span class="event-gcal-badge" title="מיומן גוגל">G</span>';
+}
+
 function repeatIconHtml(event) {
     if (!event || !event.recurrence_freq) {
         return '';
@@ -169,11 +180,13 @@ function buildEventItemHtml(event, extraClasses = []) {
     const timeHtml = event.time
         ? `<span class="event-time">${escapeHtml(event.time)}</span><span class="event-sep"> - </span>`
         : '';
-    const title = `${repeatIconHtml(event)}${escapeHtml(event.title ?? '')}`;
+    const title = `${googleBadgeHtml(event)}${repeatIconHtml(event)}${escapeHtml(event.title ?? '')}`;
     const occurrence = escapeHtml(event.occurrence_date || event.gregorian_date || '');
     const recurring = event.recurrence_freq ? '1' : '0';
+    const gcal = isGoogleEvent(event) ? '1' : '0';
+    const fullTitle = isGoogleEvent(event) ? `${label} — לעריכה ביומן גוגל` : label;
 
-    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}" title="${label}" style="${style}">${timeHtml}<span class="event-title">${title}</span></div>`;
+    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}" data-gcal="${gcal}" title="${escapeHtml(fullTitle)}" style="${style}">${timeHtml}<span class="event-title">${title}</span></div>`;
 }
 
 function jewishEventHtml(event) {

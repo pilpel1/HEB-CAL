@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof initReminderPeoplePage === 'function') {
         initReminderPeoplePage();
     }
+    if (typeof initGcalSettings === 'function') {
+        initGcalSettings();
+    }
     if (typeof initShiftEntry === 'function') {
         initShiftEntry();
     }

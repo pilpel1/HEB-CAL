@@ -10,7 +10,7 @@ function initCalendarContextMenu(calendarBody) {
         document.body.appendChild(menu);
     }
 
-    let menuState = { dateStr: null, eventId: null, occurrenceDate: null, recurring: false };
+    let menuState = { dateStr: null, eventId: null, occurrenceDate: null, recurring: false, gcal: false };
     let press = null;
     let suppressClick = false;
     const LONG_PRESS_MS = 500;
@@ -18,7 +18,7 @@ function initCalendarContextMenu(calendarBody) {
     function hideMenu() {
         menu.classList.remove('is-open');
         menu.innerHTML = '';
-        menuState = { dateStr: null, eventId: null, occurrenceDate: null, recurring: false };
+        menuState = { dateStr: null, eventId: null, occurrenceDate: null, recurring: false, gcal: false };
     }
 
     function positionMenu(clientX, clientY) {
@@ -53,7 +53,13 @@ function initCalendarContextMenu(calendarBody) {
     function buildMenuItems() {
         const items = [];
 
-        if (menuState.eventId && menuState.recurring) {
+        if (menuState.eventId && menuState.gcal) {
+            items.push(
+                { label: 'פרטי האירוע', action: 'edit-event' },
+                { label: 'לעריכה ביומן גוגל', action: 'gcal-note' },
+                { separator: true },
+            );
+        } else if (menuState.eventId && menuState.recurring) {
             items.push(
                 { label: 'ערוך רק הפעם', action: 'edit-occurrence' },
                 { label: 'ערוך את הסדרה', action: 'edit-series' },
@@ -118,6 +124,7 @@ function initCalendarContextMenu(calendarBody) {
             eventId: eventItem ? eventItem.getAttribute('data-event-id') : null,
             occurrenceDate: eventItem ? eventItem.getAttribute('data-occurrence-date') : null,
             recurring: eventItem ? eventItem.getAttribute('data-recurring') === '1' : false,
+            gcal: eventItem ? eventItem.getAttribute('data-gcal') === '1' : false,
         };
         showMenu(clientX, clientY);
         return true;
@@ -214,8 +221,8 @@ function initCalendarContextMenu(calendarBody) {
             await openQuickEventModal(dateStr);
             return;
         }
-        if (action === 'edit-event' && eventId) {
-            await openEditEventModal(eventId);
+        if ((action === 'edit-event' || action === 'gcal-note') && eventId) {
+            await openEditEventModal(eventId, action === 'gcal-note' ? occurrenceDate : null);
             return;
         }
         if (action === 'edit-occurrence' && eventId) {

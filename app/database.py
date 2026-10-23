@@ -18,9 +18,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # גרסה 2: יישור כותרת וצבע של משמרות קיימות, בתוך אותו מנעול (אידמפוטנטי).
 # גרסה 3: reminder_sends לפי צ'אט (כדי שלא יישלח שוב אחרי כשל חלקי).
 # גרסה 4: דגלי receives_reminders / works_shifts על reminder_people, עם backfill.
+# גרסה 5: מקורות iCal של יומן גוגל, ומזהה מקור+UID על events. בלי מחיקת שורות.
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
@@ -178,6 +179,7 @@ def apply_pending_migrations(db) -> None:
     קוראים את הגרסה שוב אחרי BEGIN IMMEDIATE. מי שחיכה על המנעול
     רואה את הגרסה שכבר נכתבה ויוצא בלי ALTER נוסף.
     """
+    from app.gcal.schema import ensure_gcal_schema
     from app.reminders.repository import ensure_reminder_schema
     from app.services.shifts import ensure_shift_schema
 
@@ -191,6 +193,7 @@ def apply_pending_migrations(db) -> None:
         ensure_reminder_schema(db)
         ensure_recurrence_schema(db)
         ensure_shift_schema(db)
+        ensure_gcal_schema(db)
         from app.reminders.repository import backfill_people_role_flags
 
         backfill_people_role_flags(db)
@@ -505,10 +508,15 @@ def import_data(payload, mode="replace"):
         db.execute("BEGIN")
 
         if mode == "replace":
-            db.execute("DELETE FROM reminder_sends")
-            db.execute("DELETE FROM reminders")
-            db.execute("DELETE FROM event_exceptions")
-            db.execute("DELETE FROM events")
+            # אירועי יומן גוגל שייכים לסנכרון, לא לגיבוי. לא מוחקים אותם.
+            local_ids = "SELECT id FROM events WHERE gcal_source_id IS NULL"
+            db.execute(
+                f"DELETE FROM reminder_sends WHERE reminder_id IN "
+                f"(SELECT id FROM reminders WHERE event_id IN ({local_ids}))"
+            )
+            db.execute(f"DELETE FROM reminders WHERE event_id IN ({local_ids})")
+            db.execute(f"DELETE FROM event_exceptions WHERE event_id IN ({local_ids})")
+            db.execute("DELETE FROM events WHERE gcal_source_id IS NULL")
             db.execute("DELETE FROM event_colors")
             if "reminder_people" in payload:
                 db.execute("DELETE FROM reminder_people")
@@ -571,7 +579,11 @@ def import_data(payload, mode="replace"):
             for person in people:
                 upsert_person_for_import(person, replace_ids=(mode == "replace"))
 
-        existing_events = get_all_events() if mode == "merge" else []
+        existing_events = [
+            event
+            for event in (get_all_events() if mode == "merge" else [])
+            if not event.get("gcal_source_id")
+        ]
         existing_by_id = {event["id"]: event for event in existing_events}
         existing_by_fp = {_event_fingerprint(event): event for event in existing_events}
         existing_by_slot = {}
@@ -591,6 +603,9 @@ def import_data(payload, mode="replace"):
                 cleaned = clean_event_write(event)
             except EventPayloadError as exc:
                 raise ValueError(str(exc)) from exc
+
+            if event.get("gcal_source_id") or event.get("gcal_uid"):
+                continue
 
             title = cleaned["title"]
             gregorian_date = cleaned["gregorian_date"]
@@ -746,13 +761,14 @@ def _with_recurrence(data):
 
 
 def _attach_related(events):
+    from app.gcal.repository import annotate_gcal
     from app.reminders.repository import attach_reminders
 
     attach_reminders(events)
     grouped = exceptions_for_events([event["id"] for event in events if event.get("id") is not None])
     for event in events:
         event["exceptions"] = grouped.get(event.get("id"), [])
-    return events
+    return annotate_gcal(events)
 
 
 def create_event(

@@ -699,11 +699,17 @@ class Bot:
         if event is None:
             self.toast = "האירוע נמחק"
             return self.out(*ui.missing_event_screen())
+        if event.get("gcal_source_id"):
+            self.toast = "לעריכה ביומן גוגל"
+            return self._open(event_id, _focus(event.get("gregorian_date")))
         self.session["open_id"] = event_id
         return self.out(*ui.delete_screen(event))
 
     def _do_delete(self, event_id: int) -> dict:
         event = get_event(event_id)
+        if event is not None and event.get("gcal_source_id"):
+            self.toast = "לעריכה ביומן גוגל"
+            return self._open(event_id, _focus(event.get("gregorian_date")))
         if event is None or not store.remove_event(event_id):
             self.toast = "כבר נמחק"
             return self.out(*ui.missing_event_screen())
@@ -780,6 +786,9 @@ class Bot:
         if event is None:
             self.toast = "האירוע נמחק"
             return self.out(*ui.missing_event_screen())
+        if event.get("gcal_source_id"):
+            self.toast = "לעריכה ביומן גוגל"
+            return self._open(event_id, _focus(event.get("gregorian_date")))
         self.session["draft"] = store.snapshot(event)
         self.session["open_id"] = event_id
         if event.get("is_shift"):
@@ -824,6 +833,10 @@ class Bot:
             self._clear_flow()
             self.toast = "האירוע נמחק"
             return self.out(*ui.missing_event_screen())
+        if status == "readonly":
+            self._clear_flow()
+            self.toast = "לעריכה ביומן גוגל"
+            return self._open(int(draft["event_id"]), _focus(self.session.get("open_day")))
         if status == "conflict":
             self.toast = "האירוע השתנה"
             return self.out(*ui.conflict_screen(event or {}, draft))

@@ -849,13 +849,17 @@ function renderDayAgenda(dateStr) {
         const occurrence = escapeHtml(ev.occurrence_date || ev.gregorian_date || '');
         const recurring = ev.recurrence_freq ? '1' : '0';
         const icon = typeof repeatIconHtml === 'function' ? repeatIconHtml(ev) : '';
+        const gcal = typeof isGoogleEvent === 'function' && isGoogleEvent(ev);
+        const gcalHtml = gcal
+            ? `${typeof googleBadgeHtml === 'function' ? googleBadgeHtml(ev) : ''}<span class="agenda-gcal-note">לעריכה ביומן גוגל</span>`
+            : '';
         const descHtml = agendaDescriptionHtml(ev);
         const textClass = descHtml ? 'agenda-text has-desc' : 'agenda-text';
         items.push(
             `<li class="agenda-item agenda-event${colored}" data-event-id="${ev.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}">`
             + `<span class="agenda-swatch${ev.color ? '' : ' is-empty'}"${swatchStyle}></span>`
             + `<span class="agenda-highlight"${highlightStyle}>${time}`
-            + `<span class="${textClass}">${icon}${escapeHtml(ev.title || '')}${descHtml}</span></span>${range}</li>`
+            + `<span class="${textClass}">${gcalHtml}${icon}${escapeHtml(ev.title || '')}${descHtml}</span></span>${range}</li>`
         );
     }
 
