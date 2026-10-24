@@ -5,7 +5,7 @@
 **HEB-CAL** is a small Flask web app: a shared Hebrew–Gregorian calendar for a couple. Users browse months, see Jewish holidays and parshiyot (via **pyluach**), and manage personal events (CRUD). The UI is **Hebrew**, **RTL**, built with **vanilla JavaScript** and **Bootstrap RTL**; there is no React/Vue SPA.
 
 - **Backend:** Flask, SQLite (`data/calendar.db` by default), REST API under `/api`.
-- **Config:** `.env` (see `.env.example`) — `DATABASE_PATH`, `SECRET_KEY`, `FLASK_DEBUG`, optional `BOT_TOKEN`.
+- **Config:** `.env` (see `.env.example`) — `DATABASE_PATH`, `SECRET_KEY`, `FLASK_DEBUG`, optional `TELEGRAM_BOT_TOKEN` (`BOT_TOKEN` is unused). Docker publish: `HEB_CAL_BIND_HOST` / `HEB_CAL_PORT`.
 - **Scope:** Personal/couple use; not a multi-tenant SaaS.
 
 ## Setup
@@ -30,6 +30,8 @@ python -m flask --app app run
 Alternative entry: `python app/main.py` (same app).
 
 Open the URL Flask prints (default `http://127.0.0.1:5000`).
+
+Household Docker (same image on a home server, Windows, or a small cloud host): `docker compose up -d --build`. Compose starts `web` (`0.0.0.0:5000` inside the container; host bind defaults to `127.0.0.1`) and `reminder` (Telegram plus Google Calendar sync). The `gcal` profile runs `scripts/gcal_sync_worker.py` only — do not run it beside `reminder`. Compose sets `HEB_CAL_UPDATE_MODE=docker`; the in-app update command stays `docker compose pull && docker compose up -d`. `HEB_CAL_RESTART_COMMAND` is the non-Docker path. Tailscale stays on the host. See README «הרצה ב-Docker».
 
 ## Test
 
@@ -96,6 +98,7 @@ Manual checks:
 | `scripts/verify_infinite_scroll.py`, `scripts/smoke_ui.py` | Playwright checks. Not collected by pytest. See Test |
 | `test_calendar.py` | Manual pyluach script at the repo root. Not part of pytest |
 | `init_db.py` | Optional DB init helper |
+| `Dockerfile`, `docker-compose.yml`, `docker/entrypoint.sh` | One image for web + workers. No secrets in the image. Volumes: `data/`, `logs/`, `backups/`. `gcal` service is profile `gcal` |
 
 ## Known issues / repo reality
 
@@ -104,6 +107,7 @@ Manual checks:
 3. **Frontend JS is classic scripts, one shared global scope** (see the lessons below). `base.html` loads `theme.js`, then `script.js`, then the `core/` / `calendar/` / `events/` files. Search, import, and export live in the inline script of `events_list.html`, not in those files. Shifts reuse `reminder_people` (color + `shift_allowed` JSON). A shift is a normal all-day event (`is_shift`, `shift_person_id`, `shift_label`) titled `שם — בוקר|ערב|לילה`. The week grid adds and removes only those rows. `household_settings.shifts_enabled` (default off) shows the «הזן משמרות» button. Recurring events stay expanded in the same `GET /api/events?from=&to=` list.
 4. **`origin/feature/infinite-scroll-calendar` is a stale snapshot, not the current UI.** The infinite calendar is on `main`: it landed as the scroll-stability work, then `script.js` was split into `app/static/js/core/` and `app/static/js/calendar/`. That remote branch is still the older monolithic `script.js`. Do not merge it back and do not treat it as the source of truth.
 5. **Google Calendar sync is one-way and secret-iCal, not OAuth.** Settings («חיבור ליומן גוגל») stores one or more `https://calendar.google.com/calendar/ical/…/basic.ics` URLs in `gcal_sources.ical_url`. The API and the UI only ever return a fixed mask. Do not log the URL, do not put a real one in git, and do not echo it in errors (`app.gcal.urls.redact`). Occurrences in the sync window (default 180 days back, 400 ahead, Asia/Jerusalem) are normal `events` rows keyed by `(gcal_source_id, gcal_uid, gcal_recurrence_id)` so a re-sync updates or deletes instead of duplicating. Google RRULEs are expanded with `recurring-ical-events` because HEB-CAL recurrence is only monthly/yearly. Imported rows are read-only (API 403, modal note «לעריכה ביומן גוגל», no bot edit/delete). `scripts/reminder_worker.py` starts the 15-minute loop; `scripts/gcal_sync_worker.py` is the same loop without Telegram. Two-way sync is not built — it would need OAuth.
+6. **Docker does not change auth or the update command.** The image listens on `0.0.0.0:5000`. Compose publishes `${HEB_CAL_BIND_HOST:-127.0.0.1}:${HEB_CAL_PORT:-5000}`. `reminder` already runs the gcal loop; profile `gcal` is the standalone worker. Do not put tokens in the image or in `Dockerfile` `ARG`. `/.dockerenv` (and compose's `HEB_CAL_UPDATE_MODE=docker`) makes the settings screen show `docker compose pull && docker compose up -d` and not git checkout. Host Tailscale is the remote path; `tailscale serve` is a later host step. No sidecar in v1.
 
 ## Infinite calendar — lessons (scroll stability)
 

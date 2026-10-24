@@ -176,7 +176,9 @@ HEB_CAL_GITHUB_TOKEN=טוקן-קריאה
 
 ### Docker, או סקריפט משלכם
 
-`HEB_CAL_UPDATE_MODE=auto` בוחר `docker` אם קיים `/.dockerenv` או ש-`HEB_CAL_DOCKER=1`. אחרת `git`.
+ההתקנה עצמה מתוארת ב«הרצה ב-Docker» למטה. `HEB_CAL_RESTART_COMMAND` הוא להרצה בלי Docker.
+
+`HEB_CAL_UPDATE_MODE=auto` בוחר `docker` אם קיים `/.dockerenv` או ש-`HEB_CAL_DOCKER=1`. אחרת `git`. ב-`docker compose` המצב קבוע על `docker`.
 
 במצב Docker המסך לא עושה checkout. אם יש גרסה חדשה הוא מראה:
 
@@ -194,6 +196,66 @@ HEB_CAL_UPDATE_HOOK=/home/you/HEB-CAL/scripts/update-hook.sh
 במצב `docker` עם hook מוגדר מופיעים גם המשפט על `docker compose` וגם הכפתור, שמריץ את הסקריפט.
 
 `HEB_CAL_UPDATE_MODE=off` משאיר את מספר הגרסה ומכבה את העדכון.
+
+## הרצה ב-Docker
+
+אותה תמונה רצה על שרת בית, על Windows (Docker Desktop), או על ענן קטן. צריך Docker עם Compose. אין צורך ב-Python על המארח, ואין צורך בפורט פתוח לאינטרנט.
+
+בתוך הקונטיינר האפליקציה מאזינה על `0.0.0.0:5000`. על המארח הפורט נפתח רק על `127.0.0.1` (`HEB_CAL_BIND_HOST` / `HEB_CAL_PORT` ב-`.env.example`).
+
+```bash
+cp .env.example .env
+```
+
+ב-Windows (PowerShell): `copy .env.example .env`.
+
+עורכים את `.env`: מחליפים את `SECRET_KEY`. `TELEGRAM_BOT_TOKEN` רק אם יש בוט. `BOT_TOKEN` נשאר ריק — ה-worker לא קורא אותו. `HEB_CAL_RESTART_COMMAND` נשאר ריק בהתקנת Docker. `DATABASE_PATH` נשאר `data/calendar.db` (התיקייה שמחוברת לקונטיינר, לא נתיב של Windows).
+
+```bash
+docker compose up -d --build
+```
+
+בדפדפן על אותו מחשב: `http://127.0.0.1:5000`.
+
+הפקודה מעלה שני תהליכים מאותה תמונה:
+
+- `web` — האפליקציה.
+- `reminder` — תזכורות טלגרם, תפריט הבוט, וסנכרון יומן גוגל. בלי טלגרם משאירים את `TELEGRAM_BOT_TOKEN` ריק; הסנכרון של היומן ממשיך.
+
+`scripts/gcal_sync_worker.py` הוא אותו סנכרון בלי טלגרם. הוא לא עולה כברירת מחדל, כי `reminder` כבר מריץ אותו. רק בית שלא רוצה את תהליך התזכורות מפעיל את הפרופיל, ואז לא משאירים את `reminder` רץ (אחרת היומן נמשך פעמיים):
+
+```bash
+docker compose stop reminder
+docker compose --profile gcal up -d --no-deps gcal
+```
+
+אחרי שינוי ב-`.env`: `docker compose up -d`.
+
+### גיבוי
+
+עוצרים, מעתיקים את `data/` (קובץ ה-SQLite וגם `-wal` / `-shm` אם קיימים), ומפעילים. הפקודה הזו עובדת גם בלינוקס וגם ב-Windows:
+
+```bash
+docker compose stop
+docker compose cp web:/app/data ./data-backup
+docker compose start
+```
+
+אם יש הרשאת קריאה על התיקייה במארח, אפשר גם להעתיק את `data/` ידנית אחרי `docker compose stop`. `logs/` הוא טקסט שאפשר למחוק כשהקונטיינרים כבויים. `backups/` שמור לגיבוי שירוץ מתוך הקונטיינר.
+
+### עדכון
+
+בקונטיינר המצב הוא `HEB_CAL_UPDATE_MODE=docker`. המסך לא מושך git ולא קורא ל-`HEB_CAL_RESTART_COMMAND`. כשיש גרסה חדשה הוא מראה את הפקודה הזו, ומריצים אותה בתיקייה של `docker-compose.yml`:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+התמונה היא `ghcr.io/pilpel1/heb-cal:latest`. לפני העדכון מעתיקים את `data/` כמו בגיבוי. אם `pull` נכשל כי החבילה ב-GitHub עדיין לא ציבורית, מעדכנים מהקוד: `git pull` ואז `docker compose up -d --build`.
+
+### Tailscale
+
+Tailscale מותקן על המארח (המחשב, שרת הבית, או הענן) — לא בתוך הקונטיינר, ואין sidecar בקומפוז. משאירים את `HEB_CAL_BIND_HOST=127.0.0.1` כדי לא לפרסם פורט. מחשב אחר באותו tailnet מגיע למארח; HTTPS דרך `tailscale serve` הוא צעד נפרד על המארח אחר כך, ולא חלק מההתקנה הזו.
 
 ## מצב נוכחי
 
