@@ -93,8 +93,7 @@
                 link.appendChild(anchor);
             }
         }
-        var canApply = !!(info.admin && info.can_apply);
-        show(byId('updateApplyBtn'), canApply);
+        show(byId('updateApplyBtn'), !!(info && info.can_apply));
     }
 
     function showDockerCommand(info) {
@@ -136,17 +135,14 @@
         }
         setText('updateCurrentVersion', info.current || '');
         setText('updateModeHint', info.instructions || info.hint || '');
-        if (!info.admin_configured) {
-            setText('updateState', 'כדי לעדכן מהממשק הגדירו ADMIN_PASSWORD בקובץ .env והפעילו מחדש.');
-        } else if (info.block) {
+        if (info.block) {
             setText('updateState', info.block);
         } else if (info.cached && info.cached.message) {
             setText('updateState', info.cached.message);
         } else {
             setText('updateState', '');
         }
-        show(byId('updateLoginForm'), !info.admin && !!info.admin_configured);
-        show(byId('updateCheckBtn'), !!info.admin);
+        show(byId('updateCheckBtn'), true);
         showDockerCommand(info);
         renderOffer(info.cached, info);
         if (renderProgress(info.status || {})) {
@@ -164,8 +160,8 @@
             try {
                 var result = await api('/api/updates/status');
                 misses = 0;
-                if (result.status === 401) {
-                    setError('פג תוקף הכניסה. התחברו שוב.');
+                if (!result.ok) {
+                    setError((result.data && result.data.error) || 'לא הצלחנו לקרוא את מצב העדכון.');
                     pollTimer = 0;
                     return;
                 }
@@ -209,28 +205,6 @@
     }
 
     function bind() {
-        var form = byId('updateLoginForm');
-        if (form) {
-            form.addEventListener('submit', async function (event) {
-                event.preventDefault();
-                var input = byId('updateAdminPassword');
-                var password = input ? input.value : '';
-                if (input) {
-                    input.value = '';
-                }
-                setError('');
-                var result = await api('/api/updates/login', {
-                    method: 'POST',
-                    body: JSON.stringify({password: password}),
-                });
-                if (!result.ok) {
-                    setError((result.data && result.data.error) || 'לא הצלחנו להיכנס.');
-                    return;
-                }
-                var info = await api('/api/updates');
-                applySummary(info.data || {});
-            });
-        }
         var check = byId('updateCheckBtn');
         if (check) {
             check.addEventListener('click', async function () {

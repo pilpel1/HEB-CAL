@@ -50,7 +50,6 @@ REMINDER_TIMEZONE=Asia/Jerusalem
 REMINDER_DEFAULT_TIME=09:00
 REMINDER_POLL_SECONDS=45
 BOT_TOKEN=
-ADMIN_PASSWORD=
 HEB_CAL_RESTART_COMMAND=
 HEB_CAL_UPDATE_MODE=auto
 HEB_CAL_GITHUB_REPO=
@@ -58,7 +57,7 @@ HEB_CAL_GITHUB_TOKEN=
 HEB_CAL_UPDATE_AUTOCHECK=1
 ```
 
-`TELEGRAM_BOT_TOKEN` הוא הטוקן היחיד שה-worker קורא. `BOT_TOKEN` נשאר שמור ולא בשימוש. לא לשמור טוקן אמיתי בגיט. `ADMIN_PASSWORD` ו-`HEB_CAL_GITHUB_TOKEN` גם הם רק ב-`.env`.
+`TELEGRAM_BOT_TOKEN` הוא הטוקן היחיד שה-worker קורא. `BOT_TOKEN` נשאר שמור ולא בשימוש. לא לשמור טוקן אמיתי בגיט. `HEB_CAL_GITHUB_TOKEN`, אם צריך אותו למאגר פרטי, נשאר רק ב-`.env`.
 
 ## הרצה
 
@@ -110,13 +109,7 @@ python scripts/reminder_worker.py
 
 ### מי יכול ללחוץ
 
-רק מנהל של העותק הזה. ב-`.env`:
-
-```env
-ADMIN_PASSWORD=בחרו-סיסמה-ארוכה
-```
-
-בלי זה הכפתורים חסומים. הסיסמה נשארת בקובץ ההגדרות, לא בקוד ולא בלוג. אחרי כניסה הבקשות נשלחות עם אסימון שנשמר בעוגייה של הדפדפן (CSRF). אי אפשר לשלוח מהבקשה פקודת מסוף, נתיב, או טוקן — השרת מתעלם מהם.
+כל מי שכבר משתמש בלוח של הבית הזה. אין סיסמה נפרדת לעדכון. «בדוק עדכונים» ו«עדכן עכשיו» נשלחים עם אסימון שנשמר בעוגייה של הדפדפן (CSRF), כדי שאתר אחר לא יוכל ללחוץ במקומכם. אי אפשר לשלוח מהבקשה פקודת מסוף, נתיב, או טוקן — השרת מתעלם מהם. הפקודה עצמה נשארת ב-`.env`.
 
 ### מה קורה בלחיצה על «עדכן עכשיו»
 
@@ -144,11 +137,13 @@ cp scripts/restart.example.sh scripts/restart.sh
 chmod +x scripts/restart.sh
 ```
 
-ב-`.env`, נתיב מלא:
+ב-`.env`, נתיב יחסי לשורש הפרויקט, או נתיב מלא:
 
 ```env
-HEB_CAL_RESTART_COMMAND=/home/you/HEB-CAL/scripts/restart.sh
+HEB_CAL_RESTART_COMMAND=scripts/restart.sh
 ```
+
+נתיב שמתחיל ב-`/` (למשל `/home/you/HEB-CAL/scripts/restart.sh`) נשאר כמו שהוא. נתיב יחסי כמו `scripts/restart.sh` מחובר לשורש הפרויקט בזמן הריצה, לא לפי התיקייה שממנה הפעלתם את פלאסק.
 
 הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית. כשהעדכון משחזר גיבוי הוא מריץ את אותה פקודה עם `HEB_CAL_UPDATE_ACTION=stop` — הדוגמה אז רק עוצרת. אחר כך היא רצה שוב בלי המשתנה הזה ומעלה את האפליקציה ואת worker התזכורות.
 

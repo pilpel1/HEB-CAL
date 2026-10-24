@@ -41,16 +41,14 @@ class UpdateConfig:
     db_path: Path
     repo_root: Path
     autocheck: bool
-    admin_password: str | None
     update_dir: Path
     repo_error: str | None
 
     def __repr__(self) -> str:
-        # בלי הטוקן ובלי הסיסמה, גם אם מישהו מדפיס את האובייקט.
+        # בלי הטוקן, גם אם מישהו מדפיס את האובייקט.
         return (
             f"UpdateConfig(mode={self.mode!r}, repo={self.repo!r}, "
-            f"token={'set' if self.token else 'unset'}, "
-            f"admin={'set' if self.admin_password else 'unset'})"
+            f"token={'set' if self.token else 'unset'})"
         )
 
 
@@ -119,9 +117,6 @@ def load_config() -> UpdateConfig:
     update_dir = Path(_blank("HEB_CAL_UPDATE_DIR") or (BASE_DIR / "data"))
     backup_dir = Path(_blank("HEB_CAL_BACKUP_DIR") or (BASE_DIR / "backups"))
     token = _blank("HEB_CAL_GITHUB_TOKEN") or None
-    password = os.getenv("ADMIN_PASSWORD")
-    if password is not None:
-        password = password.strip() or None
     restart = _blank("HEB_CAL_RESTART_COMMAND") or None
     if restart and ("\n" in restart or "\x00" in restart):
         restart = None
@@ -141,7 +136,6 @@ def load_config() -> UpdateConfig:
         db_path=get_database_path(),
         repo_root=BASE_DIR,
         autocheck=_flag("HEB_CAL_UPDATE_AUTOCHECK", True),
-        admin_password=password,
         update_dir=update_dir,
         repo_error=repo_error,
     )
@@ -220,10 +214,13 @@ def describe_mode(cfg: UpdateConfig, *, git_checkout: bool) -> dict:
             "instructions": None,
             "docker_command": None,
         }
-    if not cfg.restart_command:
+    from app.updates.gitops import restart_block
+
+    block = restart_block(cfg.restart_command, cfg.repo_root)
+    if block:
         return {
             "can_apply": False,
-            "block": "לא הוגדרה פקודת הפעלה מחדש (HEB_CAL_RESTART_COMMAND).",
+            "block": block,
             "instructions": None,
             "docker_command": None,
         }

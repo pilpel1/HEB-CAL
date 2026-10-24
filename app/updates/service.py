@@ -83,7 +83,7 @@ def read_public_status() -> dict:
 
 
 def summary() -> dict:
-    from app.updates.security import is_admin, issue_csrf
+    from app.updates.security import issue_csrf
 
     cfg = load_config()
     current = installed_version()
@@ -91,8 +91,6 @@ def summary() -> dict:
     return {
         "current": current,
         "mode": cfg.mode,
-        "admin": is_admin(),
-        "admin_configured": bool(cfg.admin_password),
         "csrf_token": issue_csrf(),
         "restart_configured": bool(cfg.restart_command),
         "hook_configured": bool(cfg.hook_path) and not cfg.hook_error,

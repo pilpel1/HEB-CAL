@@ -4,9 +4,8 @@ from __future__ import annotations
 from flask import jsonify, request
 
 from app.api import api
-from app.updates.envconfig import load_config
 from app.updates.errors import UpdateError
-from app.updates.security import login_admin, logout_admin, require_admin, require_csrf
+from app.updates.security import require_csrf
 from app.updates.service import badge, check_for_updates, read_public_status, start_apply, summary
 from app.updates.version import installed_version
 
@@ -19,7 +18,7 @@ def _json(payload: dict, code: int = 200):
 
 
 def _guard_write():
-    return require_csrf() or require_admin()
+    return require_csrf()
 
 
 @api.route("/updates/health")
@@ -39,30 +38,7 @@ def updates_summary():
 
 @api.route("/updates/status")
 def updates_status():
-    denied = require_admin()
-    if denied:
-        return denied
     return _json(read_public_status())
-
-
-@api.route("/updates/login", methods=["POST"])
-def updates_login():
-    denied = require_csrf()
-    if denied:
-        return denied
-    body = request.get_json(silent=True) or {}
-    password = body.get("password") if isinstance(body, dict) else ""
-    if not isinstance(password, str):
-        password = ""
-    return login_admin(password, load_config().admin_password)
-
-
-@api.route("/updates/logout", methods=["POST"])
-def updates_logout():
-    denied = _guard_write()
-    if denied:
-        return denied
-    return logout_admin()
 
 
 @api.route("/updates/check", methods=["POST"])

@@ -20,7 +20,6 @@ from app.updates.gitops import (
     restore_sqlite,
     restart_argv,
 )
-from app.updates.security import reset_failures
 from app.updates.store import acquire_lock, blank_status, public_status, release_lock, write_status
 from app.updates.version import (
     highlights_from_body,
@@ -48,11 +47,10 @@ def _update_env(monkeypatch, tmp_path):
     monkeypatch.setenv("HEB_CAL_UPDATE_MODE", "git")
     monkeypatch.setenv("HEB_CAL_GITHUB_REPO", "pilpel1/HEB-CAL")
     monkeypatch.setenv("HEB_CAL_RESTART_COMMAND", "/bin/true")
-    monkeypatch.setenv("ADMIN_PASSWORD", "secret-secret")
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     monkeypatch.delenv("HEB_CAL_GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("HEB_CAL_UPDATE_HOOK", raising=False)
     monkeypatch.delenv("HEB_CAL_HEALTH_URL", raising=False)
-    reset_failures()
     yield tmp_path
 
 
@@ -174,10 +172,21 @@ def test_dirty_tree_and_non_fast_forward_and_bad_tag():
     assert "shallow" in caught.value.message
 
 
-def test_restart_argv_rejects_newlines():
-    assert restart_argv("/bin/true") == ["/bin/true"]
+def test_restart_argv_rejects_newlines(tmp_path):
+    assert restart_argv("/bin/true", tmp_path) == ["/bin/true"]
     with pytest.raises(UpdateError):
-        restart_argv("echo hi\nrm -rf /")
+        restart_argv("echo hi\nrm -rf /", tmp_path)
+
+
+def test_restart_argv_resolves_relative_to_repo_root(tmp_path):
+    script = tmp_path / "scripts" / "restart.sh"
+    script.parent.mkdir()
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(0o755)
+    assert restart_argv("scripts/restart.sh", tmp_path) == [str(script.resolve())]
+    assert restart_argv("./scripts/restart.sh --flag", tmp_path) == [str(script.resolve()), "--flag"]
+    assert restart_argv("/bin/true", tmp_path) == ["/bin/true"]
+    assert restart_argv("true", tmp_path) == ["true"]
 
 
 def test_backup_roundtrip_and_drops_wal(tmp_path):
@@ -348,17 +357,6 @@ def _csrf(client) -> str:
     return client.get("/api/updates").get_json()["csrf_token"]
 
 
-def _login(client, password="secret-secret") -> str:
-    token = _csrf(client)
-    response = client.post(
-        "/api/updates/login",
-        json={"password": password},
-        headers={"X-CSRF-Token": token},
-    )
-    assert response.status_code == 200, response.get_json()
-    return response.get_json()["csrf_token"]
-
-
 def _release():
     return Release(
         "1.2.0",
@@ -374,6 +372,8 @@ def test_settings_and_gear_markup(client):
     assert "עדכון גרסה" in settings
     assert "בדוק עדכונים" in settings
     assert "עדכן עכשיו" in settings
+    assert "סיסמת מנהל" not in settings
+    assert "updateLoginForm" not in settings
     assert ">1.0.0<" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
@@ -381,6 +381,8 @@ def test_settings_and_gear_markup(client):
     script = (REPO / "app/static/js/events/updates.js").read_text(encoding="utf-8")
     assert "textContent" in script
     assert "innerHTML" not in script
+    assert "ADMIN_PASSWORD" not in script
+    assert "/api/updates/login" not in script
 
 
 def test_health_is_public_and_summary_has_no_secrets(client):
@@ -390,29 +392,24 @@ def test_health_is_public_and_summary_has_no_secrets(client):
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
     assert body["current"] == "1.0.0"
-    assert body["admin"] is False
-    assert body["admin_configured"] is True
+    assert "admin" not in body
+    assert "admin_configured" not in body
     assert "csrf_token" in body
     assert "secret-secret" not in dumped
     assert "ghp_" not in dumped
     assert "/bin/true" not in dumped
     assert "HEB_CAL_GITHUB_TOKEN" not in dumped
-    assert client.get("/api/updates/status").status_code == 401
+    assert "ADMIN_PASSWORD" not in dumped
+    assert client.get("/api/updates/status").status_code == 200
     assert client.post("/api/updates/check").status_code == 403
+    assert client.post("/api/updates/login", json={"password": "x"}).status_code == 404
 
 
-def test_login_csrf_and_lockout(client):
-    token = _csrf(client)
-    bad = client.post("/api/updates/login", json={"password": "nope"}, headers={"X-CSRF-Token": token})
-    assert bad.status_code == 401
-    missing = client.post("/api/updates/check", headers={"X-CSRF-Token": "not-the-token"})
-    assert missing.status_code in {401, 403}
-    for _ in range(8):
-        token = _csrf(client)
-        client.post("/api/updates/login", json={"password": "nope"}, headers={"X-CSRF-Token": token})
-    token = _csrf(client)
-    locked = client.post("/api/updates/login", json={"password": "secret-secret"}, headers={"X-CSRF-Token": token})
-    assert locked.status_code == 429
+def test_csrf_blocks_check_and_apply(client):
+    assert client.post("/api/updates/apply", json={"version": "1.2.0", "command": "rm -rf /"}).status_code == 403
+    bad = client.post("/api/updates/check", headers={"X-CSRF-Token": "not-the-token"})
+    assert bad.status_code == 403
+    assert "נחסמה" in bad.get_json()["error"]
 
 
 def test_check_and_apply_ignore_commands_from_the_request(client, monkeypatch):
@@ -438,7 +435,7 @@ def test_check_and_apply_ignore_commands_from_the_request(client, monkeypatch):
     # service imported Popen already
     monkeypatch.setattr("app.updates.service.subprocess.Popen", FakePopen)
 
-    token = _login(client)
+    token = _csrf(client)
     checked = client.post("/api/updates/check", json={}, headers={"X-CSRF-Token": token})
     assert checked.status_code == 200
     payload = checked.get_json()
@@ -450,13 +447,6 @@ def test_check_and_apply_ignore_commands_from_the_request(client, monkeypatch):
     assert seen["token"] == "ghp_SUPERSECRET"
 
     token = client.get("/api/updates").get_json()["csrf_token"]
-    # login rotates csrf; the check response does not include a new one. Re-read.
-    # The session csrf is unchanged by check. `_login` returned the rotated token,
-    # and check used it. It's still valid.
-    token = _login(client) if not client.get("/api/updates").get_json()["admin"] else client.get("/api/updates").get_json()["csrf_token"]
-    # Re-login is harmless if already admin: login rotates again. Just use a fresh login.
-    reset_failures()
-    token = _login(client)
     before = "/bin/true"
     response = client.post(
         "/api/updates/apply",
@@ -489,7 +479,7 @@ def test_docker_mode_does_not_spawn(client, monkeypatch):
     monkeypatch.setenv("HEB_CAL_UPDATE_MODE", "docker")
     spawned = []
     monkeypatch.setattr("app.updates.service.spawn_updater", lambda *args: spawned.append(args))
-    token = _login(client)
+    token = _csrf(client)
     response = client.post("/api/updates/apply", json={"version": "9.9.9"}, headers={"X-CSRF-Token": token})
     assert response.status_code == 400
     assert "Docker" in response.get_json()["error"]
@@ -497,6 +487,14 @@ def test_docker_mode_does_not_spawn(client, monkeypatch):
     summary = client.get("/api/updates").get_json()
     assert summary["can_apply"] is False
     assert summary["docker_command"] == "docker compose pull && docker compose up -d"
+
+
+def test_missing_relative_restart_blocks_apply(client, monkeypatch):
+    monkeypatch.setenv("HEB_CAL_RESTART_COMMAND", "scripts/does-not-exist.sh")
+    body = client.get("/api/updates").get_json()
+    assert body["can_apply"] is False
+    assert body["block"] == "סקריפט ההפעלה מחדש לא נמצא."
+    assert "does-not-exist" not in json.dumps({k: v for k, v in body.items() if k != "block"})
 
 
 def test_hook_command_string_is_rejected(client, monkeypatch):

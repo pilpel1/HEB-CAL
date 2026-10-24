@@ -24,16 +24,45 @@ logger = logging.getLogger(__name__)
 _SHALLOW_NOTE = "העותק הותקן בלי היסטוריה מלאה (shallow). עדכון אוטומטי דורש clone מלא."
 
 
-def restart_argv(command: str) -> list[str]:
+def _relative_script(token: str) -> bool:
+    """נתיב יחסי לשורש (scripts/restart.sh או ./restart.sh). שם בלי סלאש נשאר ב-PATH."""
+    if Path(token).is_absolute():
+        return False
+    return "/" in token or token.startswith(".")
+
+
+def restart_argv(command: str, repo_root: Path) -> list[str]:
     if not isinstance(command, str) or "\n" in command or "\x00" in command:
         raise UpdateError("פקודת ההפעלה מחדש לא תקינה.", step="restart")
+    root = repo_root if isinstance(repo_root, Path) else Path(repo_root)
     try:
         args = shlex.split(command, posix=True)
     except ValueError as exc:
         raise UpdateError("פקודת ההפעלה מחדש לא תקינה.", step="restart") from exc
     if not args or any(not isinstance(part, str) or part == "" for part in args):
         raise UpdateError("פקודת ההפעלה מחדש לא תקינה.", step="restart")
+    if _relative_script(args[0]):
+        args[0] = str((root / args[0]).resolve())
     return args
+
+
+def restart_block(command: str | None, repo_root: Path) -> str | None:
+    """הודעה בעברית אם אי אפשר להפעיל מחדש. None אם אפשר."""
+    if not command:
+        return "לא הוגדרה פקודת הפעלה מחדש (HEB_CAL_RESTART_COMMAND)."
+    try:
+        args = restart_argv(command, repo_root)
+        token = shlex.split(command, posix=True)[0]
+    except UpdateError as exc:
+        return exc.message
+    if not (Path(token).is_absolute() or _relative_script(token)):
+        return None
+    path = Path(args[0])
+    if not path.is_file():
+        return "סקריפט ההפעלה מחדש לא נמצא."
+    if not os.access(path, os.X_OK):
+        return "סקריפט ההפעלה מחדש לא ניתן להרצה."
+    return None
 
 
 def git_auth_env(base: dict, token: str | None) -> dict:
@@ -305,7 +334,12 @@ class LiveOps:
             raise UpdateError("לא הוגדרה פקודת הפעלה מחדש.", step="restart")
         env = os.environ.copy()
         env["HEB_CAL_UPDATE_ACTION"] = action
-        proc = run_argv(restart_argv(self.cfg.restart_command), cwd=self.cfg.repo_root, env=env, timeout=60)
+        proc = run_argv(
+            restart_argv(self.cfg.restart_command, self.cfg.repo_root),
+            cwd=self.cfg.repo_root,
+            env=env,
+            timeout=60,
+        )
         if proc.returncode != 0:
             raise UpdateError("ההפעלה מחדש נכשלה.", step="restart")
 
