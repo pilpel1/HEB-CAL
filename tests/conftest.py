@@ -43,6 +43,10 @@ def _empty_events_table(app):
         db.execute("DELETE FROM reminder_people")
         db.execute("DELETE FROM events")
         if db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'gcal_sources'"
+        ).fetchone():
+            db.execute("DELETE FROM gcal_sources")
+        if db.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'bot_sessions'"
         ).fetchone():
             db.execute("DELETE FROM bot_sessions")

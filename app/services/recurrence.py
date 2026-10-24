@@ -363,6 +363,9 @@ def expand_event(event: dict, exceptions: list[dict] | None, range_from: date, r
                 "is_shift": 1 if event.get("is_shift") else 0,
                 "shift_person_id": event.get("shift_person_id"),
                 "shift_label": event.get("shift_label") or None,
+                "gcal_source_id": event.get("gcal_source_id"),
+                "gcal_uid": event.get("gcal_uid"),
+                "gcal_readonly": bool(event.get("gcal_source_id")),
             })
 
         if start > limit:

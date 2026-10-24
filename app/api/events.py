@@ -17,6 +17,7 @@ from app.database import (
 )
 from app.reminders.repository import clear_reminder_delivery, people_ids, replace_event_reminders
 from app.reminders.schedule import OffsetError, parse_reminders_payload, reminder_timezone
+from app.gcal.repository import READONLY_MESSAGE, is_gcal_event
 from app.services.event_payload import EventPayloadError, clean_event_write
 from app.services.shifts import ShiftError, resolve_manual_shift, shifts_enabled
 from app.services.recurrence import (
@@ -303,6 +304,8 @@ def update_single_event(event_id):
     existing = get_event(event_id)
     if existing is None:
         return jsonify({"error": "Event not found", "success": False}), 404
+    if is_gcal_event(existing):
+        return jsonify({"error": READONLY_MESSAGE, "success": False}), 403
 
     scope = (data.get("scope") or "all").strip()
     if scope == "occurrence" and "reminders" in data:
@@ -393,8 +396,10 @@ def update_single_event(event_id):
 @api.route('/events/<int:event_id>', methods=['DELETE'])
 def delete_single_event(event_id):
     scope = (request.args.get("scope") or "all").strip()
+    existing = get_event(event_id)
+    if is_gcal_event(existing):
+        return jsonify({"error": READONLY_MESSAGE, "success": False}), 403
     if scope == "occurrence":
-        existing = get_event(event_id)
         if existing is None:
             return jsonify({"error": "Event not found", "success": False}), 404
         if not is_recurring(existing):

@@ -347,6 +347,10 @@
     color: var(--bs-secondary-color);
 }
 
+[data-bs-theme="dark"] .event-gcal-list-note {
+    color: #8ab4f8;
+}
+
 [data-bs-theme="dark"] .filter-chip {
     background-color: var(--bs-secondary-bg);
     color: var(--bs-body-color);

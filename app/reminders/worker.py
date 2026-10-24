@@ -1,5 +1,7 @@
 """סבב שליחה: תזכורות שהגיע זמנן + תפריט הבוט (כפתורים ופקודות).
 
+הלולאה הארוכה מפעילה גם סנכרון יומן גוגל (``app.gcal.worker``), בערך כל 15 דקות.
+
 תזכורות ולחיצות רצות בלולאות נפרדות. לחיצה לא מחכה לסבב התזכורות:
 ``getUpdates`` עם long poll של 25 שניות רץ ברצף, ו-``answerCallbackQuery``
 יוצא לפני בניית המסך.
@@ -171,11 +173,25 @@ def main(argv: list[str] | None = None) -> int:
         if args.once:
             run_once(long_poll=0)
             return 0
+        from app.gcal.worker import run_loop as gcal_loop
+        from app.gcal.worker import sync_interval_seconds
+
+        stop = threading.Event()
+        gcal = threading.Thread(
+            target=gcal_loop,
+            kwargs={"stop": stop, "interval": sync_interval_seconds()},
+            name="gcal-sync",
+            daemon=True,
+        )
+        gcal.start()
         try:
-            run_loop(args.interval)
+            run_loop(args.interval, stop_event=stop)
         except KeyboardInterrupt:
             print("reminder worker stopped")
             return 0
+        finally:
+            stop.set()
+            gcal.join(timeout=1)
     return 0
 
 

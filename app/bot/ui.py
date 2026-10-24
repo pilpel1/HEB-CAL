@@ -208,6 +208,8 @@ def _row_button(event: dict, people: dict, *, with_date: bool) -> str:
         name = _person_name(people, event.get("shift_person_id"))
         title = f"{title} · {name}"
     prefix = ""
+    if event.get("gcal_source_id"):
+        title = f"{title} · גוגל"
     raw_day = (event.get("gregorian_date") or "")[:10]
     try:
         day = date.fromisoformat(raw_day)
@@ -520,6 +522,12 @@ def event_screen(event: dict, people: dict, focus: date | None = None) -> tuple[
         short = description if len(description) <= 400 else description[:399] + "…"
         lines.append(esc(short))
     recurring = bool(event.get("recurrence_freq"))
+    if event.get("gcal_source_id"):
+        lines.append("מיומן גוגל. לעריכה ביומן גוגל.")
+        lines.append("")
+        return "\n".join(lines), kb(
+            [[("↩️ חזרה לרשימה", "back:list"), (BTN_MENU, "home")]]
+        )
     if recurring:
         lines.append("אירוע חוזר. עריכה ומחיקה כאן חלות על כל הסדרה.")
     lines.append("")

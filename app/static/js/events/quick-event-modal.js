@@ -229,6 +229,34 @@ function setQuickColor(colorValue) {
     });
 }
 
+function setQuickEventReadonly(readonly) {
+    const form = document.getElementById('quickEventForm');
+    const note = document.getElementById('quick_gcal_note');
+    const submit = document.getElementById('quick_submit_btn');
+    if (note) {
+        note.hidden = !readonly;
+    }
+    if (submit) {
+        submit.hidden = !!readonly;
+    }
+    if (!form) {
+        return;
+    }
+    form.classList.toggle('is-gcal-readonly', !!readonly);
+    form.querySelectorAll('input, textarea, select, button').forEach((el) => {
+        if (el.hasAttribute('data-bs-dismiss') || el.id === 'quick_submit_btn') {
+            return;
+        }
+        el.disabled = !!readonly;
+    });
+    if (readonly) {
+        const title = document.getElementById('quickEventModalLabel');
+        if (title) {
+            title.textContent = 'אירוע מיומן גוגל';
+        }
+    }
+}
+
 function setQuickEventModalMode(isEdit) {
     const title = document.getElementById('quickEventModalLabel');
     const submitBtn = document.getElementById('quick_submit_btn');
@@ -530,6 +558,7 @@ async function openQuickEventModal(dateStr) {
         form.reset();
     }
 
+    setQuickEventReadonly(false);
     const pendingHebrew = fillQuickEventForm({ gregorian_date: dateStr });
     // אחרי reset — מוודאים שוב שה-min על תאריך הסיום ננעל לתאריך ההתחלה
     syncEndDateMin(dateStr, document.getElementById('quick_end_date'));
@@ -564,6 +593,8 @@ async function openEditEventModal(eventId, occurrenceDate) {
             setRecurrenceScopeVisible(true, 'occurrence');
         }
         setQuickEventModalMode(true);
+        const fromGoogle = typeof isGoogleEvent === 'function' && isGoogleEvent(event);
+        setQuickEventReadonly(fromGoogle);
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (error) {
         console.error('Error loading event for edit:', error);
@@ -597,6 +628,7 @@ function initQuickEventModal() {
     });
 
     modalElement.addEventListener('hidden.bs.modal', () => {
+        setQuickEventReadonly(false);
         fillQuickEventForm();
         setQuickEventModalMode(false);
     });
@@ -738,6 +770,9 @@ function initQuickEventModal() {
 
     quickForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (quickForm.classList.contains('is-gcal-readonly')) {
+            return;
+        }
 
         if (typeof shiftUiState !== 'undefined' && shiftUiState.quickShiftFill) {
             await shiftUiState.quickShiftFill;
