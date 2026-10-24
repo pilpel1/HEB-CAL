@@ -1143,3 +1143,35 @@
     font-family: ui-monospace, SFMono-Regular, monospace;
     font-size: 0.85rem;
 }
+
+.update-highlights {
+    margin: 0.35rem 0 0.75rem;
+    padding-inline-start: 1.15rem;
+}
+
+.update-progress-msg {
+    font-weight: 600;
+}
+
+.update-progress-lines {
+    margin: 0;
+    padding-inline-start: 1.15rem;
+    color: var(--bs-secondary-color, #666);
+    font-size: 0.85rem;
+}
+
+.update-error {
+    color: var(--bs-danger);
+}
+
+.update-command {
+    direction: ltr;
+    text-align: left;
+    margin: 0.75rem 0 0;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--bs-tertiary-bg, #f3f4f6);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+}

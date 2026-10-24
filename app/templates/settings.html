@@ -12,6 +12,29 @@
         </nav>
     </div>
 
+    <section class="card mb-3" id="settingsUpdate" aria-labelledby="settings-update-title">
+        <div class="card-body">
+            <h2 class="h5" id="settings-update-title">עדכון גרסה</h2>
+            <p class="mb-1">גרסה מותקנת: <strong id="updateCurrentVersion">{{ app_version }}</strong></p>
+            <p id="updateModeHint" class="text-muted small mb-2"></p>
+            <p id="updateState" class="small mb-2" role="status"></p>
+            <button type="button" class="btn btn-outline-primary" id="updateCheckBtn">בדוק עדכונים</button>
+            <div id="updateOffer" class="mt-3" hidden>
+                <p class="mb-1">יש גרסה חדשה: <strong id="updateLatest"></strong></p>
+                <ul id="updateHighlights" class="update-highlights"></ul>
+                <p id="updateEmptyNotes" class="text-muted small" hidden>אין פירוט לגרסה הזו.</p>
+                <p id="updateReleaseLink" class="small mb-2"></p>
+                <button type="button" class="btn btn-primary" id="updateApplyBtn" hidden>עדכן עכשיו</button>
+            </div>
+            <pre id="updateDockerCommand" class="update-command" dir="ltr" hidden></pre>
+            <div id="updateProgress" class="mt-3" hidden>
+                <p id="updateProgressMessage" class="update-progress-msg mb-1" role="status" aria-live="polite"></p>
+                <ul id="updateProgressLines" class="update-progress-lines"></ul>
+            </div>
+            <p id="updateError" class="update-error mt-2" hidden></p>
+        </div>
+    </section>
+
     <section class="card mb-3" aria-labelledby="settings-display-title">
         <div class="card-body">
             <h2 class="h5" id="settings-display-title">תצוגה</h2>

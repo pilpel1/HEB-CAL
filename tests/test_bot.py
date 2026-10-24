@@ -809,7 +809,8 @@ def test_today_during_draft_cancels_it(app):
 
 
 def test_consume_updates_sends_menu_and_answers_buttons(app):
-    _event(app, "סיור", TODAY)
+    # consume_updates קורא ל-handle_update בלי שעון מוזרק, אז האירוע חייב להיות על היום האמיתי.
+    _event(app, "סיור", datetime.now(TZ).date())
     calls = []
 
     def api(token, method, payload=None, timeout=30):
