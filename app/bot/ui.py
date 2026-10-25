@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from app.bot.query import PAGE_SIZE, PEOPLE_PAGE, clamp_page
 from app.bot.textutil import clip, code, esc
+from app.reminders.schedule import PRESET_OFFSETS, offset_label
 from app.services.recurrence import hebrew_display
 from app.services.shifts import (
     WEEKDAY_NAMES,
@@ -115,7 +116,7 @@ def _pager(previous: str | None, following: str | None) -> list[tuple[str, str]]
 def menu_rows() -> list[list[tuple[str, str]]]:
     return [
         [("🗓 אירועי השבוע", "week"), ("📆 אירועי היום", "today")],
-        [("👷 משמרות", "shifts"), ("⏭ אירועים קרובים", "soon")],
+        [("👷 משמרות", "shifts"), ("⏮ אירועי החודש", "soon")],
         [("👤 לפי אדם", "who"), ("🔍 חיפוש אירוע", "find")],
         [(BTN_ADD, "add"), ("⚙️ הגדרות", "set")],
     ]
@@ -254,6 +255,11 @@ def list_screen(
     end: date | None = None,
     note: str = "",
 ) -> tuple[str, dict]:
+    if kind == "person":
+        # משמרות קודם, אחר כך אירועים. הסדר בתוך כל קבוצה נשאר לפי תאריך.
+        rows = [row for row in rows if row.get("is_shift")] + [
+            row for row in rows if not row.get("is_shift")
+        ]
     page, pages = clamp_page(len(rows), page)
     chunk = rows[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
     with_date = kind != "today"
@@ -269,8 +275,26 @@ def list_screen(
     if not chunk:
         lines.append(_empty_hint(kind, mode))
     else:
+        section = None
         for event in chunk:
-            lines.append(_event_line(event, people, with_date=with_date))
+            marker = "•"
+            if kind == "person":
+                # רק במסך «לפי אדם». שאר הרשימות נשארות עם עיגול.
+                shift = bool(event.get("is_shift"))
+                name = "משמרות" if shift else "אירועים"
+                marker = "👷" if shift else "🔔"
+                if name != section:
+                    lines.append(f"<b>{name}</b>")
+                    section = name
+            lines.append(
+                _event_line(
+                    event,
+                    people,
+                    with_date=with_date,
+                    with_description=(kind == "find"),
+                    marker=marker,
+                )
+            )
         lines.append("")
         lines.append(LIST_HINT)
     buttons = [[item] for item in _unique_buttons(chunk, people, with_date=with_date)]
@@ -314,7 +338,7 @@ def _list_heading(kind, today, start, end, person_name, query, mode) -> list[str
         return lines
     if kind == "soon" and start and end:
         return [
-            f"הקרובים · {SOON_LABEL} · {filt}",
+            f"אירועי החודש · {SOON_LABEL} · {filt}",
             f"{code(greg(start))}–{code(greg(end))}",
         ]
     if kind == "shifts" and start and end:
@@ -356,7 +380,25 @@ def _empty_hint(kind: str, mode: str) -> str:
     return "אין מה להציג."
 
 
-def _event_line(event: dict, people: dict, *, with_date: bool) -> str:
+# שורת חיפוש. הכפתור נשאר תאריך+כותרת; התיאור רק בטקסט, ב-<i>.
+SEARCH_BLURB = 160
+
+
+def _one_line(value, limit: int) -> str:
+    text = " ".join(str(value or "").replace("\n", " ").split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
+
+
+def _event_line(
+    event: dict,
+    people: dict,
+    *,
+    with_date: bool,
+    with_description: bool = False,
+    marker: str = "•",
+) -> str:
     title = esc(visible_name(event))
     bits = []
     if with_date and event.get("gregorian_date"):
@@ -369,8 +411,12 @@ def _event_line(event: dict, people: dict, *, with_date: bool) -> str:
         bits.append("משמרת · " + esc(_person_name(people, event.get("shift_person_id"))))
     elif event.get("recurring") or event.get("recurrence_freq"):
         bits.append("חוזר")
-    extra = " · ".join(bits)
-    return f"• <b>{title}</b>\n  {extra}"
+    lines = [f"{marker} <b>{title}</b>", f"  {' · '.join(bits)}"]
+    if with_description:
+        blurb = _one_line(event.get("description"), SEARCH_BLURB)
+        if blurb:
+            lines.append(f"  <i>{esc(blurb)}</i>")
+    return "\n".join(lines)
 
 
 def _day_letter(day: date) -> str:
@@ -480,13 +526,13 @@ def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> t
 def shifts_off_screen() -> tuple[str, dict]:
     text = "\n".join(
         [
-            "משמרות כבויות בבית.",
-            "אפשר להדליק אותן. זה חל על כל מי שמשתמש ביומן.",
+            "משמרות כבויות ביומן.",
+            "אפשר להציג אותן. זה חל על כל מי שמשתמש ביומן.",
         ]
     )
     return text, kb(
         [
-            [("הדלקת משמרות", "set:sh:1")],
+            [("הצגת משמרות ביומן", "set:sh:1")],
             [(BTN_MENU, "home")],
         ]
     )
@@ -580,7 +626,7 @@ def _draft_day(draft: dict, today: date) -> date:
         return today
 
 
-def add_confirm_screen(draft: dict, today: date, *, error: str = "") -> tuple[str, dict]:
+def add_confirm_screen(draft: dict, today: date, *, error: str = "", people: dict | None = None) -> tuple[str, dict]:
     day = _draft_day(draft, today)
     lines = []
     if error:
@@ -599,6 +645,7 @@ def add_confirm_screen(draft: dict, today: date, *, error: str = "") -> tuple[st
         lines.append(f"עד {code(_safe_greg(draft['end_date']))}")
     if (draft.get("description") or "").strip():
         lines.append(esc(draft["description"].strip()))
+    lines.append(esc(_reminder_line(draft, people)))
     lines.append("")
     lines.append("אפשר לשמור כמו שזה, או לשנות.")
     tomorrow = today + timedelta(days=1)
@@ -614,9 +661,89 @@ def add_confirm_screen(draft: dict, today: date, *, error: str = "") -> tuple[st
             [(today_label, "add:d:0"), (tomorrow_label, "add:d:1")],
             [("תאריך אחר", "add:d:x"), ("שעה", "add:time")],
             [("תיאור", "add:desc"), ("עד תאריך", "add:end")],
+            [("• תזכורת" if _reminder_offsets(draft) else "תזכורת", "add:rem")],
             [("ביטול", "cancel")],
         ]
     )
+
+
+def _reminder_offsets(draft: dict) -> list[int]:
+    found = []
+    for item in draft.get("reminders") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            minutes = int(item.get("offset_minutes"))
+        except (TypeError, ValueError):
+            continue
+        if minutes not in found:
+            found.append(minutes)
+    return found
+
+
+def _reminder_recipient_ids(draft: dict) -> list[int]:
+    found = []
+    for item in draft.get("reminders") or []:
+        if not isinstance(item, dict):
+            continue
+        for raw in item.get("recipient_ids") or []:
+            try:
+                person_id = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if person_id not in found:
+                found.append(person_id)
+    return found
+
+
+def _reminder_line(draft: dict, people: dict | None) -> str:
+    offsets = _reminder_offsets(draft)
+    if not offsets:
+        return "בלי תזכורת"
+    labels = [offset_label(minutes) for minutes in offsets]
+    names = []
+    if people:
+        for person_id in _reminder_recipient_ids(draft):
+            person = people.get(person_id) or {}
+            name = person.get("name") or ""
+            if name and name not in names:
+                names.append(name)
+    line = "תזכורת: " + ", ".join(labels)
+    if names:
+        line += " · " + ", ".join(names)
+    return line
+
+
+def add_reminder_screen(draft: dict) -> tuple[str, dict]:
+    selected = set(_reminder_offsets(draft))
+    lines = ["מתי להזכיר?", "אפשר כמה. בלי בחירה אין תזכורת."]
+    presets = []
+    for minutes, label in PRESET_OFFSETS:
+        shown = f"• {label}" if minutes in selected else label
+        presets.append((shown, f"add:ro:{minutes}"))
+    rows = _pairs(presets)
+    rows.append([("בלי תזכורת", "add:rm0")])
+    if selected:
+        rows.append([("למי", "add:who")])
+    rows.append(_back_cancel("back:add"))
+    return "\n".join(lines), kb(rows)
+
+
+def add_reminder_people_screen(draft: dict, people: list[dict]) -> tuple[str, dict]:
+    selected = set(_reminder_recipient_ids(draft))
+    lines = [
+        "למי לשלוח?",
+        "אפשר כמה. בלי נמען התזכורת תופיע בדפדפן כשהלוח פתוח.",
+    ]
+    if not people:
+        lines.append("אין עדיין אנשים לתזכורת.")
+    rows = []
+    for person in people:
+        name = person.get("name") or "בלי שם"
+        mark = "• " if person.get("id") in selected else ""
+        rows.append([(f"{mark}{name}", f"add:rp:{person.get('id')}")])
+    rows.append([("סיום", "back:add"), ("זמנים", "add:rem")])
+    return "\n".join(lines), kb(rows)
 
 
 def add_date_screen(today: date) -> tuple[str, dict]:
@@ -837,20 +964,20 @@ def settings_screen(
         lines.insert(1, esc(note))
     lines.append(f"מזהה הצ'אט: {code(chat_id)}")
     if not linked:
-        lines.append("הצ'אט לא מחובר לאדם.")
+        lines.append("הצ'אט הזה עוד לא מחובר לאדם ביומן.")
     else:
         names = ", ".join(esc(person["name"]) for person in linked)
-        lines.append(f"מחובר אל: {names}")
+        lines.append(f"הצ'אט הזה מחובר ביומן בתור {names}.")
     if household is None:
-        lines.append("בחרו בית. המתג של משמרות חל רק עליו.")
+        lines.append("בחרו בית. משמרות נדלקות או נכבות רק בו.")
         lines.append("האירועים עצמם משותפים.")
     else:
         state = "דלוקות" if household.get("shifts_enabled") else "כבויות"
         if len(households) > 1:
             lines.append(f"בית נבחר: {esc(household.get('name') or '')}")
-            lines.append("כמה בתים בבסיס. המתג חל רק על הבית שנבחר. האירועים משותפים.")
+            lines.append("יש כמה בתים. משמרות נדלקות או נכבות רק בבית שנבחר. האירועים משותפים.")
         else:
-            lines.append("בית אחד. המתג של משמרות חל על כולם.")
+            lines.append("יש בית אחד. משמרות נדלקות או נכבות לכולם ביחד.")
         lines.append(f"משמרות: {state}")
     rows: list[list[tuple[str, str]]] = []
     if len(households) > 1 or household is None:
@@ -867,23 +994,23 @@ def settings_screen(
         )
     rows.append([("חיבור לאדם", "set:link")])
     for person in linked:
-        rows.append([(f"ניתוק {person['name']}", f"set:ul:{person['id']}")])
+        rows.append([(f"ניתוק {person['name']} מהצ'אט", f"set:ul:{person['id']}")])
     if household is not None:
         if household.get("shifts_enabled"):
-            rows.append([("כיבוי משמרות", "set:sh:0")])
+            rows.append([("הסתרת משמרות ביומן", "set:sh:0")])
             rows.append([("מי עובד במשמרות", "set:workers")])
         else:
-            rows.append([("הדלקת משמרות", "set:sh:1")])
+            rows.append([("הצגת משמרות ביומן", "set:sh:1")])
     rows.append([(BTN_MENU, "home")])
     return "\n".join(lines), kb(rows)
 
 
 def shift_toggle_screen(enabled: bool, household_name: str) -> tuple[str, dict]:
-    verb = "להדליק" if enabled else "לכבות"
+    verb = "להציג" if enabled else "להסתיר"
     text = "\n".join(
         [
-            f"{verb} משמרות ל{esc(household_name)}?",
-            "זה חל על כל המשתמשים בבית הזה.",
+            f"{verb} את המשמרות ביומן של {esc(household_name)}?",
+            "זה חל על כל מי שמשתמש ביומן.",
         ]
     )
     answer = "set:shy:1" if enabled else "set:shy:0"
@@ -893,19 +1020,19 @@ def shift_toggle_screen(enabled: bool, household_name: str) -> tuple[str, dict]:
 def link_picker(people: list[dict], page: int) -> tuple[str, dict]:
     page, pages = clamp_page(len(people), page, PEOPLE_PAGE)
     chunk = people[page * PEOPLE_PAGE : (page + 1) * PEOPLE_PAGE]
-    lines = ["לחבר את הצ'אט למי?", "בחרו אדם, או צרו חדש."]
+    lines = ["מי אתם ביומן?", "בחרו את השם שלכם, כדי לחבר את הצ'אט הזה."]
     if pages > 1:
         lines.append(f"עמוד {page + 1}/{pages}")
     if not people:
         lines.append("אין עדיין אנשים. אפשר ליצור עכשיו.")
-    rows = [[(person["name"], f"set:pick:{person['id']}")] for person in chunk]
+    rows = [[(f"אני {person['name']}", f"set:pick:{person['id']}")] for person in chunk]
     nav = _pager(
         f"set:lp:{page - 1}" if page > 0 else None,
         f"set:lp:{page + 1}" if page + 1 < pages else None,
     )
     if nav:
         rows.append(nav)
-    rows.append([("אדם חדש", "set:new")])
+    rows.append([("אני לא ברשימה", "set:new")])
     rows.append([("חזרה", "set"), ("ביטול", "cancel")])
     return "\n".join(lines), kb(rows)
 
@@ -938,8 +1065,8 @@ def link_name_screen(*, error: str = "") -> tuple[str, dict]:
     lines = []
     if error:
         lines.append(esc(error))
-    lines.append("איך קוראים לאדם החדש?")
-    lines.append("כתבו שם. הצ'אט יחובר אליו.")
+    lines.append("איך קוראים לכם?")
+    lines.append("כתבו שם. הצ'אט הזה יחובר אליו.")
     return "\n".join(lines), kb([_back_cancel("set:link")])
 
 

@@ -85,7 +85,23 @@ def create_user_event(draft: dict) -> dict:
             "color": None,
         }
     )
-    return _insert(cleaned)
+    reminders = draft.get("reminders") or []
+    parsed = []
+    if reminders:
+        from app.reminders.repository import people_ids, replace_event_reminders
+        from app.reminders.schedule import OffsetError, parse_reminders_payload
+
+        try:
+            parsed = parse_reminders_payload(reminders, people_ids(role="reminders"))
+        except OffsetError as exc:
+            raise InputError(str(exc)) from exc
+    saved = _insert(cleaned)
+    if parsed:
+        from app.reminders.repository import replace_event_reminders
+
+        replace_event_reminders(saved["id"], parsed)
+        saved = get_event(saved["id"]) or saved
+    return saved
 
 
 def create_shift(person_id: int, label: str, gregorian_date: str) -> dict:
