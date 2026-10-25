@@ -102,6 +102,46 @@
             </small>
         </div>
     </section>
+
+    <section class="card mb-3" id="settingsAutoBackup" aria-labelledby="settings-auto-backup-title">
+        <div class="card-body">
+            <h2 class="h5" id="settings-auto-backup-title">גיבוי אוטומטי</h2>
+            <p class="alert alert-warning small py-2" role="note">
+                הגיבוי רץ רק כשהמחשב הזה דולק, מחובר לאינטרנט, והיומן פתוח בדפדפן. מחשב כבוי או דפדפן סגור — אין גיבוי.
+            </p>
+            <div class="settings-switch-row">
+                <label class="settings-switch-label" for="autoBackupEnabled">
+                    גיבוי אוטומטי
+                    <span class="settings-switch-hint text-muted">פעם ביום, כל עוד היומן פתוח במכשיר הזה</span>
+                </label>
+                <div class="form-check form-switch settings-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="autoBackupEnabled">
+                </div>
+            </div>
+            <div class="mt-3">
+                <label for="autoBackupRetention" class="form-label">כמה עותקים אחרונים לשמור</label>
+                <input type="number" class="form-control auto-backup-retention" id="autoBackupRetention" min="1" max="30" step="1" inputmode="numeric" value="3">
+                <small class="text-muted d-block mt-1">בין 1 ל־30. ברירת מחדל 3. נשמר במכשיר הזה.</small>
+            </div>
+            <p class="text-muted small mt-3 mb-2" id="autoBackupFolderHelp">
+                בחרו את תיקיית ההורדות, או תיקייה בשם «גיבוי יומן». אם בחרתם תיקייה אחרת, נוצרת בתוכה «גיבוי יומן» והקבצים נשמרים שם.
+                אם הדפדפן מסרב לתיקיית ההורדות עצמה, צרו את «גיבוי יומן» בחלון הבחירה ובחרו אותה.
+                ב־Chrome סמנו לאפשר גישה גם בביקורים הבאים, אחרת צריך לאשר שוב כל יום.
+            </p>
+            <p id="autoBackupFolderStatus" class="small mb-2">עדיין לא נבחרה תיקייה.</p>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-secondary" id="autoBackupPickFolder">בחירת תיקייה</button>
+                <button type="button" class="btn btn-outline-primary" id="autoBackupNow">גבה עכשיו</button>
+            </div>
+            <p id="autoBackupLastRun" class="small text-muted mt-2 mb-0">עדיין לא רץ גיבוי מהמכשיר הזה.</p>
+            <p id="autoBackupStatus" class="small mt-2 mb-0" role="status"></p>
+            <p id="autoBackupApiNote" class="small text-muted mt-2 mb-0" hidden>
+                בדפדפן הזה אי אפשר לבחור תיקייה קבועה. זה עובד ב־Chrome וב־Edge על מחשב, וב־Chrome לאנדרואיד, רק בכתובת מאובטחת (HTTPS, או localhost / 127.0.0.1). Safari, Firefox, ו־Chrome באייפון לא תומכים בזה.
+                הקובץ ירד להורדות בשם שמתחיל ב־heb-cal-backup, אחרי לחיצה ביומן — הדפדפן חוסם הורדה בלי פעולה.
+                בלי תיקייה, עותקים ישנים לא נמחקים לבד.
+            </p>
+        </div>
+    </section>
     <script>
         (function () {
             var themeInput = document.getElementById('themeSwitch');
@@ -112,6 +152,21 @@
             try { density = localStorage.getItem('heb-cal-density'); } catch (e) {}
             var densityInput = document.getElementById('densitySwitch');
             if (densityInput) densityInput.checked = density === 'compact';
+            var autoBackup = null;
+            var autoRetention = null;
+            try {
+                autoBackup = localStorage.getItem('heb-cal-auto-backup-enabled');
+                autoRetention = localStorage.getItem('heb-cal-auto-backup-retention');
+            } catch (e) {}
+            var autoBackupInput = document.getElementById('autoBackupEnabled');
+            if (autoBackupInput) autoBackupInput.checked = autoBackup === '1';
+            var autoRetentionInput = document.getElementById('autoBackupRetention');
+            if (autoRetentionInput && autoRetention) {
+                var autoRetentionNumber = Number(autoRetention);
+                if (autoRetentionNumber >= 1 && autoRetentionNumber <= 30) {
+                    autoRetentionInput.value = String(autoRetentionNumber);
+                }
+            }
         })();
     </script>
 
