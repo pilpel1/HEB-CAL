@@ -794,6 +794,10 @@
     cursor: pointer;
 }
 
+.auto-backup-retention {
+    max-width: 6.5rem;
+}
+
 .settings-colors-list {
     list-style: none;
     padding: 0;

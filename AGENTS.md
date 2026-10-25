@@ -82,6 +82,7 @@ Manual checks:
 | `app/static/js/calendar/infinite-calendar.js` | Infinite-scroll core: maintain/trim, `renderAround`, `scrollToDate`, today button |
 | `app/static/js/events/end-date-validation.js` | End date must not precede the start date (shared with the events-list page) |
 | `app/static/js/events/event-actions.js` | Create / update / delete, success toast, refresh both views |
+| `app/static/js/events/auto-backup.js` | Settings «גיבוי אוטומטי»: once a local day while the tab is open. Writes the existing `/api/events/export` JSON into a chosen folder (`גיבוי יומן` via the File System Access API + IndexedDB handle) and prunes by retention. Safari / Firefox / insecure HTTP fall back to a `heb-cal-backup-…` download on the first click or key that day. Rules live in `auto-backup-logic.js` |
 | `app/static/js/events/quick-event-modal.js` | Quick-event modal: fields, time parsed out of the title, color, submit. Reminder block is filled from `reminders-form.js` |
 | `app/static/js/events/reminders-form.js` | Reminder checkbox, offset chips, custom amount, recipients |
 | `app/static/js/events/reminder-notify.js` | Notification API poll of `/api/reminders/due` while the tab is open |
