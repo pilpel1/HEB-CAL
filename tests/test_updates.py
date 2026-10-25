@@ -56,8 +56,11 @@ def _update_env(monkeypatch, tmp_path):
 
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
+    changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
     assert parse_version(version) == (1, 0, 4)
-    assert f"## {version}" in (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert f"## {version}" in changelog
+    assert "## 1.0.3" in changelog
+    assert "## 1.0.2" in changelog
 
 
 def test_semver_and_newer():
