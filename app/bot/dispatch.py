@@ -470,12 +470,20 @@ class Bot:
             "time": None,
             "description": "",
             "end_date": None,
+            "reminders": [],
         }
         return self.out(*ui.add_title_screen())
 
     def _add_confirm(self, error: str = "") -> dict:
         self.session["flow"] = "add"
-        return self.out(*ui.add_confirm_screen(self.session.get("draft") or {}, self.today, error=error))
+        return self.out(
+            *ui.add_confirm_screen(
+                self.session.get("draft") or {},
+                self.today,
+                error=error,
+                people=self.by_id,
+            )
+        )
 
     def _back_add(self) -> dict:
         if (self.session.get("draft") or {}).get("title"):
@@ -539,8 +547,71 @@ class Bot:
             start = date.fromisoformat((draft.get("gregorian_date") or self.today.isoformat())[:10])
             draft["end_date"] = (start + timedelta(days=1)).isoformat()
             return self._add_confirm()
+        if data == "add:rem":
+            return self.out(*ui.add_reminder_screen(draft))
+        if data == "add:rm0":
+            draft["reminders"] = []
+            return self.out(*ui.add_reminder_screen(draft))
+        if data.startswith("add:ro:"):
+            return self._toggle_reminder_offset(draft, data[7:])
+        if data == "add:who":
+            return self._reminder_people(draft)
+        if data.startswith("add:rp:"):
+            return self._toggle_reminder_person(draft, data[7:])
         self.toast = "הכפתור לא מוכר"
         return self._add_confirm()
+
+    def _store_reminders(self, draft: dict, offsets: list[int], recipients: list[int]) -> None:
+        if not offsets:
+            draft["reminders"] = []
+            return
+        draft["reminders"] = [
+            {"offset_minutes": minutes, "recipient_ids": list(recipients)}
+            for minutes in offsets
+        ]
+
+    def _toggle_reminder_offset(self, draft: dict, raw: str) -> dict:
+        from app.reminders.schedule import PRESET_LABELS
+
+        if not raw.isdigit():
+            self.toast = "הכפתור לא מוכר"
+            return self.out(*ui.add_reminder_screen(draft))
+        minutes = int(raw)
+        if minutes not in PRESET_LABELS:
+            self.toast = "הכפתור לא מוכר"
+            return self.out(*ui.add_reminder_screen(draft))
+        offsets = ui._reminder_offsets(draft)
+        if minutes in offsets:
+            offsets = [item for item in offsets if item != minutes]
+        else:
+            offsets.append(minutes)
+        offsets = sorted(offsets)
+        self._store_reminders(draft, offsets, ui._reminder_recipient_ids(draft))
+        return self.out(*ui.add_reminder_screen(draft))
+
+    def _reminder_people(self, draft: dict) -> dict:
+        if not ui._reminder_offsets(draft):
+            self.toast = "קודם בוחרים מתי"
+            return self.out(*ui.add_reminder_screen(draft))
+        people = [person for person in self.people if person.get("receives_reminders")]
+        return self.out(*ui.add_reminder_people_screen(draft, people))
+
+    def _toggle_reminder_person(self, draft: dict, raw: str) -> dict:
+        people = [person for person in self.people if person.get("receives_reminders")]
+        if not raw.isdigit():
+            self.toast = "הכפתור לא מוכר"
+            return self.out(*ui.add_reminder_people_screen(draft, people))
+        person_id = int(raw)
+        if person_id not in {person["id"] for person in people}:
+            self.toast = "האדם לא ברשימת התזכורות"
+            return self.out(*ui.add_reminder_people_screen(draft, people))
+        recipients = ui._reminder_recipient_ids(draft)
+        if person_id in recipients:
+            recipients = [item for item in recipients if item != person_id]
+        else:
+            recipients.append(person_id)
+        self._store_reminders(draft, ui._reminder_offsets(draft), recipients)
+        return self.out(*ui.add_reminder_people_screen(draft, people))
 
     def _save_add(self) -> dict:
         try:

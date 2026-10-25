@@ -243,7 +243,7 @@ def test_start_unlinked_is_only_the_chat_id(app):
     )
     labels = [button["text"] for button in _buttons(reply)]
     assert labels == ["חיבור כאן"]
-    for label in ("היום", "השבוע", "הקרובים", "משמרות", "לפי אדם", "חיפוש", "אירוע חדש", "הגדרות"):
+    for label in ("היום", "השבוע", "אירועי החודש", "משמרות", "לפי אדם", "חיפוש", "אירוע חדש", "הגדרות"):
         assert label not in labels
     assert "מה עושים?" not in reply["text"]
     link = _press(app, reply, "חיבור כאן")
@@ -263,7 +263,7 @@ def test_start_linked_is_only_the_menu(app):
         "🗓 אירועי השבוע",
         "📆 אירועי היום",
         "👷 משמרות",
-        "⏭ אירועים קרובים",
+        "⏮ אירועי החודש",
         "👤 לפי אדם",
         "🔍 חיפוש אירוע",
         "➕ הוספת אירוע",
@@ -271,7 +271,7 @@ def test_start_linked_is_only_the_menu(app):
     ]
     rows = reply["markup"]["inline_keyboard"]
     assert [button["text"] for button in rows[0]] == ["🗓 אירועי השבוע", "📆 אירועי היום"]
-    assert [button["text"] for button in rows[1]] == ["👷 משמרות", "⏭ אירועים קרובים"]
+    assert [button["text"] for button in rows[1]] == ["👷 משמרות", "⏮ אירועי החודש"]
     assert [button["text"] for button in rows[2]] == ["👤 לפי אדם", "🔍 חיפוש אירוע"]
     assert [button["text"] for button in rows[3]] == ["➕ הוספת אירוע", "⚙️ הגדרות"]
     _has_exit(reply)
@@ -349,6 +349,7 @@ def test_today_week_soon_and_pagination(app):
     _has_exit(week)
 
     soon = _go(app, _cb("soon"))
+    assert "אירועי החודש" in soon["text"]
     assert "30 יום" in soon["text"]
     assert "<code>21.11.2026</code>" in soon["text"]
     blob = soon["text"]
@@ -592,8 +593,8 @@ def test_shifts_toggle_create_and_date_edit(app):
     off = _go(app, _cb("shifts"))
     assert "כבויות" in off["text"]
     _has_exit(off)
-    settings = _press(app, off, "הדלקת משמרות")
-    assert "להדליק" in settings["text"]
+    settings = _press(app, off, "הצגת משמרות ביומן")
+    assert "להציג" in settings["text"]
     settings = _press(app, settings, "כן")
     assert "דלוקות" in settings["text"]
 
@@ -683,7 +684,7 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
         assert get_person(noa["id"])["telegram_chat_id"] in (None, "")
 
     picker = _press(app, moved, "חיבור לאדם")
-    fresh = _press(app, picker, "אדם חדש")
+    fresh = _press(app, picker, "אני לא ברשימה")
     missing = _go(app, _msg("  "))
     assert "שם" in missing["text"] or "חסר" in missing["text"]
     too_long = _go(app, _msg("א" * 81))
@@ -694,9 +695,10 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
     unlinked = _press(app, created, "ניתוק רינה")
     assert "נותק" in unlinked["text"] or "רינה" in unlinked["text"]
 
-    off = _press(app, unlinked, "כיבוי משמרות") if "כיבוי משמרות" in [
-        b["text"] for b in _buttons(unlinked)
-    ] else _press(app, unlinked, "הדלקת משמרות")
+    labels = [b["text"] for b in _buttons(unlinked)]
+    off = _press(app, unlinked, "הסתרת משמרות ביומן") if "הסתרת משמרות ביומן" in labels else _press(
+        app, unlinked, "הצגת משמרות ביומן"
+    )
     # המשמרות כבויות בהתחלה, אז זה מסך ההדלקה
     assert "משמרות" in off["text"]
     _press(app, off, "לא")
@@ -726,7 +728,7 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
     assert "בית 2" in [button["text"].replace("• ", "") for button in _buttons(picked)]
     chosen = _press(app, picked, "בית 2")
     assert "בית 2" in chosen["text"]
-    ask = _press(app, chosen, "כיבוי משמרות")
+    ask = _press(app, chosen, "הסתרת משמרות ביומן")
     _press(app, ask, "כן")
     assert calls == [(2, False)]
 
@@ -738,7 +740,7 @@ def test_single_missing_household_falls_back(app):
         save_session("7", {"household_id": 99})
     reply = _go(app, _msg("/settings", chat=7))
     assert "עברנו" in reply["text"]
-    assert "הדלקת משמרות" in [button["text"] for button in _buttons(reply)]
+    assert "הצגת משמרות ביומן" in [button["text"] for button in _buttons(reply)]
 
 
 def test_other_date_hint_and_edit_field_saved(app):
@@ -1042,3 +1044,165 @@ def test_updates_poll_while_reminders_are_still_running():
     assert seen.get("long_poll") == UPDATE_LONG_POLL_SECONDS == 25
     assert seen["delay"] < 1.0, seen["delay"]
     assert elapsed < 1.0, elapsed
+
+
+def test_person_view_groups_shifts_then_events(app):
+    person = _person(app, "דני", works_shifts=1)
+    later = TODAY + timedelta(days=3)
+    _event(app, "לילה", later, shift=(1, person["id"], "לילה"))
+    meeting = _event(app, "פגישה", TODAY, time="11:00")
+    with app.app_context():
+        from app.reminders.repository import replace_event_reminders
+
+        replace_event_reminders(meeting, [{"offset_minutes": 0, "recipient_ids": [person["id"]]}])
+
+    today = _go(app, _msg("/today"))
+    assert "• <b>פגישה</b>" in today["text"]
+    assert "👷" not in today["text"]
+    assert "🔔" not in today["text"]
+    week = _go(app, _msg("/week"))
+    assert "• <b>" in week["text"]
+    assert "👷" not in week["text"]
+    assert "🔔" not in week["text"]
+
+    listed = _go(app, _cb(f"who:{person['id']}"))
+    text = listed["text"]
+    shift_at = text.index("👷 <b>לילה</b>")
+    event_at = text.index("🔔 <b>פגישה</b>")
+    assert text.index("<b>משמרות</b>") < shift_at < text.index("<b>אירועים</b>") < event_at
+    assert "•" not in text
+    labels = [button["text"] for button in _buttons(listed)]
+    assert labels.index(next(label for label in labels if "לילה" in label)) < labels.index(
+        next(label for label in labels if "פגישה" in label)
+    )
+
+    only_shifts = _press(app, listed, "משמרות")
+    assert "<b>משמרות</b>" in only_shifts["text"]
+    assert "👷 <b>לילה</b>" in only_shifts["text"]
+    assert "<b>אירועים</b>" not in only_shifts["text"]
+    assert "🔔" not in only_shifts["text"]
+    assert "•" not in only_shifts["text"]
+
+
+def test_add_event_reminder_uses_the_same_offsets(app):
+    person = _person(app, "דני", chat=42, receives_reminders=1)
+    _go(app, _msg("/add"))
+    confirm = _go(app, _msg("אירוע בדיקה"))
+    assert "בלי תזכורת" in confirm["text"]
+    timed = _press(app, _press(app, confirm, "שעה"), "12:00")
+    tomorrow = _press(app, timed, "מחר")
+    remind = _press(app, tomorrow, "תזכורת")
+    assert "מתי להזכיר" in remind["text"]
+    picked = _press(app, _press(app, remind, "15 דקות"), "יום")
+    who = _press(app, picked, "למי")
+    chosen = _press(app, who, "דני")
+    done = _press(app, chosen, "סיום")
+    assert "תזכורת: 15 דקות, יום · דני" in done["text"]
+    assert "12:00" in done["text"]
+    saved = _press(app, done, "שמירה")
+    assert "נשמר" in saved["text"]
+    with app.app_context():
+        from app.database import get_all_events
+
+        rows = get_all_events()
+    assert len(rows) == 1
+    assert rows[0]["title"] == "אירוע בדיקה"
+    assert rows[0]["time"] == "12:00"
+    assert rows[0]["gregorian_date"] == (TODAY + timedelta(days=1)).isoformat()
+    reminders = rows[0]["reminders"]
+    assert [item["offset_minutes"] for item in reminders] == [15, 1440]
+    assert reminders[0]["recipient_ids"] == [person["id"]]
+    assert reminders[1]["recipient_ids"] == [person["id"]]
+
+    skipped = _go(app, _msg("/add"))
+    plain = _go(app, _msg("בלי תזכורת עכשיו"))
+    assert "בלי תזכורת" in plain["text"]
+    _press(app, plain, "שמירה")
+    with app.app_context():
+        from app.database import get_all_events
+
+        bare = next(row for row in get_all_events() if row["title"] == "בלי תזכורת עכשיו")
+    assert bare["reminders"] == []
+
+
+def test_find_shows_description_in_italics_under_the_title(app):
+    _event(app, "פגישה", TODAY, time="18:30", description="להביא <עוגה>\nונרות")
+    _event(app, "בלי תיאור", TODAY + timedelta(days=1))
+    found = _go(app, _msg("/find עוגה"))
+    assert "• <b>פגישה</b>\n  22.10.2026 · 18:30\n  <i>להביא &lt;עוגה&gt; ונרות</i>" in found["text"]
+    labels = [button["text"] for button in _buttons(found)]
+    assert any(label.startswith("22.10 פגישה") for label in labels)
+    assert all("עוגה" not in label for label in labels)
+    today = _go(app, _msg("/today"))
+    assert "<i>" not in today["text"]
+    assert "עוגה" not in today["text"]
+    plain = _go(app, _msg("/find בלי תיאור"))
+    assert "<b>בלי תיאור</b>" in plain["text"]
+    assert "<i>" not in plain["text"]
+
+
+def test_find_clips_a_long_description(app):
+    from app.bot.ui import SEARCH_BLURB
+
+    _event(app, "ארוך", TODAY, description="א" * (SEARCH_BLURB + 20))
+    found = _go(app, _msg("/find ארוך"))
+    assert f"<i>{'א' * (SEARCH_BLURB - 1)}…</i>" in found["text"]
+    assert "א" * SEARCH_BLURB not in found["text"].split("<i>", 1)[1]
+
+
+def test_menu_commands_are_the_ones_the_bot_handles(app):
+    from app.bot.commands import BOT_COMMANDS
+
+    _person(app, "דני", chat=42)
+    names = [name for name, _description in BOT_COMMANDS]
+    assert names == ["start", "today", "week", "add", "find", "settings", "help", "menu"]
+    for name, description in BOT_COMMANDS:
+        assert description.strip()
+        assert len(description) <= 256
+        reply = _go(app, _msg(f"/{name}"))
+        assert "אין פקודה" not in reply["text"], name
+    missing = _go(app, _msg("/nope"))
+    assert "אין פקודה" in missing["text"]
+
+
+def test_publish_bot_commands_uses_set_my_commands():
+    from app.bot.commands import command_menu_payload
+    from app.reminders.telegram import TelegramError, publish_bot_commands
+
+    calls = []
+
+    def api(token, method, payload=None, timeout=30):
+        calls.append((token, method, payload, timeout))
+        return True
+
+    assert publish_bot_commands("secret-token", api=api) is True
+    token, method, payload, timeout = calls[0]
+    assert token == "secret-token"
+    assert method == "setMyCommands"
+    assert timeout == 30
+    assert payload == command_menu_payload()
+    assert "language_code" not in payload
+    assert "scope" not in payload
+
+    def boom(token, method, payload=None, timeout=30):
+        raise TelegramError("setMyCommands failed: HTTP 401")
+
+    assert publish_bot_commands("secret-token", api=boom) is False
+    assert publish_bot_commands("", api=api) is False
+    assert len(calls) == 1
+
+
+def test_worker_registers_commands_on_startup(monkeypatch):
+    import app.reminders.worker as worker
+
+    calls = []
+    monkeypatch.setattr(worker, "bot_token", lambda: "tok")
+    monkeypatch.setattr(worker, "publish_bot_commands", lambda token: calls.append(token) or True)
+    monkeypatch.setattr(worker, "run_once", lambda **kwargs: calls.append(("once", kwargs)))
+    assert worker.main(["--once"]) == 0
+    assert calls == ["tok", ("once", {"long_poll": 0})]
+
+    calls.clear()
+    monkeypatch.setattr(worker, "bot_token", lambda: "")
+    assert worker.main(["--once"]) == 0
+    assert calls == [("once", {"long_poll": 0})]

@@ -36,6 +36,21 @@ def telegram_api(token: str, method: str, payload: dict | None = None, *, timeou
     return body.get("result")
 
 
+def publish_bot_commands(token: str, api=telegram_api) -> bool:
+    """רושם את תפריט הפקודות (הכפתור ליד שורת הכתיבה). כשל לא מפיל את ה-worker."""
+    if not (token or "").strip():
+        return False
+    from app.bot.commands import command_menu_payload
+
+    try:
+        api(token, "setMyCommands", command_menu_payload())
+    except TelegramError as exc:
+        print(f"setMyCommands failed: {exc}", file=sys.stderr)
+        return False
+    print("telegram command menu updated")
+    return True
+
+
 def send_message(token: str, chat_id, text: str, *, reply_markup: dict | None = None) -> bool:
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     if reply_markup:

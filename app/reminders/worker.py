@@ -21,7 +21,7 @@ import time
 
 from app.reminders.due import telegram_due
 from app.reminders.repository import mark_reminder_sent
-from app.reminders.telegram import TelegramError, consume_updates, send_message
+from app.reminders.telegram import TelegramError, consume_updates, publish_bot_commands, send_message
 
 
 def bot_token() -> str:
@@ -170,6 +170,9 @@ def main(argv: list[str] | None = None) -> int:
     from app import app
 
     with app.app_context():
+        token = bot_token()
+        if token:
+            publish_bot_commands(token)
         if args.once:
             run_once(long_poll=0)
             return 0
