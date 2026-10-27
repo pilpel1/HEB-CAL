@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
 from datetime import MAXYEAR, MINYEAR, datetime
 from pyluach.dates import GregorianDate
+from pyluach.hebrewcal import Year
+from app.services.recurrence import hebrew_month_name
 import logging
 import calendar
 from app.services.jewish_calendar import JewishCalendarService
@@ -14,23 +16,9 @@ logger.setLevel(logging.DEBUG)
 
 api = Blueprint('api', __name__)
 
-def get_hebrew_month_name(month_num):
-    months = {
-        1: 'ניסן',
-        2: 'אייר',
-        3: 'סיון',
-        4: 'תמוז',
-        5: 'אב',
-        6: 'אלול',
-        7: 'תשרי',
-        8: 'חשון',
-        9: 'כסלו',
-        10: 'טבת',
-        11: 'שבט',
-        12: 'אדר',
-        13: 'אדר ב'
-    }
-    return months.get(month_num, '')
+def get_hebrew_month_name(month_num, leap=False):
+    """חודש 1 = ניסן. בשנה מעוברת חודש 12 הוא אדר א׳."""
+    return hebrew_month_name(month_num, leap=bool(leap))
 
 def get_hebrew_day(day):
     days = {
@@ -121,7 +109,9 @@ def get_calendar(year, month):
     for day in range(1, num_days + 1):
         hebrew_date = _hebrew_ymd(year, month, day)
         hebrew_day = hebrew_date[2]
-        hebrew_month_name = get_hebrew_month_name(hebrew_date[1])
+        hebrew_month_name = get_hebrew_month_name(
+            hebrew_date[1], leap=Year(hebrew_date[0]).leap
+        )
         hebrew_months_set.add(hebrew_month_name)
         
         is_hebrew_month_start = hebrew_day == 1
@@ -154,7 +144,8 @@ def get_calendar(year, month):
     # מיון החודשים העבריים לפי הסדר הנכון
     hebrew_months_order = {
         'ניסן': 1, 'אייר': 2, 'סיון': 3, 'תמוז': 4, 'אב': 5, 'אלול': 6,
-        'תשרי': 7, 'חשון': 8, 'כסלו': 9, 'טבת': 10, 'שבט': 11, 'אדר': 12, 'אדר ב': 13
+        'תשרי': 7, 'חשון': 8, 'כסלו': 9, 'טבת': 10, 'שבט': 11,
+        'אדר': 12, 'אדר א׳': 12, 'אדר ב': 13, 'אדר ב׳': 13,
     }
     sorted_hebrew_months = sorted(hebrew_months_set, key=lambda x: hebrew_months_order.get(x, 99))
     

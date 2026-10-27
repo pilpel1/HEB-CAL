@@ -45,6 +45,27 @@ def _week_cells(start, pairs):
     return cells
 
 
+def test_default_week_uses_jerusalem_not_the_host_clock(monkeypatch):
+    """אחרי חצות בישראל השרת ב-UTC עוד בשבת. הרשת צריכה את השבוע הבא."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    israel = ZoneInfo("Asia/Jerusalem")
+    # 1.11.2026 ראשון 00:30 (אחרי סיום שעון הקיץ, UTC+2) = 31.10 22:30 UTC, עוד שבת.
+    moment = datetime(2026, 11, 1, 0, 30, tzinfo=israel)
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return moment.replace(tzinfo=None)
+            return moment.astimezone(tz)
+
+    monkeypatch.setattr("app.services.shifts.datetime", Frozen)
+    monkeypatch.setenv("REMINDER_TIMEZONE", "Asia/Jerusalem")
+    assert default_week_start() == date(2026, 11, 8)
+
+
 def test_default_week_is_the_week_after_today():
     assert default_week_start(date(2026, 10, 18)) == date(2026, 10, 25)  # Sunday
     assert default_week_start(date(2026, 10, 21)) == date(2026, 10, 25)  # Wednesday

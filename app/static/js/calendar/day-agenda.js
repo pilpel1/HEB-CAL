@@ -26,8 +26,42 @@ function isPageZoomed() {
     return vv.scale > 1.01;
 }
 
+function pinZoomScroll(top) {
+    const stream = infiniteCalendar && infiniteCalendar.stream;
+    if (!stream || top == null || stream.scrollTop === top) {
+        return;
+    }
+    stream.scrollTop = top;
+}
+
 function syncPageZoomState() {
-    document.documentElement.classList.toggle('is-page-zoomed', isPageZoomed());
+    const zoomed = isPageZoomed();
+    const root = document.documentElement;
+    const was = root.classList.contains('is-page-zoomed');
+    const stream = infiniteCalendar && infiniteCalendar.stream;
+    if (!zoomed && stream && infiniteCalendar.zoomScrollTop == null) {
+        infiniteCalendar.restingScrollTop = stream.scrollTop;
+    }
+    if (was === zoomed) {
+        if (zoomed) {
+            pinZoomScroll(infiniteCalendar && infiniteCalendar.zoomScrollTop);
+        }
+        return;
+    }
+    // ברגע שה-scale עולה, scrollTop כבר זז (~רוחב פס הגלילה). מחזירים את הערך
+    // שנשמר לפני הפינץ', לא את הערך שכבר סטה.
+    const top = (infiniteCalendar && infiniteCalendar.restingScrollTop != null)
+        ? infiniteCalendar.restingScrollTop
+        : (stream ? stream.scrollTop : null);
+    root.classList.toggle('is-page-zoomed', zoomed);
+    if (!stream || top == null) {
+        return;
+    }
+    pinZoomScroll(top);
+    infiniteCalendar.zoomScrollTop = zoomed ? top : null;
+    if (zoomed) {
+        requestAnimationFrame(() => pinZoomScroll(infiniteCalendar.zoomScrollTop));
+    }
 }
 
 function densityDivisor() {
@@ -593,6 +627,10 @@ function syncWeekRowHeight() {
     const stream = infiniteCalendar.stream;
     // הצפיפות חלה גם בדסקטופ (CSS). גובה השורה הקבוע נשאר רק בטלפון.
     root.dataset.calDensity = densityDivisor() === 9 ? 'compact' : 'comfortable';
+    // בזום לא מחשבים מחדש גובה שורה: זה מזיז את scrollTop באמצע פאן.
+    if (isPageZoomed()) {
+        return;
+    }
     if (!isCompactCalendar() || !stream) {
         if (root.style.getPropertyValue('--week-row-height')) {
             root.style.removeProperty('--week-row-height');

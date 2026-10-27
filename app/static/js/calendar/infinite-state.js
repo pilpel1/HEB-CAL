@@ -45,6 +45,8 @@ const infiniteCalendar = {
     firstWeek: null, // YYYY-MM-DD של יום ראשון בשורה הראשונה ב-DOM
     lastWeek: null,
     anchor: null, // { row, offset, scrollTop } — שורה גלויה ומרחקה מראש אזור התוכן
+    zoomScrollTop: null, // scrollTop שננעל בזמן פינץ', כדי שהחודש לא יזוז ~13px
+    restingScrollTop: null, // הערך האחרון לפני הפינץ'
     initialized: false,
     ready: false,
     isScrolling: false,

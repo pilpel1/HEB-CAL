@@ -195,6 +195,9 @@ function scheduleMaintain() {
 
 function onStreamScroll() {
     const cal = infiniteCalendar;
+    if (cal.zoomScrollTop == null && cal.stream) {
+        cal.restingScrollTop = cal.stream.scrollTop;
+    }
     cal.isScrolling = true;
     clearTimeout(cal.idleTimer);
     // גיבוי לדפדפנים בלי scrollend (Safari)
@@ -213,6 +216,13 @@ function onStreamScrollEnd() {
 
 /** גובה שורה השתנה בלי שאנחנו ביקשנו (פונט, רוחב חלון) — מחזירים את העוגן לפני paint */
 function onCalendarResize() {
+    if (infiniteCalendar.zoomScrollTop != null) {
+        const pinned = infiniteCalendar.zoomScrollTop;
+        if (infiniteCalendar.stream && infiniteCalendar.stream.scrollTop !== pinned) {
+            infiniteCalendar.stream.scrollTop = pinned;
+        }
+        return;
+    }
     if (typeof syncCalendarFrame === 'function') {
         syncCalendarFrame();
     }
@@ -461,6 +471,7 @@ async function initInfiniteCalendar() {
     if (centered !== null) {
         cal.stream.scrollTop = Math.max(0, centered);
     }
+    cal.restingScrollTop = cal.stream.scrollTop;
     cal.anchor = captureAnchor();
 
     root?.classList.remove('is-booting');

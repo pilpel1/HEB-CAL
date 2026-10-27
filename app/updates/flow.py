@@ -16,13 +16,19 @@ class Plan:
     version: str
 
 
-def outcome_text(done: set[str], rollback_ok: bool) -> str:
+def outcome_text(done: set[str], rollback_ok: bool | str) -> str:
     code = bool(done & _CODE_STEPS)
     database = bool(done & _DB_STEPS)
     restarted = "restart" in done
     if not (code or database or restarted):
         return "לא שינינו את הקוד."
-    if not rollback_ok:
+    if rollback_ok == "partial-both":
+        return "הקוד ומסד הנתונים חזרו לגיבוי, אבל ההפעלה מחדש נכשלה."
+    if rollback_ok == "partial-code":
+        return "הקוד חזר לגרסה הקודמת, אבל ההפעלה מחדש נכשלה."
+    if rollback_ok == "partial-db":
+        return "מסד הנתונים שוחזר מהגיבוי, אבל ההפעלה מחדש נכשלה."
+    if rollback_ok in {False, "failed"}:
         return "החזרה לאחור לא הושלמה. הגיבוי נשמר בתיקיית backups."
     if code and database:
         return "חזרנו לגרסה הקודמת ולגיבוי של מסד הנתונים."
@@ -33,18 +39,21 @@ def outcome_text(done: set[str], rollback_ok: bool) -> str:
     return "חזרנו למצב הקודם."
 
 
-def failure_message(cause: str, done: set[str], rollback_ok: bool) -> str:
+def failure_message(cause: str, done: set[str], rollback_ok: bool | str) -> str:
     detail = cause if safe_detail(cause) else "העדכון נכשל."
     return f"{detail} {outcome_text(done, rollback_ok)}"
 
 
-def _rollback(ops, done: set[str], backup, sha: str | None) -> bool:
+def _rollback(ops, done: set[str], backup, sha: str | None) -> bool | str:
+    restored_code = False
+    restored_db = False
     try:
         if done & _CODE_STEPS:
             if not sha:
                 raise UpdateError("אין נקודת חזרה לקוד.", step="rollback")
             ops.checkout_sha(sha)
             ops.pip_install()
+            restored_code = True
         if done & _DB_STEPS:
             if backup is None:
                 raise UpdateError("אין גיבוי לשחזור.", step="rollback")
@@ -54,12 +63,19 @@ def _rollback(ops, done: set[str], backup, sha: str | None) -> bool:
                 # גם אם העצירה נכשלה מנסים לשחזר, ואז להפעיל מחדש.
                 pass
             ops.restore_database(backup)
-        if "restart" in done or done & _CODE_STEPS or done & _DB_STEPS:
+            restored_db = True
+        if "restart" in done or restored_code or restored_db:
             if ops.restart_configured():
                 ops.restart()
         return True
     except Exception as exc:
         redact(str(exc))
+        if restored_code and restored_db:
+            return "partial-both"
+        if restored_code:
+            return "partial-code"
+        if restored_db:
+            return "partial-db"
         return False
 
 

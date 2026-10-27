@@ -99,12 +99,14 @@ def _evaluated(now: datetime | None = None):
         chat_ids = _chat_ids(reminder["recipient_ids"], people)
         recurring = is_recurring(event)
         for occ in _occurrences_for_reminder(event, current, row["offset_minutes"]):
+            # מפתח קיים עם None הוא «כל היום» / תיאור שנמחק במופע.
+            # נפילה לערך הסדרה הייתה מדליקה תזכורת בשעת הסדרה.
             display = {
                 "title": occ.get("title") or event.get("title"),
                 "gregorian_date": occ.get("gregorian_date"),
                 "hebrew_date": occ.get("hebrew_date") or event.get("hebrew_date"),
-                "time": occ.get("time") if occ.get("time") is not None else event.get("time"),
-                "description": occ.get("description") if occ.get("description") is not None else event.get("description"),
+                "time": occ["time"] if "time" in occ else event.get("time"),
+                "description": occ["description"] if "description" in occ else event.get("description"),
                 "end_date": occ.get("end_date"),
             }
             try:
