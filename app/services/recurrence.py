@@ -64,8 +64,21 @@ HEBREW_MONTHS = {
     10: "טבת",
     11: "שבט",
     12: "אדר",
-    13: "אדר ב",
+    13: "אדר ב׳",
 }
+
+
+def hebrew_month_name(month: int, *, leap: bool = False) -> str:
+    """שם חודש לתצוגה. בחודש 12 של שנה מעוברת זה אדר א׳, לא «אדר»."""
+    try:
+        month = int(month)
+    except (TypeError, ValueError):
+        return ""
+    if leap and month == 12:
+        return "אדר א׳"
+    if month == 13:
+        return "אדר ב׳"
+    return HEBREW_MONTHS.get(month, "")
 
 HEBREW_DAYS = {
     1: "א", 2: "ב", 3: "ג", 4: "ד", 5: "ה", 6: "ו", 7: "ז", 8: "ח", 9: "ט", 10: "י",
@@ -163,7 +176,7 @@ def hebrew_display(day: date) -> str:
     heb = GregorianDate(day.year, day.month, day.day).to_heb()
     return format_hebrew_date(
         HEBREW_DAYS.get(heb.day, str(heb.day)),
-        HEBREW_MONTHS.get(heb.month, ""),
+        hebrew_month_name(heb.month, leap=Year(heb.year).leap),
         heb.year,
     )
 

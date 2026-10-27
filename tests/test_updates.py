@@ -57,7 +57,7 @@ def _update_env(monkeypatch, tmp_path):
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert parse_version(version) == (1, 0, 5)
+    assert parse_version(version) == (1, 0, 6)
     assert f"## {version}" in changelog
     assert "## 1.0.3" in changelog
     assert "## 1.0.2" in changelog
@@ -244,12 +244,17 @@ def test_outcome_messages():
     assert outcome_text(set(), True) == "לא שינינו את הקוד."
     assert "חזרנו לגרסה הקודמת ולגיבוי" in outcome_text({"checkout", "migrate"}, True)
     assert "לא הושלמה" in outcome_text({"migrate"}, False)
+    both = outcome_text({"checkout", "migrate", "restart"}, "partial-both")
+    assert "הפעלה מחדש נכשלה" in both
+    assert "לא הושלמה" not in both
+    assert "מסד הנתונים" in both and "הקוד" in both
 
 
 class FakeOps:
-    def __init__(self, fail_at=None, restart_on=True):
+    def __init__(self, fail_at=None, restart_on=True, restart_fails=0):
         self.fail_at = fail_at
         self.restart_on = restart_on
+        self.restart_fails = restart_fails
         self.calls = []
         self.payload = {}
 
@@ -302,6 +307,10 @@ class FakeOps:
         self._fail("run_hook", "סקריפט העדכון נכשל.", "hook")
 
     def restart(self):
+        if self.restart_fails:
+            self.calls.append(("restart",))
+            self.restart_fails -= 1
+            raise UpdateError("ההפעלה מחדש נכשלה.", step="restart")
         self._fail("restart", "ההפעלה מחדש נכשלה.", "restart")
 
     def stop_app(self):
@@ -355,6 +364,15 @@ def test_flow_success_and_rollback_paths():
     assert "מסד הנתונים שוחזר" in hook.payload["message"]
     assert "checkout_sha" not in _names(hook)
 
+    # ההפעלה נכשלת גם אחרי שהקוד והמסד כבר חזרו — לא לכתוב «לא הושלמה».
+    stuck = FakeOps(restart_fails=2)
+    execute_update(stuck, Plan("git", "v1.2.0", "1.2.0"))
+    assert stuck.payload["state"] == "failed"
+    assert "הפעלה מחדש נכשלה" in stuck.payload["message"]
+    assert "לא הושלמה" not in stuck.payload["message"]
+    assert "restore_database" in _names(stuck)
+    assert "checkout_sha" in _names(stuck)
+
 
 def _csrf(client) -> str:
     return client.get("/api/updates").get_json()["csrf_token"]
@@ -377,7 +395,7 @@ def test_settings_and_gear_markup(client):
     assert "עדכן עכשיו" in settings
     assert "סיסמת מנהל" not in settings
     assert "updateLoginForm" not in settings
-    assert ">1.0.5<" in settings
+    assert ">1.0.6<" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
     assert 'href="/settings#settingsUpdate"' in page
@@ -386,15 +404,18 @@ def test_settings_and_gear_markup(client):
     assert "innerHTML" not in script
     assert "ADMIN_PASSWORD" not in script
     assert "/api/updates/login" not in script
+    failed_branch = script.split("state === 'failed'", 1)[1][:700]
+    assert "disabled = false" in failed_branch
+    assert "updateOffer" in failed_branch
 
 
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
-    assert health.get_json()["version"] == "1.0.5"
+    assert health.get_json()["version"] == "1.0.6"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
-    assert body["current"] == "1.0.5"
+    assert body["current"] == "1.0.6"
     assert "admin" not in body
     assert "admin_configured" not in body
     assert "csrf_token" in body

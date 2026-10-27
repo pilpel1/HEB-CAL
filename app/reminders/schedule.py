@@ -281,11 +281,12 @@ def occurrence_start(
     *,
     tz: ZoneInfo | None = None,
     default_time: str | None = None,
-) -> datetime:
+) -> datetime | None:
     """המופע שעליו חלה התזכורת.
 
     בלי חזרה — תאריך האירוע, בלי קשר ל-``now``.
     עם חזרה — המופע הבא שתחילתו >= ``now`` (ברירת מחדל: עכשיו).
+    ``None`` אם הסדרה נגמרה ואין מופע כזה.
     ההשוואה ב-UTC: בשעה כפולה ``==`` של אותו ZoneInfo מתעלם מ-``fold``.
     """
     tz = tz or reminder_timezone()
@@ -308,7 +309,7 @@ def occurrence_start(
         )
         if _to_utc(start, tz) >= _to_utc(current, tz):
             return start
-    return anchor
+    return None
 
 
 def fire_at(
@@ -318,8 +319,10 @@ def fire_at(
     now: datetime | None = None,
     tz: ZoneInfo | None = None,
     default_time: str | None = None,
-) -> datetime:
+) -> datetime | None:
     start = occurrence_start(event, now, tz=tz, default_time=default_time)
+    if start is None:
+        return None
     return apply_offset(start, offset_minutes)
 
 

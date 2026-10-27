@@ -17,7 +17,7 @@ from pyluach.dates import GregorianDate, HebrewDate
 from pyluach.hebrewcal import Month, Year
 
 from app.services.hebrew_format import format_hebrew_date, format_hebrew_year
-from app.services.recurrence import HEBREW_DAYS, HEBREW_MONTHS
+from app.services.recurrence import HEBREW_DAYS, hebrew_month_name
 
 MAX_YEAR_SPAN = 500
 
@@ -27,11 +27,7 @@ class HebrewDateError(ValueError):
 
 
 def _picker_month_name(leap: bool, month: int) -> str:
-    if leap and month == 12:
-        return "אדר א׳"
-    if leap and month == 13:
-        return "אדר ב׳"
-    return HEBREW_MONTHS.get(month, "")
+    return hebrew_month_name(month, leap=leap)
 
 
 def _months(year: int, leap: bool) -> list[dict]:

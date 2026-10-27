@@ -113,6 +113,13 @@
         fillList('updateProgressLines', (status && status.lines) || []);
         if (state === 'failed') {
             setError((status && (status.error || status.message)) || 'העדכון נכשל.');
+            var applyFailed = byId('updateApplyBtn');
+            if (applyFailed) {
+                applyFailed.disabled = false;
+            }
+            if (latest) {
+                show(byId('updateOffer'), true);
+            }
         }
         if (state === 'running') {
             sawRunning = true;

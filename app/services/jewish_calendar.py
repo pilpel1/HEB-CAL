@@ -135,7 +135,9 @@ class JewishCalendarService:
             day_label = JewishCalendarService.get_hebrew_day_letter(heb_date.day)
             result = format_hebrew_date(
                 day_label,
-                JewishCalendarService.get_hebrew_month_name(heb_date.month),
+                JewishCalendarService.get_hebrew_month_name(
+                    heb_date.month, leap=hebrewcal.Year(heb_date.year).leap
+                ),
                 heb_date.year,
             )
             logger.debug(f"Hebrew date: {result}")
@@ -154,21 +156,12 @@ class JewishCalendarService:
         return days.get(day, str(day))
     
     @staticmethod
-    def get_hebrew_month_name(month):
-        hebrew_months = {
-            1: 'תשרי',
-            2: 'חשון',
-            3: 'כסלו',
-            4: 'טבת',
-            5: 'שבט',
-            6: 'אדר',
-            7: 'ניסן',
-            8: 'אייר',
-            9: 'סיון',
-            10: 'תמוז',
-            11: 'אב',
-            12: 'אלול',
-            13: 'אדר א׳',
-            14: 'אדר ב׳'
-        }
-        return hebrew_months.get(month, '')
+    def get_hebrew_month_name(month, leap=False):
+        """חודש pyluach: 1 = ניסן, 12 = אדר או אדר א׳, 13 = אדר ב׳.
+
+        המפה הישנה מנתה מתשרי (1 = תשרי) וסימנה את אדר א׳ כ-13.
+        ``heb_date.month`` מ-pyluach לא מתאים לה, וניסן יצא «תשרי».
+        """
+        from app.services.recurrence import hebrew_month_name
+
+        return hebrew_month_name(month, leap=bool(leap))

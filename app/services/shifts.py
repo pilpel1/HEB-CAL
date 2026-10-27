@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from app.services.recurrence import hebrew_display
 
@@ -132,12 +132,13 @@ def hebrew_day_parts(day: date) -> tuple[str, str]:
     """יום וחודש עבריים, בלי שנה. 27 בתשרי → (כ״ז, תשרי)."""
     from hebrew_numbers import int_to_gematria
     from pyluach.dates import GregorianDate
+    from pyluach.hebrewcal import Year
 
-    from app.services.recurrence import HEBREW_MONTHS
+    from app.services.recurrence import hebrew_month_name
 
     heb = GregorianDate(day.year, day.month, day.day).to_heb()
     day_label = int_to_gematria(int(heb.day), gershayim=True)
-    month = HEBREW_MONTHS.get(heb.month, "")
+    month = hebrew_month_name(heb.month, leap=Year(heb.year).leap)
     return day_label, month
 
 
@@ -269,8 +270,15 @@ def parse_week_start(value) -> date:
 
 
 def default_week_start(today: date | None = None) -> date:
-    """השבוע שאחרי השבוע הנוכחי. ראשון עד שבת."""
-    today = today or date.today()
+    """השבוע שאחרי השבוע הנוכחי. ראשון עד שבת, לפי שעון ישראל.
+
+    ``date.today()`` על שרת UTC (Docker) ביום ראשון אחרי חצות בישראל
+    עדיין שבת, והרשת נפתחת על השבוע שכבר התחיל במקום על הבא.
+    """
+    if today is None:
+        from app.reminders.schedule import reminder_timezone
+
+        today = datetime.now(reminder_timezone()).date()
     sunday = today - timedelta(days=weekday_index(today))
     return sunday + timedelta(days=7)
 

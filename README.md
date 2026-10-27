@@ -68,7 +68,7 @@ docker compose pull && docker compose up -d
 
 חבילה חדשה ב-GHCR נוצרת פרטית. פעם אחת: GitHub → הפרופיל → Packages → `heb-cal` → Package settings → Change visibility → Public. בלי זה `docker pull` מהבית נכשל.
 
-אחרי מיזוג של `1.0.5` צריך גם תג `v1.0.5` (Release ב-GitHub) כדי שמסך «עדכון גרסה» יראה אותה. ה-workflow לא יוצר את ה-Release בעצמו.
+אחרי מיזוג של `1.0.6` צריך גם תג `v1.0.6` (Release ב-GitHub) כדי שמסך «עדכון גרסה» יראה אותה. ה-workflow לא יוצר את ה-Release בעצמו.
 
 ## דרישות
 
