@@ -1,0 +1,18 @@
+# תבנית. install.sh מחליף @INSTALL_DIR@ ו-@DOCKER_BIN@
+# וכותב את התוצאה ל-/etc/systemd/system/heb-cal.service.
+# לא להעתיק את הקובץ כמו שהוא: השמות עם @ לא נתיב אמיתי.
+[Unit]
+Description=HEB-CAL household calendar
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory="@INSTALL_DIR@"
+ExecStart="@DOCKER_BIN@" compose up -d --no-build --wait
+ExecStop="@DOCKER_BIN@" compose stop
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

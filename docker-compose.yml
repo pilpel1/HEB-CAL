@@ -16,6 +16,8 @@ x-app: &app
     - ./data:/app/data
     - ./logs:/app/logs
     - ./backups:/app/backups
+  # unless-stopped: אחרי אתחול Docker מחזיר קונטיינר שלא עצרו ידנית.
+  # compose stop נשאר כבוי עד heb-cal.service (Linux) או המשימה HEB-CAL (Windows).
   restart: unless-stopped
   init: true
 
