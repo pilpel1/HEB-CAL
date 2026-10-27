@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -38,6 +39,7 @@ def test_compose_starts_web_and_reminder_and_documents_gcal():
     assert "./logs:/app/logs" in text
     assert "./backups:/app/backups" in text
     assert "HEB_CAL_UPDATE_MODE: docker" in text
+    assert "restart: unless-stopped" in text
     assert "HEB_CAL_DOCKER:" in text
     assert 'command: ["python", "scripts/reminder_worker.py"]' in text
     assert 'command: ["python", "scripts/gcal_sync_worker.py"]' in text
@@ -83,7 +85,7 @@ def test_readme_update_command_matches_docker_mode():
     assert "gcal_sync_worker.py" in readme
     changelog = _text("CHANGELOG.md")
     version = _text("VERSION").strip()
-    assert version == "1.0.4"
+    assert version == "1.0.5"
     assert f"## {version}" in changelog
     assert "Docker" in changelog
 
@@ -131,3 +133,40 @@ def test_compose_config_when_docker_is_installed():
     )
     assert default.returncode == 0, default.stderr
     assert set(default.stdout.split()) == {"web", "reminder"}
+
+
+def test_household_install_scripts_and_ghcr_workflow():
+    sh = _text("install.sh")
+    ps1 = _text("install.ps1")
+    bat = _text("Install.bat")
+    boot = _text("scripts/docker-boot.ps1")
+    unit = _text("docker/heb-cal.service")
+    wf = _text(".github/workflows/docker.yml")
+    readme = _text("README.md")
+    for text in (sh, ps1, readme, wf):
+        assert "ghcr.io/pilpel1/heb-cal" in text
+        assert "ghp_" not in text
+    assert "docker compose pull" in sh
+    assert "docker compose pull" in ps1
+    assert "unless-stopped" in sh
+    assert "heb-cal.service" in sh
+    assert "Register-ScheduledTask" in ps1
+    assert 'TaskName "HEB-CAL"' in ps1
+    assert "install.ps1" in bat
+    assert "powershell" in bat.lower()
+    assert "docker compose up -d" in boot
+    assert "@INSTALL_DIR@" in unit
+    assert "@DOCKER_BIN@" in unit
+    assert "compose up -d" in unit
+    assert "packages: write" in wf
+    assert "secrets.GITHUB_TOKEN" in wf
+    assert "provenance: false" in wf
+    assert "release:" in wf
+    assert "branches: [main]" in wf
+    assert 'tags: ["v*.*.*"]' in wf
+    secrets = set(re.findall(r"secrets\.([A-Z0-9_]+)", wf))
+    assert secrets == {"GITHUB_TOKEN"}
+    assert "install.sh" in readme
+    assert "install.ps1" in readme
+    assert "Install.bat" in readme
+    assert "התקנה לבית עם Docker" in readme

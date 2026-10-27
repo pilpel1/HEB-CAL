@@ -2,6 +2,74 @@
 
 אפליקציית Flask ללוח שנה עברי עם CRUD לאירועים אישיים.
 
+## התקנה לבית עם Docker
+
+בלי Python על המחשב. מתאים ללינוקס ול-Windows. התמונה יורדת מוכנה מ-`ghcr.io/pilpel1/heb-cal` — לא בונים אותה אצלכם. צריך Docker שכבר מותקן ורץ: בלינוקס Docker Engine עם Compose (`docker compose version` עובד), וב-Windows [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/).
+
+התמונה שנבנית ב-GitHub היא `linux/amd64` (מחשב רגיל, ו-Windows על מעבד כזה). Raspberry Pi ומחשב ARM לא נכללים בגרסה הזו.
+
+היומן נפתח על המחשב הזה: `http://127.0.0.1:5000`. אין סיסמה חדשה. Tailscale, אם משתמשים בו, נשאר על המחשב — לא בתוך Docker.
+
+הסקריפט בודק ש-Docker רץ, יוצר `.env` עם `SECRET_KEY` אקראי אם אין קובץ (המפתח לא מודפס), מושך את התמונה, ומעלה את האפליקציה ואת התזכורות. אם יש בוט, אחרי זה עורכים `TELEGRAM_BOT_TOKEN` ב-`.env` ומריצים `docker compose up -d`.
+
+### Linux
+
+```bash
+git clone https://github.com/pilpel1/HEB-CAL.git
+cd HEB-CAL
+chmod +x install.sh
+./install.sh
+```
+
+אחרי אתחול המחשב:
+
+- אם יש `sudo` ויש `docker.service`, נוצרת יחידת systemd בשם `heb-cal.service`. היא עולה אחרי Docker ומריצה `docker compose up -d`. גם קונטיינר שנעצר ביד חוזר בהפעלה הבאה.
+- בלי `sudo`, או ב-Docker rootless / בלי systemd, נשארת המדיניות `restart: unless-stopped` מ-`docker-compose.yml`. Docker מחזיר קונטיינר שלא נעצר ביד, בתנאי ש-Docker עצמו עולה עם המחשב.
+
+### Windows
+
+בלי Git: ב-GitHub לחצו Code → Download ZIP, חלצו, ולחצו פעמיים על `Install.bat`.
+
+עם Git:
+
+```powershell
+git clone https://github.com/pilpel1/HEB-CAL.git
+cd HEB-CAL
+.\Install.bat
+```
+
+אפשר גם, מתוך התיקייה:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+אחרי כניסה למשתמש (לא לפני שמישהו מתחבר ל-Windows):
+
+- משימה ב-Task Scheduler בשם `HEB-CAL` מפעילה את Docker Desktop אם הוא כבוי, מחכה לו, ומריצה `docker compose up -d`.
+- אם אין כבר הפעלה אוטומטית, הסקריפט מוסיף את Docker Desktop לכניסה למשתמש.
+- קונטיינר שרץ ולא נעצר ביד חוזר גם דרך `restart: unless-stopped`, ברגע שהמנוע של Docker עלה.
+
+לוג קצר של העלייה אחרי אתחול: `logs\boot.log`.
+
+### עדכון
+
+בתיקייה של `docker-compose.yml`:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+זו אותה פקודה שהמסך «עדכון גרסה» מראה בהתקנת Docker.
+
+### התמונה ב-GitHub (פעם אחת, לבעל המאגר)
+
+`.github/workflows/docker.yml` בונה ודוחף ל-`ghcr.io/pilpel1/heb-cal` בעלייה ל-`main`, בתג `v*.*.*`, ובפרסום Release. ההתחברות היא `GITHUB_TOKEN` עם הרשאת `packages: write`. אין סוד נוסף להגדיר ב-Actions.
+
+חבילה חדשה ב-GHCR נוצרת פרטית. פעם אחת: GitHub → הפרופיל → Packages → `heb-cal` → Package settings → Change visibility → Public. בלי זה `docker pull` מהבית נכשל.
+
+אחרי מיזוג של `1.0.5` צריך גם תג `v1.0.5` (Release ב-GitHub) כדי שמסך «עדכון גרסה» יראה אותה. ה-workflow לא יוצר את ה-Release בעצמו.
+
 ## דרישות
 
 - Python 3.12+
@@ -198,6 +266,8 @@ HEB_CAL_UPDATE_HOOK=/home/you/HEB-CAL/scripts/update-hook.sh
 `HEB_CAL_UPDATE_MODE=off` משאיר את מספר הגרסה ומכבה את העדכון.
 
 ## הרצה ב-Docker
+
+התקנה מוכנה לבית (מושכת תמונה, בלי לבנות מהקוד): «התקנה לבית עם Docker» למעלה. הפקודות כאן הן להרצה ידנית מתוך העותק.
 
 אותה תמונה רצה על שרת בית, על Windows (Docker Desktop), או על ענן קטן. צריך Docker עם Compose. אין צורך ב-Python על המארח, ואין צורך בפורט פתוח לאינטרנט.
 

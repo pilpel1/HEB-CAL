@@ -49,6 +49,11 @@ RUN chmod 755 /entrypoint.sh \
     && mkdir -p /app/data /app/logs /app/backups \
     && chown hebcal:hebcal /app/data /app/logs /app/backups
 
+LABEL org.opencontainers.image.source="https://github.com/pilpel1/HEB-CAL" \
+      org.opencontainers.image.url="https://github.com/pilpel1/HEB-CAL" \
+      org.opencontainers.image.title="heb-cal" \
+      org.opencontainers.image.description="Hebrew-Gregorian household calendar"
+
 EXPOSE 5000
 
 ENTRYPOINT ["/entrypoint.sh"]
