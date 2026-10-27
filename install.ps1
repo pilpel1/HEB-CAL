@@ -28,7 +28,8 @@ function Replace-ExactLine([string]$Path, [string]$OldLine, [string]$NewLine) {
   $utf8 = New-Object System.Text.UTF8Encoding $false
   $text = [System.IO.File]::ReadAllText($Path, $utf8)
   $text = $text -replace "`r`n", "`n" -replace "`r", "`n"
-  $parts = $text -split "`n", -1
+  # בלי ", -1". ב-PowerShell זה אומר לפצל מהסוף ולכל היותר חלק אחד, והשורה לא מוחלפת.
+  $parts = $text.Split([string[]]@("`n"), [System.StringSplitOptions]::None)
   $hit = $false
   for ($i = 0; $i -lt $parts.Length; $i++) {
     if ($parts[$i] -eq $OldLine) {
