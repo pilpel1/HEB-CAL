@@ -252,6 +252,9 @@ class Bot:
             self._clear_flow()
             note = "הטיוטה בוטלה." if had else ""
             return self.settings(note=note)
+        if name == "digest":
+            self._clear_flow()
+            return self._toggle_digest_command()
         self._clear_flow()
         return self.go_home(note="אין פקודה כזאת.")
 
@@ -1049,6 +1052,9 @@ class Bot:
         worker = _prefix_int(data, "set:ws:")
         if worker is not None:
             return self._flip_worker(worker)
+        digest_id = _prefix_int(data, "set:dg:")
+        if digest_id is not None:
+            return self._flip_digest(digest_id)
         self.toast = "הכפתור לא מוכר"
         return self.settings()
 
@@ -1135,6 +1141,36 @@ class Bot:
         else:
             self.toast = "עודכן"
         return self.out(*ui.workers_screen(self.people, self.session.get("workers_page") or 0))
+
+    def _linked_person(self, person_id: int) -> dict | None:
+        return next((person for person in self.linked if person["id"] == person_id), None)
+
+    def _flip_digest(self, person_id: int) -> dict:
+        person = self._linked_person(person_id)
+        if person is None:
+            self.toast = "האדם לא מחובר לצ'אט"
+            return self.settings()
+        updated = directory.set_daily_digest(
+            person_id, not person.get("daily_digest_enabled")
+        )
+        self.reload_people()
+        if updated is None:
+            self.toast = "האדם לא נמצא"
+            return self.settings()
+        self.toast = "עודכן"
+        state = "דלוק" if updated.get("daily_digest_enabled") else "כבוי"
+        return self.settings(note=f"סיכום בוקר {state}.")
+
+    def _toggle_digest_command(self) -> dict:
+        if not self.linked:
+            return self.settings(note="קודם מחברים את הצ'אט לאדם ביומן.")
+        enable = not all(person.get("daily_digest_enabled") for person in self.linked)
+        for person in self.linked:
+            directory.set_daily_digest(person["id"], enable)
+        self.reload_people()
+        self.toast = "עודכן"
+        state = "דלוק" if enable else "כבוי"
+        return self.settings(note=f"סיכום בוקר {state}.")
 
     def _on_shift(self, data: str) -> dict:
         if data == "sh:new":

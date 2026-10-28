@@ -19,9 +19,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # גרסה 3: reminder_sends לפי צ'אט (כדי שלא יישלח שוב אחרי כשל חלקי).
 # גרסה 4: דגלי receives_reminders / works_shifts על reminder_people, עם backfill.
 # גרסה 5: מקורות iCal של יומן גוגל, ומזהה מקור+UID על events. בלי מחיקת שורות.
+# גרסה 6: סיכום בוקר בטלגרם — daily_digest_enabled / daily_digest_last_sent על reminder_people.
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000

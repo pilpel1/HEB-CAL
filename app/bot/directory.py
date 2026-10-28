@@ -60,5 +60,17 @@ def set_works_shifts(person_id: int, enabled: bool) -> dict | None:
     )
 
 
+def set_daily_digest(person_id: int, enabled: bool) -> dict | None:
+    person = get_person(person_id)
+    if person is None:
+        return None
+    return update_person(
+        person_id,
+        person["name"],
+        person.get("telegram_chat_id"),
+        daily_digest_enabled=bool(enabled),
+    )
+
+
 def add_linked_person(name: str, chat_id) -> dict:
     return create_person(name, str(chat_id))

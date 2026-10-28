@@ -1340,7 +1340,17 @@ def test_menu_commands_are_the_ones_the_bot_handles(app):
 
     _person(app, "דני", chat=42)
     names = [name for name, _description in BOT_COMMANDS]
-    assert names == ["start", "today", "week", "add", "find", "settings", "help", "menu"]
+    assert names == [
+        "start",
+        "today",
+        "week",
+        "add",
+        "find",
+        "settings",
+        "digest",
+        "help",
+        "menu",
+    ]
     for name, description in BOT_COMMANDS:
         assert description.strip()
         assert len(description) <= 256
@@ -1391,3 +1401,31 @@ def test_worker_registers_commands_on_startup(monkeypatch):
     monkeypatch.setattr(worker, "bot_token", lambda: "")
     assert worker.main(["--once"]) == 0
     assert calls == [("once", {"long_poll": 0})]
+
+
+def test_digest_toggle_in_settings_and_slash_command(app):
+    person = _person(app, "דני", chat=42)
+    settings = _go(app, _msg("/settings"))
+    assert "06:00" in settings["text"]
+    assert "א׳–ו׳" in settings["text"]
+    assert "שישי כולל שבת" in settings["text"]
+    labels = [button["text"] for button in _buttons(settings)]
+    assert "סיכום בוקר יומי: כבוי" in labels
+    on = _press(app, settings, "סיכום בוקר יומי: כבוי")
+    assert "סיכום בוקר דלוק" in on["text"]
+    assert "סיכום בוקר יומי: דלוק" in [button["text"] for button in _buttons(on)]
+    with app.app_context():
+        from app.reminders.repository import get_person
+
+        assert get_person(person["id"])["daily_digest_enabled"] is True
+    off = _press(app, on, "סיכום בוקר יומי: דלוק")
+    assert "סיכום בוקר כבוי" in off["text"]
+    again = _go(app, _msg("/digest"))
+    assert "סיכום בוקר דלוק" in again["text"]
+    with app.app_context():
+        from app.reminders.repository import get_person
+
+        assert get_person(person["id"])["daily_digest_enabled"] is True
+    unlinked = _go(app, _msg("/digest", chat=99))
+    assert "קודם מחברים" in unlinked["text"]
+    assert "סיכום בוקר יומי" not in [button["text"] for button in _buttons(unlinked)]

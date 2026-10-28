@@ -986,6 +986,11 @@ def settings_screen(
     else:
         names = ", ".join(esc(person["name"]) for person in linked)
         lines.append(f"הצ'אט הזה מחובר ביומן בתור {names}.")
+        hour, minute = _digest_clock()
+        lines.append(
+            f"סיכום בוקר: כל יום א׳–ו׳ ב-{hour:02d}:{minute:02d} "
+            "(שישי כולל שבת). כבוי עד שמפעילים."
+        )
     if household is None:
         lines.append("בחרו בית. משמרות נדלקות או נכבות רק בו.")
         lines.append("האירועים עצמם משותפים.")
@@ -1013,6 +1018,8 @@ def settings_screen(
     rows.append([("חיבור לאדם", "set:link")])
     for person in linked:
         rows.append([(f"ניתוק {person['name']} מהצ'אט", f"set:ul:{person['id']}")])
+    for person in linked:
+        rows.append([(_digest_toggle_label(person, many=len(linked) > 1), f"set:dg:{person['id']}")])
     if household is not None:
         if household.get("shifts_enabled"):
             rows.append([("הסתרת משמרות ביומן", "set:sh:0")])
@@ -1021,6 +1028,20 @@ def settings_screen(
             rows.append([("הצגת משמרות ביומן", "set:sh:1")])
     rows.append([(BTN_MENU, "home")])
     return "\n".join(lines), kb(rows)
+
+
+def _digest_clock() -> tuple[int, int]:
+    from app.reminders.digest import digest_clock
+
+    return digest_clock()
+
+
+def _digest_toggle_label(person: dict, *, many: bool) -> str:
+    on = bool(person.get("daily_digest_enabled"))
+    state = "דלוק" if on else "כבוי"
+    if many:
+        return f"סיכום בוקר ל{person.get('name') or 'האדם'}: {state}"
+    return f"סיכום בוקר יומי: {state}"
 
 
 def shift_toggle_screen(enabled: bool, household_name: str) -> tuple[str, dict]:

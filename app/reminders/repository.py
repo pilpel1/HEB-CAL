@@ -22,6 +22,8 @@ _PEOPLE_COLUMNS = (
     ("telegram_chat_id", "TEXT"),
     ("receives_reminders", "INTEGER NOT NULL DEFAULT 0"),
     ("works_shifts", "INTEGER NOT NULL DEFAULT 0"),
+    ("daily_digest_enabled", "INTEGER NOT NULL DEFAULT 0"),
+    ("daily_digest_last_sent", "TEXT"),
 )
 
 
@@ -116,6 +118,7 @@ def person_to_dict(row) -> dict:
         "shift_allowed": parse_shift_allowed(raw_allowed),
         "receives_reminders": _row_flag(row, "receives_reminders"),
         "works_shifts": _row_flag(row, "works_shifts"),
+        "daily_digest_enabled": _row_flag(row, "daily_digest_enabled"),
     }
 
 
@@ -284,6 +287,7 @@ def create_person(
     shift_allowed=_MISSING,
     receives_reminders=_MISSING,
     works_shifts=_MISSING,
+    daily_digest_enabled=_MISSING,
 ) -> dict:
     db = get_db()
     clean_name = _clean_name(name)
@@ -292,27 +296,41 @@ def create_person(
     receives, works = _default_role_flags(
         color, shift_allowed, receives_reminders, works_shifts
     )
+    digest = (
+        0
+        if daily_digest_enabled is _MISSING
+        else _clean_flag(daily_digest_enabled)
+    )
     if person_id is None:
         cursor = db.execute(
             """
             INSERT INTO reminder_people (
                 name, telegram_chat_id, color, shift_allowed,
-                receives_reminders, works_shifts
+                receives_reminders, works_shifts, daily_digest_enabled
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (clean_name, chat_id, color_value, rules_value, receives, works),
+            (clean_name, chat_id, color_value, rules_value, receives, works, digest),
         )
     else:
         cursor = db.execute(
             """
             INSERT INTO reminder_people (
                 id, name, telegram_chat_id, color, shift_allowed,
-                receives_reminders, works_shifts
+                receives_reminders, works_shifts, daily_digest_enabled
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (int(person_id), clean_name, chat_id, color_value, rules_value, receives, works),
+            (
+                int(person_id),
+                clean_name,
+                chat_id,
+                color_value,
+                rules_value,
+                receives,
+                works,
+                digest,
+            ),
         )
     db.commit()
     return get_person(cursor.lastrowid)
@@ -327,6 +345,7 @@ def update_person(
     shift_allowed=_MISSING,
     receives_reminders=_MISSING,
     works_shifts=_MISSING,
+    daily_digest_enabled=_MISSING,
 ) -> dict | None:
     if get_person(person_id) is None:
         return None
@@ -347,6 +366,9 @@ def update_person(
     if works_shifts is not _MISSING:
         assignments.append("works_shifts = ?")
         params.append(_clean_flag(works_shifts))
+    if daily_digest_enabled is not _MISSING:
+        assignments.append("daily_digest_enabled = ?")
+        params.append(_clean_flag(daily_digest_enabled))
     params.append(person_id)
     db.execute(
         f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
@@ -652,6 +674,9 @@ def _apply_imported_person_extras(db, person_id: int, person: dict) -> None:
         params.append(1)
         assignments.append("works_shifts = ?")
         params.append(works)
+    if "daily_digest_enabled" in person:
+        assignments.append("daily_digest_enabled = ?")
+        params.append(_clean_flag(person.get("daily_digest_enabled")))
     if not assignments:
         return
     params.append(person_id)
