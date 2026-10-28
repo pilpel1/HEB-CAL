@@ -1,0 +1,278 @@
+{
+  "days": [
+    {
+      "gregorian_date": "2026-10-28",
+      "hebrew_date": "יז חשון תשפ״ז",
+      "source_label": "יז 28",
+      "events": [
+        {
+          "title": "בוקר (עד 12) 8:30 פילאטיס מכשירים ערב",
+          "gregorian_date": "2026-10-28",
+          "hebrew_date": "יז חשון תשפ״ז",
+          "time": "08:30",
+          "description": "",
+          "end_date": null,
+          "color": null,
+          "is_shift": 0,
+          "shift_person_id": null,
+          "shift_person_name": null,
+          "shift_label": null,
+          "shift_hints": [
+            "בוקר",
+            "ערב"
+          ]
+        }
+      ],
+      "shift_candidates": []
+    },
+    {
+      "gregorian_date": "2026-10-29",
+      "hebrew_date": "יח חשון תשפ״ז",
+      "source_label": "יח 29",
+      "events": [
+        {
+          "title": "ערב להכין שבת 15:30 תור טלפוני לאופר",
+          "gregorian_date": "2026-10-29",
+          "hebrew_date": "יח חשון תשפ״ז",
+          "time": "15:30",
+          "description": "",
+          "end_date": null,
+          "color": null,
+          "is_shift": 0,
+          "shift_person_id": null,
+          "shift_person_name": null,
+          "shift_label": null,
+          "shift_hints": [
+            "ערב"
+          ]
+        }
+      ],
+      "shift_candidates": []
+    },
+    {
+      "gregorian_date": "2026-10-30",
+      "hebrew_date": "יט חשון תשפ״ז",
+      "source_label": "יט 30",
+      "events": [],
+      "shift_candidates": [
+        {
+          "title": "בוקר",
+          "gregorian_date": "2026-10-30",
+          "hebrew_date": "יט חשון תשפ״ז",
+          "time": null,
+          "description": "",
+          "end_date": null,
+          "color": null,
+          "is_shift": 1,
+          "shift_person_id": null,
+          "shift_person_name": null,
+          "shift_label": "בוקר"
+        }
+      ]
+    },
+    {
+      "gregorian_date": "2026-10-31",
+      "hebrew_date": "כ חשון תשפ״ז",
+      "source_label": "כ 31",
+      "events": [
+        {
+          "title": "וירא בבית",
+          "gregorian_date": "2026-10-31",
+          "hebrew_date": "כ חשון תשפ״ז",
+          "time": null,
+          "description": "",
+          "end_date": null,
+          "color": null,
+          "is_shift": 0,
+          "shift_person_id": null,
+          "shift_person_name": null,
+          "shift_label": null
+        }
+      ],
+      "shift_candidates": []
+    },
+    {
+      "gregorian_date": "2026-11-01",
+      "hebrew_date": "כא חשון תשפ״ז",
+      "source_label": "כא 1.11",
+      "events": [
+        {
+          "title": "בוקר 21 משפחות חדשות",
+          "gregorian_date": "2026-11-01",
+          "hebrew_date": "כא חשון תשפ״ז",
+          "time": null,
+          "description": "",
+          "end_date": null,
+          "color": null,
+          "is_shift": 0,
+          "shift_person_id": null,
+          "shift_person_name": null,
+          "shift_label": null,
+          "shift_hints": [
+            "בוקר"
+          ]
+        }
+      ],
+      "shift_candidates": []
+    },
+    {
+      "gregorian_date": "2026-11-02",
+      "hebrew_date": "כב חשון תשפ״ז",
+      "source_label": "כב 2",
+      "events": [
+        {
+          "title": "בוקר לילה 9 לאופר לתיפי",
+          "gregorian_date": "2026-11-02",
+          "hebrew_date": "כב חשון תשפ״ז",
+          "time": null,
+          "description": "",
+          "end_date": null,
+          "color": null,
+          "is_shift": 0,
+          "shift_person_id": null,
+          "shift_person_name": null,
+          "shift_label": null,
+          "shift_hints": [
+            "בוקר",
+            "לילה"
+          ]
+        }
+      ],
+      "shift_candidates": []
+    },
+    {
+      "gregorian_date": "2026-11-03",
+      "hebrew_date": "כג חשון תשפ״ז",
+      "source_label": "כג 3",
+      "events": [],
+      "shift_candidates": [
+        {
+          "title": "ערב",
+          "gregorian_date": "2026-11-03",
+          "hebrew_date": "כג חשון תשפ״ז",
+          "time": null,
+          "description": "",
+          "end_date": null,
+          "color": null,
+          "is_shift": 1,
+          "shift_person_id": null,
+          "shift_person_name": null,
+          "shift_label": "ערב"
+        }
+      ]
+    }
+  ],
+  "records": [
+    {
+      "title": "בוקר (עד 12) 8:30 פילאטיס מכשירים ערב",
+      "gregorian_date": "2026-10-28",
+      "hebrew_date": "יז חשון תשפ״ז",
+      "time": "08:30",
+      "description": "",
+      "end_date": null,
+      "color": null,
+      "is_shift": 0,
+      "shift_person_id": null,
+      "shift_person_name": null,
+      "shift_label": null,
+      "shift_hints": [
+        "בוקר",
+        "ערב"
+      ]
+    },
+    {
+      "title": "ערב להכין שבת 15:30 תור טלפוני לאופר",
+      "gregorian_date": "2026-10-29",
+      "hebrew_date": "יח חשון תשפ״ז",
+      "time": "15:30",
+      "description": "",
+      "end_date": null,
+      "color": null,
+      "is_shift": 0,
+      "shift_person_id": null,
+      "shift_person_name": null,
+      "shift_label": null,
+      "shift_hints": [
+        "ערב"
+      ]
+    },
+    {
+      "title": "בוקר",
+      "gregorian_date": "2026-10-30",
+      "hebrew_date": "יט חשון תשפ״ז",
+      "time": null,
+      "description": "",
+      "end_date": null,
+      "color": null,
+      "is_shift": 1,
+      "shift_person_id": null,
+      "shift_person_name": null,
+      "shift_label": "בוקר"
+    },
+    {
+      "title": "וירא בבית",
+      "gregorian_date": "2026-10-31",
+      "hebrew_date": "כ חשון תשפ״ז",
+      "time": null,
+      "description": "",
+      "end_date": null,
+      "color": null,
+      "is_shift": 0,
+      "shift_person_id": null,
+      "shift_person_name": null,
+      "shift_label": null
+    },
+    {
+      "title": "בוקר 21 משפחות חדשות",
+      "gregorian_date": "2026-11-01",
+      "hebrew_date": "כא חשון תשפ״ז",
+      "time": null,
+      "description": "",
+      "end_date": null,
+      "color": null,
+      "is_shift": 0,
+      "shift_person_id": null,
+      "shift_person_name": null,
+      "shift_label": null,
+      "shift_hints": [
+        "בוקר"
+      ]
+    },
+    {
+      "title": "בוקר לילה 9 לאופר לתיפי",
+      "gregorian_date": "2026-11-02",
+      "hebrew_date": "כב חשון תשפ״ז",
+      "time": null,
+      "description": "",
+      "end_date": null,
+      "color": null,
+      "is_shift": 0,
+      "shift_person_id": null,
+      "shift_person_name": null,
+      "shift_label": null,
+      "shift_hints": [
+        "בוקר",
+        "לילה"
+      ]
+    },
+    {
+      "title": "ערב",
+      "gregorian_date": "2026-11-03",
+      "hebrew_date": "כג חשון תשפ״ז",
+      "time": null,
+      "description": "",
+      "end_date": null,
+      "color": null,
+      "is_shift": 1,
+      "shift_person_id": null,
+      "shift_person_name": null,
+      "shift_label": "ערב"
+    }
+  ],
+  "stats": {
+    "days": 7,
+    "events": 5,
+    "shift_candidates": 2,
+    "unassigned_shift_candidates": 2
+  }
+}
