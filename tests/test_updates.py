@@ -57,7 +57,7 @@ def _update_env(monkeypatch, tmp_path):
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert parse_version(version) == (1, 0, 10)
+    assert parse_version(version) == (1, 0, 11)
     assert f"## {version}" in changelog
     assert "## 1.0.8" in changelog
     assert "## 1.0.3" in changelog
@@ -396,7 +396,7 @@ def test_settings_and_gear_markup(client):
     assert "עדכן עכשיו" in settings
     assert "סיסמת מנהל" not in settings
     assert "updateLoginForm" not in settings
-    assert ">1.0.10<" in settings
+    assert ">1.0.11<" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
     assert 'href="/settings#settingsUpdate"' in page
@@ -413,10 +413,10 @@ def test_settings_and_gear_markup(client):
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
-    assert health.get_json()["version"] == "1.0.10"
+    assert health.get_json()["version"] == "1.0.11"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
-    assert body["current"] == "1.0.10"
+    assert body["current"] == "1.0.11"
     assert "admin" not in body
     assert "admin_configured" not in body
     assert "csrf_token" in body
