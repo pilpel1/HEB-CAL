@@ -38,8 +38,8 @@ def test_manifest_has_installable_fields(client):
     ctype = response.headers["Content-Type"]
     assert "manifest+json" in ctype or "json" in ctype
     manifest = json.loads(response.get_data(as_text=True))
-    assert manifest["name"]
-    assert manifest["short_name"]
+    assert manifest["name"] == "לוח שנה"
+    assert manifest["short_name"] == "לוח שנה"
     assert manifest["start_url"] == "/"
     assert manifest["display"] == "standalone"
     assert manifest["theme_color"] == "#2563eb"

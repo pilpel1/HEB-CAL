@@ -396,7 +396,7 @@ def test_settings_and_gear_markup(client):
     assert "עדכן עכשיו" in settings
     assert "סיסמת מנהל" not in settings
     assert "updateLoginForm" not in settings
-    assert ">1.0.10<" in settings
+    assert ">1.0.11<" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
     assert 'href="/settings#settingsUpdate"' in page
@@ -413,10 +413,10 @@ def test_settings_and_gear_markup(client):
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
-    assert health.get_json()["version"] == "1.0.10"
+    assert health.get_json()["version"] == "1.0.11"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
-    assert body["current"] == "1.0.10"
+    assert body["current"] == "1.0.11"
     assert "admin" not in body
     assert "admin_configured" not in body
     assert "csrf_token" in body
