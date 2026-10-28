@@ -116,6 +116,12 @@ def test_desktop_agenda_collapse_is_stored_and_stays_collapsed_on_select(client)
     assert "width: 18px" in side
     assert "top: 50%" in side
     assert "translateY(-50%)" in side
+    assert "scrollbar-width: none" in side
+    assert "-ms-overflow-style: none" in side
+    assert "#calendar-stream::-webkit-scrollbar" in side
+    assert ".day-agenda-list::-webkit-scrollbar" not in side
+    stream = css.split("\n.calendar-stream {", 1)[1].split("}", 1)[0]
+    assert "overflow-y: auto" in stream
     assert ".day-agenda-toggle:hover" in css
     assert ".day-agenda-toggle:hover" in dark
     assert "day-agenda-heb" in side
@@ -125,6 +131,7 @@ def test_desktop_agenda_collapse_is_stored_and_stays_collapsed_on_select(client)
     phone = css.split("@media (max-width: 480px)", 1)[1].split("@media", 1)[0]
     assert "day-agenda-toggle" not in phone
     assert "is-agenda-collapsed" not in phone
+    assert "scrollbar-width" not in phone
 
     assert 'id="day-agenda-toggle"' in html
     assert 'aria-controls="day-agenda"' in html

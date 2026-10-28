@@ -127,6 +127,30 @@ def test_desktop_side_agenda_selects_day_and_edits(live_server, client):
             assert box["swatch"] is True
             assert box["handleDisplay"] == "none"
 
+            bar = page.evaluate("""() => {
+                const stream = document.getElementById('calendar-stream');
+                const toggle = document.getElementById('day-agenda-toggle');
+                const cs = getComputedStyle(stream);
+                const before = stream.scrollTop;
+                stream.scrollTop = before + 80;
+                const after = stream.scrollTop;
+                stream.scrollTop = before;
+                const tr = toggle.getBoundingClientRect();
+                const sr = stream.getBoundingClientRect();
+                return {
+                    overflowY: cs.overflowY,
+                    scrollbarWidth: cs.scrollbarWidth,
+                    gutter: stream.offsetWidth - stream.clientWidth,
+                    scrolled: after !== before,
+                    toggleOverlapsStreamLeft: tr.right > sr.left && tr.left < sr.left + 16,
+                };
+            }""")
+            assert bar["overflowY"] == "auto"
+            assert bar["scrollbarWidth"] == "none"
+            assert bar["gutter"] <= 1
+            assert bar["scrolled"] is True
+            assert bar["toggleOverlapsStreamLeft"] is True
+
             page.click(f'td[data-date="{tomorrow}"] .gregorian-date')
             page.wait_for_function(
                 """(day) => {
