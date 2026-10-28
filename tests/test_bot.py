@@ -921,14 +921,14 @@ def test_shifts_board_is_one_week_and_start_stays_the_menu(app):
     for letter in ("ג׳", "ד׳", "ה׳", "ו׳", "ש׳"):
         assert letter not in nxt["text"]
     assert [[button["text"] for button in row] for row in nxt["markup"]["inline_keyboard"]] == [
-        ["אביחי בוקר", "שירה ערב"],
-        ["אביחי בוקר מוקדם", "שירה בוקר", "26.10 שירה ערב"],
-        ["שירה לילה"],
+        ["א׳ אביחי בוקר", "א׳ שירה ערב"],
+        ["ב׳ אביחי בוקר מוקדם", "ב׳ שירה בוקר", "ב׳ שירה ערב"],
+        ["ב׳ שירה לילה"],
         ["שבוע הבא ←", "השבוע", "→ שבוע קודם"],
         ["➕ משמרת חדשה", "🏠 תפריט ראשי"],
     ]
 
-    card = _press(app, nxt, "אביחי בוקר")
+    card = _press(app, nxt, "א׳ אביחי בוקר")
     assert "<b>בוקר</b>" in card["text"]
     assert "אביחי" in card["text"]
 
@@ -956,6 +956,79 @@ def test_shifts_board_is_one_week_and_start_stays_the_menu(app):
     assert home["text"] == "📅 לוח השנה המשותף — מה להציג?"
     assert "פרשת" not in home["text"]
     assert "👷 משמרות" in [button["text"] for button in _buttons(home)]
+
+
+def _shift_event_buttons(markup):
+    return [
+        button
+        for row in markup["inline_keyboard"]
+        for button in row
+        if button["callback_data"].startswith("ev:")
+    ]
+
+
+def test_shifts_board_buttons_start_with_weekday_letter_and_duplicates_stay_unique():
+    from app.bot.ui import DAY_LETTERS, shifts_board
+
+    people = {
+        1: {"id": 1, "name": "אביחי"},
+        2: {"id": 2, "name": "שירה"},
+    }
+    sunday = date(2026, 10, 25)
+    monday = date(2026, 10, 26)
+    tuesday = date(2026, 10, 27)
+    wednesday = date(2026, 10, 28)
+
+    def shift(eid, person, day, label, title=None):
+        return {
+            "id": eid,
+            "gregorian_date": day.isoformat(),
+            "is_shift": 1,
+            "shift_person_id": person,
+            "shift_label": label,
+            "title": title or label,
+        }
+
+    rows = [
+        shift(10, 1, sunday, "בוקר"),
+        shift(11, 1, monday, "ערב"),
+        shift(12, 2, monday, "לילה"),
+        shift(13, 1, tuesday, "ערב"),
+        shift(14, 1, wednesday, "בוקר"),
+        shift(15, 2, wednesday, "ערב"),
+        shift(16, 1, sunday, "בוקר"),
+    ]
+    _text, markup = shifts_board(rows, people, date(2026, 10, 22), sunday)
+    buttons = _shift_event_buttons(markup)
+    labels = [button["text"] for button in buttons]
+    assert labels
+    assert all(
+        any(label.startswith(f"{letter} ") for letter in DAY_LETTERS) for label in labels
+    )
+    assert len(labels) == len(set(labels))
+    assert labels == [
+        "א׳ אביחי בוקר",
+        "א׳ אביחי בוקר #16",
+        "ב׳ אביחי ערב",
+        "ב׳ שירה לילה",
+        "ג׳ אביחי ערב",
+        "ד׳ אביחי בוקר",
+        "ד׳ שירה ערב",
+    ]
+    assert not any(
+        any(part in label for part in ("25.10", "26.10", "27.10", "28.10"))
+        for label in labels
+    )
+    callbacks = [button["callback_data"] for button in buttons]
+    assert callbacks == [
+        "ev:10:20261025",
+        "ev:16:20261025",
+        "ev:11:20261026",
+        "ev:12:20261026",
+        "ev:13:20261027",
+        "ev:14:20261028",
+        "ev:15:20261028",
+    ]
 
 
 def test_callback_ack_is_before_the_screen_and_under_a_second(app, monkeypatch):
