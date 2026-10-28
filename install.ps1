@@ -1,6 +1,7 @@
 ﻿# התקנת HEB-CAL לבית על Windows: בודק Docker, מושך ghcr.io/pilpel1/heb-cal, מעלה compose.
 # אחרי כניסה למשתמש: משימה HEB-CAL ב-Task Scheduler (scripts\docker-boot.ps1).
 # restart: unless-stopped מחזיר קונטיינר שלא נעצר ביד ברגע שהמנוע עלה.
+# Tailscale Serve אופציונלי על המארח. אם 443 / תפוס — HTTPS 8443, בלי reset.
 $ErrorActionPreference = "Stop"
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
@@ -41,6 +42,234 @@ function Replace-ExactLine([string]$Path, [string]$OldLine, [string]$NewLine) {
   $updated = [string]::Join("`n", $parts)
   [System.IO.File]::WriteAllText($Path, $updated, $utf8)
   return $true
+}
+
+function Get-TailscaleBlobLc([string]$Text) {
+  if (-not $Text) { return "" }
+  return $Text.ToLowerInvariant()
+}
+
+function Test-TailscalePermissionError([string]$Text) {
+  $s = Get-TailscaleBlobLc $Text
+  return ($s -match "permission" -or $s -match "access denied" -or $s -match "operator" -or $s -match "must be root" -or $s -match "operation not permitted" -or $s -match "access is denied")
+}
+
+function Test-TailscaleOfflineError([string]$Text) {
+  $s = Get-TailscaleBlobLc $Text
+  return ($s -match "logged out" -or $s -match "not logged" -or $s -match "needs login" -or $s -match "failed to connect" -or $s -match "tailscaled" -or $s -match "is stopped" -or $s -match "tailscale up")
+}
+
+function Test-TailscaleStatusEmpty([string]$Text) {
+  if (-not $Text) { return $true }
+  $trim = $Text.Trim()
+  if (-not $trim -or $trim -eq "{}") { return $true }
+  $s = Get-TailscaleBlobLc $trim
+  return ($s -match "no serve config" -or $s -match "no https" -or $s -match "nothing serving")
+}
+
+function Test-TailscalePointsAtPort([string]$Blob, [string]$Port) {
+  if (-not $Blob) { return $false }
+  return ($Blob.Contains("127.0.0.1:$Port") -or $Blob.Contains("localhost:$Port") -or $Blob.Contains("[::1]:$Port"))
+}
+
+function Test-TailscaleHttpsInUse([string]$Blob, [string]$Https) {
+  if (-not $Blob) { return $false }
+  if ($Https -eq "443") {
+    if ($Blob.Contains(':443"') -or $Blob.Contains('"443":')) { return $true }
+    return [regex]::IsMatch($Blob, 'https://[A-Za-z0-9._-]+(/|\s|$)')
+  }
+  return ($Blob.Contains(":${Https}`"") -or $Blob.Contains("`"$Https`":") -or $Blob.Contains(":${Https} ") -or $Blob.Contains(":${Https}`n") -or $Blob.Contains(":${Https}`r"))
+}
+
+function Write-TailscaleServeCommands([string]$Port) {
+  Write-Host "פקודות ידניות. לא מריצים tailscale serve reset — זה מוחק גם שירותים אחרים על המחשב:"
+  Write-Host "  # 443 תפוס (למשל רמקול על /): היומן על 8443"
+  Write-Host "  tailscale serve --bg --https=8443 http://127.0.0.1:$Port"
+  Write-Host "  # 443 פנוי והיומן לבד:"
+  Write-Host "  tailscale serve --bg --https=443 http://127.0.0.1:$Port"
+  Write-Host "בלי הרשאה ב-Windows: PowerShell כמנהל, או פעם אחת:"
+  Write-Host "  tailscale set --operator=$env:USERNAME"
+  Write-Host "ואז חוזרים על פקודת serve."
+}
+
+function Invoke-Tailscale {
+  param([string[]]$TsArgs)
+  $out = ""
+  $err = ""
+  $code = 0
+  try {
+    $errFile = [System.IO.Path]::GetTempFileName()
+    try {
+      $out = & tailscale @TsArgs 2>$errFile
+      $code = $LASTEXITCODE
+      if (Test-Path -LiteralPath $errFile) {
+        $err = [System.IO.File]::ReadAllText($errFile)
+      }
+    } finally {
+      Remove-Item -LiteralPath $errFile -ErrorAction SilentlyContinue
+    }
+  } catch {
+    $code = 1
+    $err = $_.Exception.Message
+  }
+  if ($null -eq $out) { $out = "" }
+  if ($out -is [array]) { $out = [string]::Join("`n", $out) }
+  if ($null -eq $err) { $err = "" }
+  if ($null -eq $code) { $code = 0 }
+  return @{ Code = [int]$code; Out = [string]$out; Err = [string]$err; Blob = "$( [string]$out )`n$( [string]$err )" }
+}
+
+function Test-WantTailscaleServe([string]$Prompt) {
+  $flag = $env:HEB_CAL_TAILSCALE_SERVE
+  if ($flag) {
+    switch ($flag.ToLowerInvariant()) {
+      { $_ -in @("0", "n", "no", "false", "off") } { return $false }
+      { $_ -in @("1", "y", "yes", "true", "on") } { return $true }
+    }
+  }
+  $interactive = $false
+  try {
+    $interactive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
+  } catch {
+    $interactive = $false
+  }
+  if (-not $interactive) { return $false }
+  Write-Host ""
+  Write-Host $Prompt
+  try {
+    $ans = Read-Host " [כ/ל] "
+  } catch {
+    return $false
+  }
+  if (-not $ans) { return $false }
+  switch ($ans.Trim()) {
+    { $_ -in @("כ", "כן", "k", "K", "y", "Y", "yes", "Yes") } { return $true }
+    default { return $false }
+  }
+}
+
+function Invoke-TailscaleServeBg([string]$Port, [string]$Https) {
+  $r = Invoke-Tailscale -TsArgs @("serve", "--bg", "--https=$Https", "--yes", "http://127.0.0.1:$Port")
+  $blobLc = Get-TailscaleBlobLc $r.Blob
+  if ($r.Code -ne 0 -and ($blobLc -match "unknown flag" -or $blobLc -match "flag provided but not defined" -or $blobLc -match "not defined: -yes" -or $blobLc -match "not defined: --yes")) {
+    $r = Invoke-Tailscale -TsArgs @("serve", "--bg", "--https=$Https", "http://127.0.0.1:$Port")
+  }
+  return $r
+}
+
+function Set-HebCalTailscaleServe([string]$Port) {
+  if (-not $Port) { $Port = "5000" }
+  if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
+    Write-Host "Tailscale לא מותקן — היומן רץ רק מקומית, וזה בסדר."
+    Write-Host "להתקין ולהצטרף לרשת: https://tailscale.com/download/windows"
+    Write-TailscaleServeCommands $Port
+    return
+  }
+
+  $jsonRun = Invoke-Tailscale -TsArgs @("serve", "status", "--json")
+  if ($jsonRun.Code -ne 0 -and (Test-TailscalePermissionError $jsonRun.Blob)) {
+    Write-Host "אין הרשאה להגדיר Tailscale Serve."
+    Write-Host "פתחו PowerShell כמנהל, או פעם אחת:"
+    Write-Host "  tailscale set --operator=$env:USERNAME"
+    Write-Host "ואז:"
+    Write-Host "  tailscale serve --bg --https=8443 http://127.0.0.1:$Port"
+    return
+  }
+  if ($jsonRun.Code -ne 0 -and (Test-TailscaleOfflineError $jsonRun.Blob)) {
+    Write-Host "Tailscale מותקן אבל לא מחובר. אחרי tailscale up:"
+    Write-TailscaleServeCommands $Port
+    return
+  }
+
+  $textRun = Invoke-Tailscale -TsArgs @("serve", "status")
+  $blob = "$($jsonRun.Out)`n$($textRun.Out)`n$($jsonRun.Err)`n$($textRun.Err)"
+
+  if (Test-TailscalePointsAtPort $blob $Port) {
+    Write-Host "Tailscale Serve כבר מפנה ליומן על פורט $Port."
+    if ($textRun.Out) { Write-Host $textRun.Out }
+    return
+  }
+
+  $httpsPort = $null
+  $forced = $env:HEB_CAL_TAILSCALE_HTTPS_PORT
+  if ($forced) {
+    if ($forced -notmatch '^[0-9]+$' -or [int]$forced -lt 1 -or [int]$forced -gt 65535) {
+      Write-Host "HEB_CAL_TAILSCALE_HTTPS_PORT לא תקין. מדלג על Serve."
+      Write-TailscaleServeCommands $Port
+      return
+    }
+    $httpsPort = $forced
+  } elseif (Test-TailscaleStatusEmpty $blob) {
+    $httpsPort = "443"
+  } elseif (Test-TailscaleHttpsInUse $blob "443") {
+    $httpsPort = "8443"
+  } else {
+    $httpsPort = "443"
+  }
+
+  if ($httpsPort -eq "443" -and -not (Test-TailscaleStatusEmpty $blob) -and (Test-TailscaleHttpsInUse $blob "443")) {
+    Write-Host "Tailscale Serve על 443 / כבר תפוס. לא דורסים אותו ולא מריצים reset."
+    Write-Host "אפשר לחבר את היומן בנפרד:"
+    Write-Host "  tailscale serve --bg --https=8443 http://127.0.0.1:$Port"
+    if ($forced) { return }
+    $httpsPort = "8443"
+  }
+
+  if ($httpsPort -ne "443" -and (Test-TailscaleHttpsInUse $blob $httpsPort)) {
+    Write-Host "HTTPS $httpsPort כבר בשימוש ב-Serve. לא דורסים ולא מריצים reset."
+    Write-Host "פורט אחר: HEB_CAL_TAILSCALE_HTTPS_PORT=9443"
+    Write-TailscaleServeCommands $Port
+    return
+  }
+
+  if ($httpsPort -eq "443") {
+    $prompt = "Tailscale מותקן. להגדיר Serve ליומן על HTTPS 443 (MagicDNS, נתיב /)?"
+  } else {
+    $prompt = "על HTTPS 443 כבר יש שירות — נשאר כמו שהוא. להגדיר את היומן על HTTPS ${httpsPort}?"
+  }
+
+  if (-not (Test-WantTailscaleServe $prompt)) {
+    if (-not $env:HEB_CAL_TAILSCALE_SERVE) {
+      $redirected = $false
+      try { $redirected = [Console]::IsInputRedirected } catch { $redirected = $true }
+      if ($redirected) {
+        Write-Host "דילגתי על Tailscale Serve (אין מסוף אינטראקטיבי, וההתקנה לא דורשת אותו)."
+      } else {
+        Write-Host "דילגתי על Tailscale Serve."
+      }
+    } else {
+      Write-Host "דילגתי על Tailscale Serve."
+    }
+    Write-TailscaleServeCommands $Port
+    return
+  }
+
+  $served = Invoke-TailscaleServeBg $Port $httpsPort
+  if ($served.Code -ne 0) {
+    if (Test-TailscalePermissionError $served.Blob) {
+      Write-Host "אין הרשאה להגדיר Tailscale Serve."
+      Write-Host "פתחו PowerShell כמנהל, או פעם אחת:"
+      Write-Host "  tailscale set --operator=$env:USERNAME"
+      Write-Host "ואז:"
+      Write-Host "  tailscale serve --bg --https=$httpsPort http://127.0.0.1:$Port"
+      return
+    }
+    if (Test-TailscaleOfflineError $served.Blob) {
+      Write-Host "Tailscale לא מחובר. אחרי tailscale up:"
+      Write-TailscaleServeCommands $Port
+      return
+    }
+    Write-Host "הגדרת Serve נכשלה:"
+    if ($served.Err) { Write-Host $served.Err } elseif ($served.Out) { Write-Host $served.Out }
+    Write-TailscaleServeCommands $Port
+    return
+  }
+
+  Write-Host "Tailscale Serve הוגדר ליומן: HTTPS $httpsPort → http://127.0.0.1:$Port"
+  if ($httpsPort -ne "443") {
+    Write-Host "הנתיב / על 443 לא השתנה."
+  }
+  if ($served.Out) { Write-Host $served.Out }
 }
 
 function Test-Docker {
@@ -222,4 +451,5 @@ Write-Host "תיקייה: $installDir"
 Write-Host "אחרי אתחול: $bootNote"
 Write-Host "עדכון אחר כך: docker compose pull && docker compose up -d"
 Write-Host "טלגרם: ערכו TELEGRAM_BOT_TOKEN ב-.env והריצו docker compose up -d"
+Set-HebCalTailscaleServe $port
 exit 0
