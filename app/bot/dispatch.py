@@ -445,6 +445,10 @@ class Bot:
             text, markup = ui.edit_desc_screen()
         elif flow == "edit_end":
             text, markup = ui.edit_end_screen(self.session.get("draft") or {})
+        elif flow == "edit_person":
+            return self._shift_edit_people(error)
+        elif flow == "edit_label":
+            return self._shift_edit_label(error)
         elif flow == "find":
             text, markup = ui.find_screen(error=error)
             return self.out(text, markup)
@@ -794,21 +798,41 @@ class Bot:
             return self._save_edit(force=False)
         if data == "ed:force":
             return self._save_edit(force=True)
+        draft = self.session.get("draft") or {}
+        shift = bool(draft.get("is_shift"))
+        if data in {"edf:time", "edf:end"} and shift:
+            self.toast = "למשמרת אין שעה או סיום"
+            return self._edit_menu()
         if data == "edf:title":
             self.session["flow"] = "edit_title"
             return self.out(*ui.edit_title_screen())
         if data == "edf:date":
             self.session["flow"] = "edit_date"
-            return self.out(*ui.edit_date_screen(self.session.get("draft") or {}, self.today))
+            return self.out(*ui.edit_date_screen(draft, self.today, shift=shift))
         if data == "edf:time":
             self.session["flow"] = "edit"
-            return self.out(*ui.edit_time_screen(self.session.get("draft") or {}))
+            return self.out(*ui.edit_time_screen(draft))
         if data == "edf:desc":
             self.session["flow"] = "edit_desc"
             return self.out(*ui.edit_desc_screen())
         if data == "edf:end":
             self.session["flow"] = "edit_end"
-            return self.out(*ui.edit_end_screen(self.session.get("draft") or {}))
+            return self.out(*ui.edit_end_screen(draft))
+        if data == "edf:person":
+            if not shift:
+                self.toast = "זה לא משמרת"
+                return self._edit_menu()
+            return self._shift_edit_people()
+        if data == "edf:label":
+            if not shift:
+                self.toast = "זה לא משמרת"
+                return self._edit_menu()
+            return self._shift_edit_label()
+        person_id = _prefix_int(data, "ed:p:")
+        if person_id is not None:
+            return self._pick_shift_person(person_id)
+        if data in {"ed:l:m", "ed:l:e", "ed:l:n"}:
+            return self._pick_shift_label(data[-1])
         if data == "ed:d:0":
             self.session["draft"]["gregorian_date"] = self.today.isoformat()
             return self._after_edit_date()
@@ -862,11 +886,6 @@ class Bot:
             return self._open(event_id, _focus(event.get("gregorian_date")))
         self.session["draft"] = store.snapshot(event)
         self.session["open_id"] = event_id
-        if event.get("is_shift"):
-            self.session["flow"] = "edit_date"
-            return self.out(
-                *ui.edit_date_screen(self.session["draft"], self.today, shift=True)
-            )
         self.session["flow"] = "edit"
         return self._edit_menu()
 
@@ -874,20 +893,75 @@ class Bot:
         draft = self.session.get("draft") or {}
         if not draft.get("event_id"):
             return self._reopen()
-        if draft.get("is_shift"):
-            self.session["flow"] = "edit_date"
-            text, markup = ui.edit_date_screen(draft, self.today, shift=True)
-            return self.out(_with_error(text, error or saved), markup)
         self.session["flow"] = "edit"
-        return self.out(*ui.edit_menu_screen(draft, error=error, saved=saved))
+        return self.out(
+            *ui.edit_menu_screen(draft, error=error, saved=saved, people=self.by_id)
+        )
 
     def _after_edit_date(self) -> dict:
-        draft = self.session.get("draft") or {}
-        if draft.get("is_shift"):
-            self.session["flow"] = "edit_date"
-            return self.out(*ui.edit_date_screen(draft, self.today, shift=True))
         self.session["flow"] = "edit"
         return self._edit_menu(saved=ui.field_saved("date"))
+
+    def _shift_edit_people(self, error: str = "") -> dict:
+        draft = self.session.get("draft") or {}
+        if not draft.get("is_shift"):
+            return self._edit_menu(error)
+        workers = [person for person in self.people if person.get("works_shifts")]
+        self.session["flow"] = "edit_person"
+        text, markup = ui.shift_people_screen(
+            workers,
+            edit=True,
+            current_id=draft.get("shift_person_id"),
+        )
+        if error:
+            text = _with_error(text, error)
+        return self.out(text, markup)
+
+    def _shift_edit_label(self, error: str = "") -> dict:
+        draft = self.session.get("draft") or {}
+        if not draft.get("is_shift"):
+            return self._edit_menu(error)
+        person = self.by_id.get(draft.get("shift_person_id"))
+        name = person.get("name") if person else "המשמרת"
+        self.session["flow"] = "edit_label"
+        text, markup = ui.shift_label_screen(
+            name,
+            edit=True,
+            current=str(draft.get("shift_label") or ""),
+        )
+        if error:
+            text = _with_error(text, error)
+        return self.out(text, markup)
+
+    def _pick_shift_person(self, person_id: int) -> dict:
+        draft = self.session.get("draft") or {}
+        if not draft.get("is_shift"):
+            return self._edit_menu()
+        person = self.by_id.get(person_id)
+        if person is None or not person.get("works_shifts"):
+            self.toast = "האדם לא נמצא"
+            return self._shift_edit_people()
+        draft["shift_person_id"] = person_id
+        self.session["flow"] = "edit"
+        return self._edit_menu(saved=ui.field_saved("person"))
+
+    def _pick_shift_label(self, key: str) -> dict:
+        draft = self.session.get("draft") or {}
+        if not draft.get("is_shift"):
+            return self._edit_menu()
+        label = ui.SHIFT_LABELS.get(key)
+        if not label:
+            self.toast = "הכפתור לא מוכר"
+            return self._shift_edit_label()
+        # כותרת שעוד זהה לסוג הישן זזה איתו, כדי שהאתר לא יישאר על «בוקר»
+        # אחרי שהסוג הפך ל«ערב». כותרת שהמשתמש שינה נשארת.
+        old = str(draft.get("shift_label") or "").strip()
+        title = str(draft.get("title") or "").strip()
+        if not title or title == old:
+            draft["title"] = label
+        draft["shift_label"] = label
+        self.session["flow"] = "edit"
+        return self._edit_menu(saved=ui.field_saved("label"))
 
     def _save_edit(self, *, force: bool) -> dict:
         draft = self.session.get("draft") or {}

@@ -12,15 +12,17 @@ from app.bot.parse import InputError
 
 def fingerprint(event: dict) -> str:
     end = event.get("end_date") or ""
-    return "\n".join(
-        [
-            event.get("title") or "",
-            (event.get("gregorian_date") or "")[:10],
-            event.get("time") or "",
-            event.get("description") or "",
-            end[:10] if end else "",
-        ]
-    )
+    parts = [
+        event.get("title") or "",
+        (event.get("gregorian_date") or "")[:10],
+        event.get("time") or "",
+        event.get("description") or "",
+        end[:10] if end else "",
+    ]
+    if event.get("is_shift"):
+        parts.append(str(event.get("shift_person_id") or ""))
+        parts.append(event.get("shift_label") or "")
+    return "\n".join(parts)
 
 
 def snapshot(event: dict) -> dict:
@@ -33,6 +35,7 @@ def snapshot(event: dict) -> dict:
         "description": event.get("description") or "",
         "end_date": end[:10] if end else None,
         "is_shift": 1 if event.get("is_shift") else 0,
+        "shift_person_id": event.get("shift_person_id"),
         "shift_label": event.get("shift_label") or "",
         "recurring": is_recurring(event),
         "base": fingerprint(event),
@@ -135,6 +138,38 @@ def create_shift(person_id: int, label: str, gregorian_date: str) -> dict:
     )
 
 
+def _same_id(left, right) -> bool:
+    try:
+        return int(left) == int(right)
+    except (TypeError, ValueError):
+        return False
+
+
+def _shift_write(draft: dict, current: dict, color):
+    """עמודות משמרת לשמירה. בלי שינוי אדם/סוג לא בודקים מחדש את הרשימה."""
+    person_id = draft.get("shift_person_id")
+    if person_id in (None, ""):
+        person_id = current.get("shift_person_id")
+    label = (draft.get("shift_label") or "").strip() or (current.get("shift_label") or "")
+    if _same_id(person_id, current.get("shift_person_id")) and label == (current.get("shift_label") or ""):
+        return "keep", color
+    try:
+        resolved = resolve_manual_shift(
+            {
+                "is_shift": True,
+                "shift_person_id": person_id,
+                "shift_label": label,
+            }
+        )
+    except ShiftError as exc:
+        raise InputError(str(exc)) from exc
+    if not resolved or not resolved.get("is_shift"):
+        raise InputError("לא הצלחתי לשמור את המשמרת.")
+    if resolved.get("color"):
+        color = resolved["color"]
+    return (1, resolved["shift_person_id"], resolved["shift_label"]), color
+
+
 def update_user_event(draft: dict) -> tuple[str, dict | None]:
     """``ok`` / ``deleted`` / ``conflict`` / ``readonly`` והאירוע הרלוונטי."""
     event_id = draft.get("event_id")
@@ -146,11 +181,17 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
     if not draft.get("force") and fingerprint(current) != draft.get("base"):
         return "conflict", current
     day = _day(draft.get("gregorian_date") or "")
+    color = current.get("color")
+    shift_arg = "keep"
     if current.get("is_shift"):
-        title = current.get("title") or draft.get("title") or ""
+        title = (draft.get("title") or "").strip() or (current.get("title") or "")
         time_value = None
-        description = current.get("description") or ""
+        if "description" in draft:
+            description = draft.get("description") or ""
+        else:
+            description = current.get("description") or ""
         end = None
+        shift_arg, color = _shift_write(draft, current, color)
     else:
         title = draft.get("title") or ""
         time_value = draft.get("time")
@@ -164,7 +205,7 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
             "time": time_value,
             "description": description,
             "end_date": end,
-            "color": current.get("color"),
+            "color": color,
         }
     )
     update_event(
@@ -175,9 +216,9 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
         time=cleaned["time"],
         description=cleaned["description"],
         end_date=cleaned["end_date"],
-        color=current.get("color"),
+        color=color,
         recurrence="keep",
-        shift="keep",
+        shift=shift_arg,
     )
     saved = get_event(event_id)
     if saved is None:
