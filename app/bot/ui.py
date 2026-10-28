@@ -499,12 +499,12 @@ def shifts_board(rows: list[dict], people: dict, today: date, anchor: date) -> t
         )
         day_buttons: list[tuple[str, str]] = []
         for event in items:
-            # היום כבר בשורת הטקסט. תאריך רק כשיש שני כפתורים זהים.
-            label = _shift_bit(event, people)
+            # אות יום תמיד, כמו בשורת הטקסט. #id רק כשאות+אדם+סוג כבר על הכפתורים.
+            base = f"{_day_letter(day)} {_shift_bit(event, people)}"
+            label = clip(base)
             if label in used:
-                label = f"{day.day}.{day.month} {label}"
-            if label in used:
-                label = f"{label} #{event.get('id')}"
+                tag = f" #{event.get('id')}"
+                label = clip(base, max(1, 40 - len(tag))) + tag
             used.add(label)
             day_buttons.append((label, f"ev:{event.get('id')}:{ymd(day)}"))
         for index in range(0, len(day_buttons), SHIFTS_PER_ROW):
