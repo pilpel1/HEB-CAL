@@ -119,7 +119,7 @@ def test_desktop_agenda_collapse_is_stored_and_stays_collapsed_on_select(client)
     assert "scrollbar-width: none" in side
     assert "-ms-overflow-style: none" in side
     assert ".day-agenda-list::-webkit-scrollbar" in side
-    first_list = css.split(".day-agenda-list {", 1)[1].split("}", 1)[0]
+    first_list = css.split("\n.day-agenda-list {", 1)[1].split("}", 1)[0]
     assert "overflow-y: auto" in first_list
     assert ".day-agenda-toggle:hover" in css
     assert ".day-agenda-toggle:hover" in dark
