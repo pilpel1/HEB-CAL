@@ -53,7 +53,8 @@ Manual checks:
 
 | Path | Role |
 |------|------|
-| `app/__init__.py` | Flask app factory, routes for `/`, `/events_list`, API blueprint registration, `init_db()` on startup |
+| `app/__init__.py` | Flask app factory, routes for `/`, `/events_list`, `/sw.js`, API blueprint registration, `init_db()` on startup |
+| `app/static/manifest.webmanifest`, `app/static/sw.js` | Basic PWA (install + offline HTML/CSS/JS shell). Manifest and icons are static; optional `/sw.js` route so the worker scope is `/`. No Web Push. |
 | `app/database.py` | SQLite connection, schema creation/migrations inline (not Alembic) |
 | `app/api/__init__.py` | API blueprint wiring |
 | `app/api/events.py` | Event CRUD endpoints. Optional `reminders` on create/update |
@@ -92,7 +93,7 @@ Manual checks:
 | `app/templates/events_list.html` (inline `<script>`) | Events-list page: search, advanced search, import/export, pagination. Not a separate file |
 | `app/templates/` | Jinja2: `base.html`, `index.html`, `events_list.html`, `settings.html`, partials (`quick_event_modal.html`, `shift_entry_modal.html`, `theme_toggle.html`) |
 | `app/static/css/` | `style.css` imports `components/`: variables, calendar, events-table, forms, dark-theme |
-| `tests/` | Pytest (`pytest.ini` sets `testpaths = tests`). `conftest.py` points the app at a temp SQLite file, never `data/calendar.db`. Modules: `test_events_api.py` (CRUD, search, import/export), `test_calendar_month_api.py`, `test_hebrew_format.py`, `test_jewish_calendar.py`, `test_static_scripts.py` (404s and duplicate top-level `const`/`let`), `test_theme.py` |
+| `tests/` | Pytest (`pytest.ini` sets `testpaths = tests`). `conftest.py` points the app at a temp SQLite file, never `data/calendar.db`. Modules: `test_events_api.py` (CRUD, search, import/export), `test_calendar_month_api.py`, `test_hebrew_format.py`, `test_jewish_calendar.py`, `test_static_scripts.py` (404s and duplicate top-level `const`/`let`), `test_theme.py`, `test_pwa.py` (manifest, icons, `/sw.js`) |
 | `scripts/migrate_recurrence.py` | Idempotent additive migration for existing SQLite files (also applied by `init_db`) |
 | `scripts/migrate_shifts.py` | Idempotent additive migration for shift columns, people color/rules, and the household toggle (also applied by `init_db`) |
 | `scripts/migrate_gcal.py` | Idempotent additive migration for `gcal_sources` and the Google identity columns on `events` (also applied by `init_db`). Does not delete rows |

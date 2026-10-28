@@ -1,6 +1,9 @@
+import mimetypes
 import os
 
-from flask import Flask, redirect, render_template, url_for
+from flask import Flask, redirect, render_template, send_from_directory, url_for
+
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 try:
     from dotenv import load_dotenv
@@ -46,3 +49,13 @@ def settings():
     from app.updates.version import installed_version
 
     return render_template('settings.html', app_version=installed_version())
+
+
+@app.route("/sw.js")
+def service_worker():
+    # מהשורש כדי ש-scope של ה-worker יהיה `/` (לא `/static/`).
+    response = send_from_directory(app.static_folder, "sw.js")
+    response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
