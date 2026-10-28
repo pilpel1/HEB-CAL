@@ -85,7 +85,7 @@ def test_readme_update_command_matches_docker_mode():
     assert "gcal_sync_worker.py" in readme
     changelog = _text("CHANGELOG.md")
     version = _text("VERSION").strip()
-    assert version == "1.0.6"
+    assert version == "1.0.7"
     assert f"## {version}" in changelog
     assert "Docker" in changelog
 
@@ -170,3 +170,21 @@ def test_household_install_scripts_and_ghcr_workflow():
     assert "install.ps1" in readme
     assert "Install.bat" in readme
     assert "התקנה לבית עם Docker" in readme
+    assert "--https=8443" in sh
+    assert "--https=8443" in ps1
+    assert "maybe_configure_tailscale_serve" in sh
+    assert "Set-HebCalTailscaleServe" in ps1
+    assert "tailscale set --operator" in sh
+    assert "tailscale set --operator" in ps1
+    assert "HEB_CAL_TAILSCALE_SERVE" in sh
+    assert "HEB_CAL_TAILSCALE_SERVE" in ps1
+    assert "serve reset" in sh
+    assert "serve reset" in ps1
+    assert "לא מריצים" in sh
+    assert "לא מריצים" in ps1
+    assert sh.count("tailscale serve reset") == sh.count("לא מריצים tailscale serve reset")
+    assert "--set-path" not in sh
+    assert "--set-path" not in ps1
+    assert ":8443/" in readme
+    assert "vostro" in readme
+    assert "operator" in _text("AGENTS.md")

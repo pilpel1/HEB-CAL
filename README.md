@@ -10,7 +10,7 @@
 
 היומן נפתח על המחשב הזה: `http://127.0.0.1:5000`. אין סיסמה חדשה. Tailscale, אם משתמשים בו, נשאר על המחשב — לא בתוך Docker.
 
-הסקריפט בודק ש-Docker רץ, יוצר `.env` עם `SECRET_KEY` אקראי אם אין קובץ (המפתח לא מודפס), מושך את התמונה, ומעלה את האפליקציה ואת התזכורות. אם יש בוט, אחרי זה עורכים `TELEGRAM_BOT_TOKEN` ב-`.env` ומריצים `docker compose up -d`.
+הסקריפט בודק ש-Docker רץ, יוצר `.env` עם `SECRET_KEY` אקראי אם אין קובץ (המפתח לא מודפס), מושך את התמונה, ומעלה את האפליקציה ואת התזכורות. אם יש בוט, אחרי זה עורכים `TELEGRAM_BOT_TOKEN` ב-`.env` ומריצים `docker compose up -d`. אחרי עלייה מוצלחת, במסוף אינטראקטיבי, הסקריפט מציע (אופציונלי) Tailscale Serve על המארח. בלי Tailscale ההתקנה ממשיכה.
 
 ### Linux
 
@@ -52,6 +52,28 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 לוג קצר של העלייה אחרי אתחול: `logs\boot.log`.
 
+### Tailscale Serve (אופציונלי)
+
+Tailscale רץ על המחשב, לא בקונטיינר. ההתקנה לא דורשת אותו. אחרי שהיומן עלה, `install.sh` / `install.ps1` מציעים להגדיר Serve.
+
+אם HTTPS 443 (נתיב `/`) כבר משרת משהו אחר — למשל רמקול על פורט 8765 — היומן **לא** מחליף אותו ולא מריץ `tailscale serve reset`. הוא מוסיף HTTPS בפורט 8443 (אפשר להחליף עם `HEB_CAL_TAILSCALE_HTTPS_PORT`):
+
+```text
+https://vostro.<tailnet>.ts.net/        → רמקול, פורט מקומי 8765 (נשאר)
+https://vostro.<tailnet>.ts.net:8443/   → HEB-CAL, פורט מקומי 5000
+```
+
+אם 443 פנוי, אפשר Serve על `/` (443) במקום 8443. MagicDNS root נשאר לשאר האפליקציות כשהן כבר תופסות אותו.
+
+בלי הרשאה בלינוקס, פעם אחת:
+
+```bash
+sudo tailscale set --operator=$USER
+tailscale serve --bg --https=8443 http://127.0.0.1:5000
+```
+
+בלי מסוף אינטראקטיבי הסקריפט מדלג ומדפיס את הפקודות. `HEB_CAL_TAILSCALE_SERVE=1` מגדיר בלי שאלה, `=0` מדלג.
+
 ### עדכון
 
 בתיקייה של `docker-compose.yml`:
@@ -68,7 +90,7 @@ docker compose pull && docker compose up -d
 
 חבילה חדשה ב-GHCR נוצרת פרטית. פעם אחת: GitHub → הפרופיל → Packages → `heb-cal` → Package settings → Change visibility → Public. בלי זה `docker pull` מהבית נכשל.
 
-אחרי מיזוג של `1.0.6` צריך גם תג `v1.0.6` (Release ב-GitHub) כדי שמסך «עדכון גרסה» יראה אותה. ה-workflow לא יוצר את ה-Release בעצמו.
+אחרי מיזוג של `1.0.7` צריך גם תג `v1.0.7` (Release ב-GitHub) כדי שמסך «עדכון גרסה» יראה אותה. ה-workflow לא יוצר את ה-Release בעצמו.
 
 ## דרישות
 
@@ -325,7 +347,7 @@ docker compose pull && docker compose up -d
 
 ### Tailscale
 
-Tailscale מותקן על המארח (המחשב, שרת הבית, או הענן) — לא בתוך הקונטיינר, ואין sidecar בקומפוז. משאירים את `HEB_CAL_BIND_HOST=127.0.0.1` כדי לא לפרסם פורט. מחשב אחר באותו tailnet מגיע למארח; HTTPS דרך `tailscale serve` הוא צעד נפרד על המארח אחר כך, ולא חלק מההתקנה הזו.
+Tailscale מותקן על המארח (המחשב, שרת הבית, או הענן) — לא בתוך הקונטיינר, ואין sidecar בקומפוז. משאירים את `HEB_CAL_BIND_HOST=127.0.0.1` כדי לא לפרסם פורט. מחשב אחר באותו tailnet מגיע למארח. HTTPS דרך `tailscale serve` הוא צעד אופציונלי על המארח (`install.sh` / `install.ps1`): אם `/` על 443 כבר תפוס, היומן על `https://<MagicDNS>:8443/` והשורש נשאר לשאר האפליקציות.
 
 ## מצב נוכחי
 

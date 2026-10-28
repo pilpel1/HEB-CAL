@@ -4,6 +4,7 @@
 # בתוך הקונטיינר האפליקציה על 0.0.0.0:5000.
 # על המארח ברירת המחדל היא 127.0.0.1, בלי פורט פתוח לרשת.
 # Tailscale רץ על המארח. אין sidecar.
+# Serve ליומן: אם 443 / תפוס, HTTPS 8443 על המארח. לא reset.
 
 x-app: &app
   image: ${HEB_CAL_IMAGE:-ghcr.io/pilpel1/heb-cal:latest}
