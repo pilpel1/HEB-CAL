@@ -1475,6 +1475,15 @@
     .day-agenda-list {
         padding-inline-end: 0.15rem;
         padding-top: 0.28rem;
+        /* פס הגלילה ישב על ידית הקריסה; הגלילה עצמה נשארת */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .day-agenda-list::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none;
     }
 }
 
