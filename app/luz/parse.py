@@ -1,7 +1,7 @@
-"""פענוח טבלת לוז מ-Markdown (ייצוא Google Docs) לרשומות יום/אירוע/משמרת.
+"""פענוח טבלת לוז מ-Markdown (ייצוא Google Docs) לרשומות יום/אירוע.
 
-אין כאן כתיבה לבסיס. צבעי המשמרת (ציאן=אביחי, כתום=שירה) לא שורדים
-בייצוא, ולכן מועמד למשמרת נשאר בלי אדם.
+אין כאן כתיבה לבסיס. צבעי משמרת לא שורדים ב-Markdown; שורת בוקר/ערב/לילה/IT
+בלי צבע לא משויכת לאדם — הערה אחת על ייצוא HTML, לא שאלה לכל תא.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from app.services.hebrew_dates import _year_number
 from app.services.recurrence import hebrew_display
 from app.services.shifts import SHIFT_LABELS
 
+SHIFT_NOTE = "משמרות דורשות ייצוא HTML עם צבע"
 _SHIFT_MODIFIERS = frozenset({"מאוחר", "קצר", "מוקדם"})
 _BREAKS = re.compile(r"(?:\x0b|<br\s*/?>)+", re.I)
 _STRIKE = re.compile(r"~~(.*?)~~", re.S)
@@ -73,28 +74,17 @@ def parse_luz(text: str, *, default_year: int | None = None) -> dict:
 
     days = []
     for frag, gregorian in zip(frags, _resolve_dates(frags, year)):
-        events, shifts = _lines_to_records(frag["lines"], gregorian)
+        events, skipped = _lines_to_records(frag["lines"], gregorian)
         days.append(
             {
                 "gregorian_date": gregorian.isoformat(),
                 "hebrew_date": hebrew_display(gregorian),
                 "source_label": frag["source_label"],
                 "events": events,
-                "shift_candidates": shifts,
+                "skipped_shift_lines": skipped,
             }
         )
-    records = [row for day in days for row in (*day["shift_candidates"], *day["events"])]
-    unassigned = sum(1 for row in records if row.get("is_shift") and row.get("shift_person_id") is None)
-    return {
-        "days": days,
-        "records": records,
-        "stats": {
-            "days": len(days),
-            "events": sum(len(day["events"]) for day in days),
-            "shift_candidates": sum(len(day["shift_candidates"]) for day in days),
-            "unassigned_shift_candidates": unassigned,
-        },
-    }
+    return _pack(days)
 
 
 def filter_days(parsed: dict, start: date | None, end: date | None) -> dict:
@@ -107,17 +97,20 @@ def filter_days(parsed: dict, start: date | None, end: date | None) -> dict:
         if end and current > end:
             continue
         days.append(day)
-    records = [row for day in days for row in (*day["shift_candidates"], *day["events"])]
+    return _pack(days)
+
+
+def _pack(days: list[dict]) -> dict:
+    records = [event for day in days for event in day["events"]]
+    skipped = sum(day.get("skipped_shift_lines") or 0 for day in days)
     return {
         "days": days,
         "records": records,
+        "notes": [SHIFT_NOTE] if skipped else [],
         "stats": {
             "days": len(days),
-            "events": sum(len(day["events"]) for day in days),
-            "shift_candidates": sum(len(day["shift_candidates"]) for day in days),
-            "unassigned_shift_candidates": sum(
-                1 for row in records if row.get("is_shift") and row.get("shift_person_id") is None
-            ),
+            "events": len(records),
+            "skipped_shift_lines": skipped,
         },
     }
 
@@ -207,9 +200,9 @@ def _resolve_dates(frags: list[dict], default_year: int) -> list[date]:
     return out
 
 
-def _lines_to_records(lines: list[str], gregorian: date) -> tuple[list[dict], list[dict]]:
+def _lines_to_records(lines: list[str], gregorian: date) -> tuple[list[dict], int]:
     events: list[dict] = []
-    shifts: list[dict] = []
+    skipped = 0
     hebrew = hebrew_display(gregorian)
     iso = gregorian.isoformat()
     for line in lines:
@@ -218,20 +211,10 @@ def _lines_to_records(lines: list[str], gregorian: date) -> tuple[list[dict], li
             continue
         labels, leftover = _shift_tokens(text)
         if labels and not leftover:
-            for label in labels:
-                shifts.append(_record(label, iso, hebrew, is_shift=True, shift_label=label))
+            skipped += 1
             continue
-        events.append(
-            _record(
-                text,
-                iso,
-                hebrew,
-                is_shift=False,
-                time=_first_clock(text),
-                shift_hints=labels or None,
-            )
-        )
-    return events, shifts
+        events.append(_event(text, iso, hebrew))
+    return events, skipped
 
 
 def _shift_tokens(line: str) -> tuple[list[str], bool]:
@@ -271,41 +254,32 @@ def _first_clock(text: str) -> str | None:
         return None
 
 
-def _record(title, gregorian_date, hebrew_date, *, is_shift, shift_label=None, time=None, shift_hints=None):
-    row = {
+def _event(title, gregorian_date, hebrew_date):
+    return {
         "title": title,
         "gregorian_date": gregorian_date,
         "hebrew_date": hebrew_date,
-        "time": None if is_shift else time,
+        "time": _first_clock(title),
         "description": "",
         "end_date": None,
         "color": None,
-        "is_shift": 1 if is_shift else 0,
+        "is_shift": 0,
         "shift_person_id": None,
-        "shift_person_name": None,
-        "shift_label": shift_label if is_shift else None,
+        "shift_label": None,
     }
-    if not is_shift and shift_hints:
-        row["shift_hints"] = shift_hints
-    return row
 
 
 def format_text_preview(parsed: dict) -> str:
     """תקציר קריא לתיאור PR — לא JSON."""
-    lines = [
-        f"ימים: {parsed['stats']['days']} · "
-        f"אירועים: {parsed['stats']['events']} · "
-        f"מועמדי משמרת (בלי אדם): {parsed['stats']['shift_candidates']}"
-    ]
+    stats = parsed["stats"]
+    lines = [f"ימים: {stats['days']} · אירועים: {stats['events']}"]
+    for note in parsed.get("notes") or []:
+        lines.append(f"הערה: {note}")
     for day in parsed["days"]:
         lines.append(f"\n{day['gregorian_date']} · {day['hebrew_date']} · {day['source_label']}")
-        for shift in day["shift_candidates"]:
-            lines.append(f"  משמרת? {shift['shift_label']} (בלי שיוך)")
         for event in day["events"]:
             clock = f"{event['time']} " if event.get("time") else ""
-            hints = event.get("shift_hints") or []
-            hint = f"  [רמזי משמרת: {', '.join(hints)}]" if hints else ""
-            lines.append(f"  אירוע: {clock}{event['title']}{hint}")
-        if not day["shift_candidates"] and not day["events"]:
-            lines.append("  (ריק)")
+            lines.append(f"  אירוע: {clock}{event['title']}")
+        if not day["events"]:
+            lines.append("  (בלי אירועים)")
     return "\n".join(lines) + "\n"

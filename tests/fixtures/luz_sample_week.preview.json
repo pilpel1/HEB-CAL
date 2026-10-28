@@ -15,15 +15,10 @@
           "color": null,
           "is_shift": 0,
           "shift_person_id": null,
-          "shift_person_name": null,
-          "shift_label": null,
-          "shift_hints": [
-            "בוקר",
-            "ערב"
-          ]
+          "shift_label": null
         }
       ],
-      "shift_candidates": []
+      "skipped_shift_lines": 0
     },
     {
       "gregorian_date": "2026-10-29",
@@ -40,35 +35,17 @@
           "color": null,
           "is_shift": 0,
           "shift_person_id": null,
-          "shift_person_name": null,
-          "shift_label": null,
-          "shift_hints": [
-            "ערב"
-          ]
+          "shift_label": null
         }
       ],
-      "shift_candidates": []
+      "skipped_shift_lines": 0
     },
     {
       "gregorian_date": "2026-10-30",
       "hebrew_date": "יט חשון תשפ״ז",
       "source_label": "יט 30",
       "events": [],
-      "shift_candidates": [
-        {
-          "title": "בוקר",
-          "gregorian_date": "2026-10-30",
-          "hebrew_date": "יט חשון תשפ״ז",
-          "time": null,
-          "description": "",
-          "end_date": null,
-          "color": null,
-          "is_shift": 1,
-          "shift_person_id": null,
-          "shift_person_name": null,
-          "shift_label": "בוקר"
-        }
-      ]
+      "skipped_shift_lines": 1
     },
     {
       "gregorian_date": "2026-10-31",
@@ -85,11 +62,10 @@
           "color": null,
           "is_shift": 0,
           "shift_person_id": null,
-          "shift_person_name": null,
           "shift_label": null
         }
       ],
-      "shift_candidates": []
+      "skipped_shift_lines": 0
     },
     {
       "gregorian_date": "2026-11-01",
@@ -106,14 +82,10 @@
           "color": null,
           "is_shift": 0,
           "shift_person_id": null,
-          "shift_person_name": null,
-          "shift_label": null,
-          "shift_hints": [
-            "בוקר"
-          ]
+          "shift_label": null
         }
       ],
-      "shift_candidates": []
+      "skipped_shift_lines": 0
     },
     {
       "gregorian_date": "2026-11-02",
@@ -130,36 +102,17 @@
           "color": null,
           "is_shift": 0,
           "shift_person_id": null,
-          "shift_person_name": null,
-          "shift_label": null,
-          "shift_hints": [
-            "בוקר",
-            "לילה"
-          ]
+          "shift_label": null
         }
       ],
-      "shift_candidates": []
+      "skipped_shift_lines": 0
     },
     {
       "gregorian_date": "2026-11-03",
       "hebrew_date": "כג חשון תשפ״ז",
       "source_label": "כג 3",
       "events": [],
-      "shift_candidates": [
-        {
-          "title": "ערב",
-          "gregorian_date": "2026-11-03",
-          "hebrew_date": "כג חשון תשפ״ז",
-          "time": null,
-          "description": "",
-          "end_date": null,
-          "color": null,
-          "is_shift": 1,
-          "shift_person_id": null,
-          "shift_person_name": null,
-          "shift_label": "ערב"
-        }
-      ]
+      "skipped_shift_lines": 1
     }
   ],
   "records": [
@@ -173,12 +126,7 @@
       "color": null,
       "is_shift": 0,
       "shift_person_id": null,
-      "shift_person_name": null,
-      "shift_label": null,
-      "shift_hints": [
-        "בוקר",
-        "ערב"
-      ]
+      "shift_label": null
     },
     {
       "title": "ערב להכין שבת 15:30 תור טלפוני לאופר",
@@ -190,24 +138,7 @@
       "color": null,
       "is_shift": 0,
       "shift_person_id": null,
-      "shift_person_name": null,
-      "shift_label": null,
-      "shift_hints": [
-        "ערב"
-      ]
-    },
-    {
-      "title": "בוקר",
-      "gregorian_date": "2026-10-30",
-      "hebrew_date": "יט חשון תשפ״ז",
-      "time": null,
-      "description": "",
-      "end_date": null,
-      "color": null,
-      "is_shift": 1,
-      "shift_person_id": null,
-      "shift_person_name": null,
-      "shift_label": "בוקר"
+      "shift_label": null
     },
     {
       "title": "וירא בבית",
@@ -219,7 +150,6 @@
       "color": null,
       "is_shift": 0,
       "shift_person_id": null,
-      "shift_person_name": null,
       "shift_label": null
     },
     {
@@ -232,11 +162,7 @@
       "color": null,
       "is_shift": 0,
       "shift_person_id": null,
-      "shift_person_name": null,
-      "shift_label": null,
-      "shift_hints": [
-        "בוקר"
-      ]
+      "shift_label": null
     },
     {
       "title": "בוקר לילה 9 לאופר לתיפי",
@@ -248,31 +174,15 @@
       "color": null,
       "is_shift": 0,
       "shift_person_id": null,
-      "shift_person_name": null,
-      "shift_label": null,
-      "shift_hints": [
-        "בוקר",
-        "לילה"
-      ]
-    },
-    {
-      "title": "ערב",
-      "gregorian_date": "2026-11-03",
-      "hebrew_date": "כג חשון תשפ״ז",
-      "time": null,
-      "description": "",
-      "end_date": null,
-      "color": null,
-      "is_shift": 1,
-      "shift_person_id": null,
-      "shift_person_name": null,
-      "shift_label": "ערב"
+      "shift_label": null
     }
+  ],
+  "notes": [
+    "משמרות דורשות ייצוא HTML עם צבע"
   ],
   "stats": {
     "days": 7,
     "events": 5,
-    "shift_candidates": 2,
-    "unassigned_shift_candidates": 2
+    "skipped_shift_lines": 2
   }
 }

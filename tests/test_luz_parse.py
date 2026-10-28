@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from app.luz.parse import filter_days, format_text_preview, parse_luz
+from app.luz.parse import SHIFT_NOTE, filter_days, format_text_preview, parse_luz
 from app.services.event_payload import clean_event_write
 from app.services.shifts import shift_columns_from_payload
 
@@ -43,6 +43,9 @@ def test_sample_week_has_seven_consecutive_days():
         "2026-11-03",
     ]
     assert parsed["stats"]["days"] == 7
+    assert parsed["stats"]["events"] == 5
+    assert parsed["stats"]["skipped_shift_lines"] == 2
+    assert parsed["notes"] == [SHIFT_NOTE]
 
 
 def test_date_header_is_not_an_event():
@@ -54,87 +57,76 @@ def test_date_header_is_not_an_event():
         assert " " in day["source_label"]
 
 
-def test_pure_shift_lines_are_unassigned_candidates():
+def test_bare_shift_lines_are_skipped_not_assigned():
     days = _by_date(_sample())
-    morning = days["2026-10-30"]
-    assert morning["events"] == []
-    assert [row["shift_label"] for row in morning["shift_candidates"]] == ["בוקר"]
-    evening = days["2026-11-03"]
-    assert evening["events"] == []
-    assert [row["shift_label"] for row in evening["shift_candidates"]] == ["ערב"]
-    for row in morning["shift_candidates"] + evening["shift_candidates"]:
-        assert row["is_shift"] == 1
+    assert days["2026-10-30"]["events"] == []
+    assert days["2026-10-30"]["skipped_shift_lines"] == 1
+    assert days["2026-11-03"]["events"] == []
+    assert days["2026-11-03"]["skipped_shift_lines"] == 1
+    for row in _sample()["records"]:
+        assert row["is_shift"] == 0
         assert row["shift_person_id"] is None
-        assert row["shift_person_name"] is None
-        assert row["color"] is None
-        assert row["time"] is None
+        assert row.get("shift_hints") is None
 
 
-def test_mixed_lines_stay_events_with_shift_hints_not_ownership():
+def test_mixed_and_plain_lines_import_as_events():
     days = _by_date(_sample())
     pilates = days["2026-10-28"]["events"]
     assert len(pilates) == 1
     assert pilates[0]["is_shift"] == 0
     assert pilates[0]["time"] == "08:30"
-    assert "פילאטיס מכשירים" in pilates[0]["title"]
-    assert pilates[0]["shift_hints"] == ["בוקר", "ערב"]
-    assert days["2026-10-28"]["shift_candidates"] == []
+    assert pilates[0]["title"] == "בוקר (עד 12) 8:30 פילאטיס מכשירים ערב"
 
     friday_prep = days["2026-10-29"]["events"]
     assert len(friday_prep) == 1
     assert friday_prep[0]["time"] == "15:30"
-    assert friday_prep[0]["shift_hints"] == ["ערב"]
+    assert "תור טלפוני לאופר" in friday_prep[0]["title"]
 
     families = days["2026-11-01"]["events"]
     assert len(families) == 1
     assert families[0]["time"] is None
-    assert "21 משפחות חדשות" in families[0]["title"]
-    assert families[0]["shift_hints"] == ["בוקר"]
+    assert families[0]["title"] == "בוקר 21 משפחות חדשות"
 
     laufer = days["2026-11-02"]["events"]
     assert len(laufer) == 1
     assert laufer[0]["time"] is None
-    assert "9 לאופר לתיפי" in laufer[0]["title"]
-    assert laufer[0]["shift_hints"] == ["בוקר", "לילה"]
+    assert laufer[0]["title"] == "בוקר לילה 9 לאופר לתיפי"
 
 
 def test_parsha_saturday_is_a_normal_event():
     day = _by_date(_sample())["2026-10-31"]
-    assert day["shift_candidates"] == []
+    assert day["skipped_shift_lines"] == 0
     assert len(day["events"]) == 1
     assert day["events"][0]["title"] == "וירא בבית"
     assert day["events"][0]["is_shift"] == 0
-    assert day["events"][0].get("shift_hints") is None
 
 
-def test_no_name_heuristic_assigns_avichay_or_shira():
+def test_named_text_is_still_an_event_not_a_shift_owner():
     parsed = parse_luz(
         "## תשפ\"ז\n\n"
         "| טז 27.10 בחירות (אביחי קולט) 11:30 | ח 16.10 אביחי בוקר שירה ערב |\n"
         "| ----: | ----: |\n"
     )
+    assert parsed["notes"] == []
     for row in parsed["records"]:
         assert row["shift_person_id"] is None
-        assert row["shift_person_name"] is None
-        assert row["color"] is None
         assert row["is_shift"] == 0
     by_date = _by_date(parsed)
     assert by_date["2026-10-27"]["events"][0]["time"] == "11:30"
     named = by_date["2026-10-16"]["events"][0]
-    assert "אביחי" in named["title"] and "שירה" in named["title"]
-    assert named["shift_hints"] == ["בוקר", "ערב"]
+    assert named["title"] == "אביחי בוקר שירה ערב"
 
 
 def test_strikethrough_days_are_still_imported():
     parsed = parse_luz(
         "## תשפ\"ז\n\n"
-        "| ~~יד 25.10 בוקר~~ | יז 28.10 בוקר |\n"
+        "| ~~יד 25.10 דייט~~ | יז 28.10 פילאטיס |\n"
         "| ----: | ----: |\n"
     )
     days = _by_date(parsed)
-    assert "2026-10-25" in days
-    assert days["2026-10-25"]["shift_candidates"][0]["shift_label"] == "בוקר"
-    assert days["2026-10-28"]["shift_candidates"][0]["shift_label"] == "בוקר"
+    assert days["2026-10-25"]["events"][0]["title"] == "דייט"
+    assert days["2026-10-28"]["events"][0]["title"] == "פילאטיס"
+    assert parsed["notes"] == []
 
 
 def test_soft_break_splits_separate_events():
@@ -147,39 +139,35 @@ def test_soft_break_splits_separate_events():
     assert day["gregorian_date"] == "2026-11-07"
     titles = [event["title"] for event in day["events"]]
     assert titles == ["חיי שרה ערב", "קורקוס (יומולדת)"]
-    assert day["events"][0]["shift_hints"] == ["ערב"]
-    assert day["shift_candidates"] == []
+    assert parsed["notes"] == []
 
 
-def test_it_and_modifiers_are_unassigned_shift_candidates():
+def test_bare_it_and_modifiers_are_parked_in_the_html_note():
     parsed = parse_luz(
         "## תשפ\"ז\n\n"
         "| כד 2.11 אביחי IT | כה 3.11 בוקר מאוחר | כו 4.11 משמרת it |\n"
         "| ----: | ----: | ----: |\n"
     )
     days = _by_date(parsed)
-    named_it = days["2026-11-02"]
-    assert named_it["shift_candidates"] == []
-    assert named_it["events"][0]["shift_hints"] == ["IT"]
-    late = days["2026-11-03"]["shift_candidates"]
-    assert [row["shift_label"] for row in late] == ["בוקר"]
-    assert late[0]["shift_person_name"] is None
-    it_only = days["2026-11-04"]["shift_candidates"]
-    assert [row["shift_label"] for row in it_only] == ["IT"]
+    assert days["2026-11-02"]["events"][0]["title"] == "אביחי IT"
+    assert days["2026-11-03"]["events"] == []
+    assert days["2026-11-04"]["events"] == []
+    assert parsed["stats"]["skipped_shift_lines"] == 2
+    assert parsed["notes"] == [SHIFT_NOTE]
 
 
-def test_records_match_existing_event_and_shift_fields():
+def test_records_match_existing_event_fields():
     parsed = _sample()
+    assert parsed["records"]
     for row in parsed["records"]:
-        payload = {key: row[key] for key in ("title", "gregorian_date", "hebrew_date", "time", "description", "end_date", "color")}
+        payload = {
+            key: row[key]
+            for key in ("title", "gregorian_date", "hebrew_date", "time", "description", "end_date", "color")
+        }
         cleaned = clean_event_write(payload)
         assert cleaned["title"] == row["title"]
         assert cleaned["gregorian_date"] == row["gregorian_date"]
-        shift = shift_columns_from_payload(row, missing="defaults")
-        if row["is_shift"]:
-            assert shift == (1, None, row["shift_label"])
-        else:
-            assert shift == (0, None, None)
+        assert shift_columns_from_payload(row, missing="defaults") == (0, None, None)
 
 
 def test_hebrew_dates_come_from_existing_formatter():
@@ -193,11 +181,13 @@ def test_hebrew_dates_come_from_existing_formatter():
 def test_filter_days_keeps_sample_range():
     parsed = parse_luz(
         "## תשפ\"ז\n\n"
-        "| יד 25 בוקר | יז 28 בוקר | כא 1.11 ערב | כד 4 בוקר |\n"
+        "| יד 25 דייט | יז 28 פילאטיס | כא 1.11 משפחות | כד 4 בוקר |\n"
         "| ----: | ----: | ----: | ----: |\n"
     )
     sliced = filter_days(parsed, SAMPLE_START, SAMPLE_END)
     assert [day["gregorian_date"] for day in sliced["days"]] == ["2026-10-28", "2026-11-01"]
+    assert sliced["stats"]["events"] == 2
+    assert sliced["notes"] == []
 
 
 def test_cli_preview_prints_json_without_touching_db(tmp_path):
@@ -221,6 +211,7 @@ def test_cli_preview_prints_json_without_touching_db(tmp_path):
     assert json_run.returncode == 0, json_run.stderr
     body = json.loads(json_run.stdout)
     assert body["stats"]["days"] == 7
+    assert body["notes"] == [SHIFT_NOTE]
     text_run = subprocess.run(
         [sys.executable, str(script), str(FIXTURE), "--text"],
         cwd=root,
@@ -231,6 +222,6 @@ def test_cli_preview_prints_json_without_touching_db(tmp_path):
     )
     assert text_run.returncode == 0, text_run.stderr
     assert "2026-10-28" in text_run.stdout
-    assert "בלי שיוך" in text_run.stdout
+    assert SHIFT_NOTE in text_run.stdout
     assert format_text_preview(_sample()).startswith("ימים: 7")
     assert "calendar.db" not in json_run.stdout
