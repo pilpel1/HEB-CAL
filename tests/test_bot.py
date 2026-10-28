@@ -624,8 +624,14 @@ def test_shifts_toggle_create_and_date_edit(app):
 
     listed = _go(app, _cb("shifts"))
     card = _press(app, listed, "בוקר")
-    editor = _press(app, card, "שינוי תאריך")
-    moved = _press(app, editor, "מחר")
+    assert "אפשר לערוך" in card["text"]
+    editor = _press(app, card, "עריכה")
+    assert "מה לשנות" in editor["text"]
+    assert "סוג משמרת" in [button["text"] for button in _buttons(editor)]
+    date_screen = _press(app, editor, "תאריך")
+    assert "המשמרת תעבור" in date_screen["text"]
+    moved = _press(app, date_screen, "מחר")
+    assert "התאריך עודכן" in moved["text"]
     saved = _press(app, moved, "שמירה")
     assert "נשמר" in saved["text"]
     with app.app_context():
@@ -636,6 +642,112 @@ def test_shifts_toggle_create_and_date_edit(app):
     assert shift["is_shift"] == 1
     assert shift["title"] == "בוקר"
     assert shift["shift_label"] == "בוקר"
+
+
+def test_shift_detail_edit_reaches_title_note_person_and_label(app):
+    danny = _person(app, "דני", works_shifts=1)
+    noa = _person(app, "נועה", works_shifts=1)
+    _person(app, "אורח", works_shifts=0)
+    _event(app, "בוקר", TODAY, shift=(1, danny["id"], "בוקר"))
+
+    card = _press(app, _go(app, _msg("/today")), "בוקר")
+    labels = [button["text"] for button in _buttons(card)]
+    assert "אפשר לערוך, למחוק, או לחזור לרשימה." in card["text"]
+    assert any("עריכה" in label for label in labels)
+    assert any("מחיקה" in label for label in labels)
+    assert any("חזרה לרשימה" in label for label in labels)
+    assert any("תפריט" in label for label in labels)
+    assert not any("שינוי תאריך" in label for label in labels)
+    styles = {button["text"]: button.get("style") for button in _buttons(card)}
+    assert styles["✏️ עריכה"] == "primary"
+    assert styles["🗑 מחיקה"] == "danger"
+
+    editor = _press(app, card, "עריכה")
+    datas = [button["callback_data"] for button in _buttons(editor)]
+    assert {"edf:title", "edf:desc", "edf:date", "edf:person", "edf:label", "ed:ok"} <= set(datas)
+    assert "edf:time" not in datas
+    assert "edf:end" not in datas
+    assert "משמרת · דני · בוקר" in editor["text"]
+
+    _press(app, editor, "כותרת")
+    titled = _go(app, _msg("משמרת כפולה"))
+    assert "מה לשנות ב«משמרת כפולה»" in titled["text"]
+    assert "הכותרת עודכנה" in titled["text"]
+
+    note = _press(app, titled, "תיאור")
+    assert "בלי תיאור" in [button["text"] for button in _buttons(note)]
+    cleared = _press(app, note, "בלי תיאור")
+    assert "התיאור עודכן" in cleared["text"]
+    note = _press(app, cleared, "תיאור")
+    noted = _go(app, _msg("להביא מפתחות"))
+    assert "להביא מפתחות" in noted["text"]
+
+    people = _press(app, noted, "אדם")
+    assert "למי המשמרת" in people["text"]
+    people_labels = [button["text"] for button in _buttons(people)]
+    assert any(label.endswith("דני") for label in people_labels)
+    assert "נועה" in people_labels
+    assert "אורח" not in people_labels
+    assert all(
+        button["callback_data"].startswith("ed:p:")
+        for button in _buttons(people)
+        if button["callback_data"] not in {"back:edit", "cancel"}
+    )
+    stayed = _go(app, _msg("לא כפתור"))
+    assert "למי המשמרת" in stayed["text"]
+    moved_person = _press(app, stayed, "נועה")
+    assert "האדם עודכן" in moved_person["text"]
+    assert "משמרת · נועה · בוקר" in moved_person["text"]
+
+    kinds = _press(app, moved_person, "סוג משמרת")
+    kind_data = [button["callback_data"] for button in _buttons(kinds)]
+    assert {"ed:l:m", "ed:l:e", "ed:l:n"} <= set(kind_data)
+    back = _press(app, kinds, "חזרה")
+    assert "מה לשנות ב«משמרת כפולה»" in back["text"]
+    kinds = _press(app, back, "סוג משמרת")
+    labeled = _press(app, kinds, "לילה")
+    assert "סוג המשמרת עודכן" in labeled["text"]
+    assert "משמרת · נועה · לילה" in labeled["text"]
+    assert "מה לשנות ב«משמרת כפולה»" in labeled["text"]
+
+    dated = _press(app, _press(app, labeled, "תאריך"), "מחר")
+    assert "התאריך עודכן" in dated["text"]
+    saved = _press(app, dated, "שמירה")
+    assert "נשמר" in saved["text"]
+    assert "<b>לילה</b>" in saved["text"]
+    assert "נועה" in saved["text"]
+    assert "להביא מפתחות" in saved["text"]
+    assert "משמרת כפולה" not in saved["text"]
+    assert any("מחיקה" in button["text"] for button in _buttons(saved))
+    again = _press(app, saved, "עריכה")
+    assert "מה לשנות ב«משמרת כפולה»" in again["text"]
+
+    with app.app_context():
+        from app.database import get_all_events
+
+        shift = get_all_events()[0]
+    assert shift["is_shift"] == 1
+    assert shift["title"] == "משמרת כפולה"
+    assert shift["description"] == "להביא מפתחות"
+    assert shift["shift_label"] == "לילה"
+    assert shift["shift_person_id"] == noa["id"]
+    assert shift["gregorian_date"] == (TODAY + timedelta(days=1)).isoformat()
+    assert shift["time"] is None
+    assert not shift["end_date"]
+
+    plain = _event(app, "בוקר", TODAY, shift=(1, danny["id"], "בוקר"))
+    listed = _go(app, _msg("/today"))
+    card = _press(app, listed, "בוקר")
+    editor = _press(app, card, "עריכה")
+    saved = _press(app, _press(app, _press(app, editor, "סוג משמרת"), "ערב"), "שמירה")
+    assert "נשמר" in saved["text"]
+    with app.app_context():
+        from app.database import get_event
+
+        synced = get_event(plain)
+    assert synced["shift_label"] == "ערב"
+    assert synced["title"] == "ערב"
+    assert synced["shift_person_id"] == danny["id"]
 
 
 def test_shift_display_uses_label_when_title_differs(app):

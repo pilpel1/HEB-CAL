@@ -38,6 +38,8 @@ _FIELD_SAVED = {
     "time": "השעה עודכנה ✅ — לשנות עוד משהו?",
     "desc": "התיאור עודכן ✅ — לשנות עוד משהו?",
     "end": "תאריך הסיום עודכן ✅ — לשנות עוד משהו?",
+    "person": "האדם עודכן ✅ — לשנות עוד משהו?",
+    "label": "סוג המשמרת עודכן ✅ — לשנות עוד משהו?",
 }
 
 
@@ -579,10 +581,7 @@ def event_screen(event: dict, people: dict, focus: date | None = None) -> tuple[
     lines.append("")
     lines.append("אפשר לערוך, למחוק, או לחזור לרשימה.")
     event_id = event.get("id")
-    if event.get("is_shift"):
-        actions = [[("📅 שינוי תאריך", f"ed:{event_id}"), ("🗑 מחיקה", f"rm:{event_id}")]]
-    else:
-        actions = [[("✏️ עריכה", f"ed:{event_id}"), ("🗑 מחיקה", f"rm:{event_id}")]]
+    actions = [[("✏️ עריכה", f"ed:{event_id}"), ("🗑 מחיקה", f"rm:{event_id}")]]
     actions.append([("↩️ חזרה לרשימה", "back:list"), (BTN_MENU, "home")])
     return "\n".join(lines), kb(actions)
 
@@ -810,7 +809,13 @@ def add_end_screen(draft: dict, today: date) -> tuple[str, dict]:
     )
 
 
-def edit_menu_screen(draft: dict, *, error: str = "", saved: str = "") -> tuple[str, dict]:
+def edit_menu_screen(
+    draft: dict,
+    *,
+    error: str = "",
+    saved: str = "",
+    people: dict | None = None,
+) -> tuple[str, dict]:
     lines = []
     if saved:
         lines.append(esc(saved))
@@ -819,27 +824,44 @@ def edit_menu_screen(draft: dict, *, error: str = "", saved: str = "") -> tuple[
         lines.append(esc(error))
         lines.append("")
     lines.append(f"מה לשנות ב«{esc(draft.get('title') or '')}»?")
-    if draft.get("recurring"):
+    shift = bool(draft.get("is_shift"))
+    if shift:
+        person = _person_name(people or {}, draft.get("shift_person_id"))
+        label = str(draft.get("shift_label") or "").strip() or "משמרת"
+        lines.append(f"משמרת · {esc(person)} · {esc(label)}")
+    elif draft.get("recurring"):
         lines.append("זה אירוע חוזר. שינוי כאן מזיז את כל הסדרה.")
     try:
         day = date.fromisoformat(draft.get("gregorian_date") or "")
         lines.append(f"{code(greg(day))} · {esc(hebrew_display(day))}")
     except ValueError:
         pass
-    if draft.get("time"):
+    if not shift and draft.get("time"):
         lines.append(f"שעה {code(draft['time'])}")
     else:
         lines.append("כל היום")
+    note = (draft.get("description") or "").strip()
+    if shift and note:
+        short = note if len(note) <= 80 else note[:79] + "…"
+        lines.append(esc(short))
     lines.append("לחצו מה לשנות, ואז שמירה.")
-    return "\n".join(lines), kb(
-        [
+    if shift:
+        rows = [
+            [("כותרת", "edf:title"), ("תיאור", "edf:desc")],
+            [("תאריך", "edf:date"), ("אדם", "edf:person")],
+            [("סוג משמרת", "edf:label")],
+            [("שמירה", "ed:ok")],
+            [("חזרה לאירוע", "back:ev"), ("ביטול", "cancel")],
+        ]
+    else:
+        rows = [
             [("כותרת", "edf:title"), ("תאריך", "edf:date")],
             [("שעה", "edf:time"), ("תיאור", "edf:desc")],
             [("תאריך סיום", "edf:end")],
             [("שמירה", "ed:ok")],
             [("חזרה לאירוע", "back:ev"), ("ביטול", "cancel")],
         ]
-    )
+    return "\n".join(lines), kb(rows)
 
 
 def edit_title_screen() -> tuple[str, dict]:
@@ -862,12 +884,8 @@ def edit_date_screen(draft: dict, today: date, *, shift: bool = False) -> tuple[
     rows = [
         [(_day_label("היום", today), "ed:d:0"), (_day_label("מחר", tomorrow), "ed:d:1")],
         [("תאריך אחר", "ed:d:x")],
+        _back_cancel("back:edit"),
     ]
-    if shift:
-        rows.append([("שמירה", "ed:ok")])
-        rows.append([("חזרה לאירוע", "back:ev"), ("ביטול", "cancel")])
-    else:
-        rows.append(_back_cancel("back:edit"))
     return "\n".join(lines), kb(rows)
 
 
@@ -1123,29 +1141,67 @@ def find_screen(*, error: str = "") -> tuple[str, dict]:
     return "\n".join(lines), kb([[("ביטול", "cancel")]])
 
 
-def shift_people_screen(people: list[dict]) -> tuple[str, dict]:
+def _marked(label: str, selected: bool) -> str:
+    if selected and not label.startswith("• "):
+        return "• " + label
+    return label
+
+
+def _same_person(left, right) -> bool:
+    try:
+        return int(left) == int(right)
+    except (TypeError, ValueError):
+        return False
+
+
+def shift_people_screen(
+    people: list[dict],
+    *,
+    edit: bool = False,
+    current_id=None,
+) -> tuple[str, dict]:
+    """בחירת אדם. ``edit`` חוזר לתפריט העריכה; יצירה חוזרת ללוח המשמרות."""
     lines = ["למי המשמרת?"]
+    back = "back:edit" if edit else "shifts"
+    prefix = "ed:p:" if edit else "sh:p:"
     if not people:
         lines.append("אף אחד לא מסומן למשמרות.")
         lines.append("אפשר לסמן אנשים, ואז לחזור לכאן.")
         return "\n".join(lines), kb(
             [
                 [("מי עובד במשמרות", "set:workers")],
-                [("חזרה", "shifts"), ("ביטול", "cancel")],
+                [("חזרה", back), ("ביטול", "cancel")],
             ]
         )
-    rows = [[(person["name"], f"sh:p:{person['id']}")] for person in people]
-    rows.append([("חזרה", "shifts"), ("ביטול", "cancel")])
+    rows = [
+        [
+            (
+                _marked(person["name"], edit and _same_person(person.get("id"), current_id)),
+                f"{prefix}{person['id']}",
+            )
+        ]
+        for person in people
+    ]
+    rows.append([("חזרה", back), ("ביטול", "cancel")])
     return "\n".join(lines), kb(rows)
 
 
-def shift_label_screen(person_name: str) -> tuple[str, dict]:
+def shift_label_screen(person_name: str, *, edit: bool = False, current: str = "") -> tuple[str, dict]:
+    """בוקר / ערב / לילה. בעריכה הכפתורים חוזרים לתפריט, לא ליצירה."""
     text = f"איזו משמרת ל{esc(person_name)}?"
+    prefix = "ed:l:" if edit else "sh:l:"
+    back = "back:edit" if edit else "sh:new"
+    current = (current or "").strip()
+
+    def choice(key: str) -> tuple[str, str]:
+        label = SHIFT_LABELS[key]
+        return _marked(label, edit and label == current), f"{prefix}{key}"
+
     return text, kb(
         [
-            [("בוקר", "sh:l:m"), ("ערב", "sh:l:e")],
-            [("לילה", "sh:l:n")],
-            [("חזרה", "sh:new"), ("ביטול", "cancel")],
+            [choice("m"), choice("e")],
+            [choice("n")],
+            [("חזרה", back), ("ביטול", "cancel")],
         ]
     )
 
