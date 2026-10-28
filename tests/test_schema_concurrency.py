@@ -112,6 +112,8 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
             "shift_allowed",
             "receives_reminders",
             "works_shifts",
+            "daily_digest_enabled",
+            "daily_digest_last_sent",
         } <= people
         reminders = {row[1] for row in conn.execute("PRAGMA table_info(reminders)")}
         assert {"event_id", "offset_minutes", "recipient_ids", "sent_at"} <= reminders
@@ -464,6 +466,40 @@ def test_version_four_backfills_people_role_flags(tmp_path):
         assert flags["עם כללים"] == (0, 1)
         assert flags["נמען"] == (1, 0)
         assert flags["שומר"] == (0, 1)
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    finally:
+        conn.close()
+
+
+def test_version_six_adds_digest_columns(tmp_path):
+    """גרסה 6 מוסיפה daily_digest_enabled (כבוי) ו-daily_digest_last_sent."""
+    path = tmp_path / "v5.sqlite"
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        from app.database import SCHEMA_VERSION, apply_pending_migrations
+
+        assert SCHEMA_VERSION >= 6
+        apply_pending_migrations(conn)
+        conn.execute("PRAGMA user_version = 5")
+        conn.execute("ALTER TABLE reminder_people DROP COLUMN daily_digest_enabled")
+        conn.execute("ALTER TABLE reminder_people DROP COLUMN daily_digest_last_sent")
+        conn.execute(
+            "INSERT INTO reminder_people (name, telegram_chat_id) VALUES ('דני', '42')"
+        )
+        conn.commit()
+        people = {row[1] for row in conn.execute("PRAGMA table_info(reminder_people)")}
+        assert "daily_digest_enabled" not in people
+
+        apply_pending_migrations(conn)
+        people = {row[1] for row in conn.execute("PRAGMA table_info(reminder_people)")}
+        assert "daily_digest_enabled" in people
+        assert "daily_digest_last_sent" in people
+        row = conn.execute(
+            "SELECT daily_digest_enabled, daily_digest_last_sent FROM reminder_people WHERE name = 'דני'"
+        ).fetchone()
+        assert row["daily_digest_enabled"] == 0
+        assert row["daily_digest_last_sent"] is None
         assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     finally:
         conn.close()

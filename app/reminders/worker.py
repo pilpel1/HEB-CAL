@@ -1,4 +1,4 @@
-"""סבב שליחה: תזכורות שהגיע זמנן + תפריט הבוט (כפתורים ופקודות).
+"""סבב שליחה: תזכורות שהגיע זמנן, סיכום בוקר, ותפריט הבוט (כפתורים ופקודות).
 
 הלולאה הארוכה מפעילה גם סנכרון יומן גוגל (``app.gcal.worker``), בערך כל 15 דקות.
 
@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 
+from app.reminders.digest import process_daily_digests
 from app.reminders.due import telegram_due
 from app.reminders.repository import mark_reminder_sent
 from app.reminders.telegram import TelegramError, consume_updates, publish_bot_commands, send_message
@@ -77,8 +78,15 @@ def process_due_reminders(*, now=None, send=None, token: str | None = None) -> i
 UPDATE_LONG_POLL_SECONDS = 25
 
 
+def process_scheduled(*, now=None, send=None, token: str | None = None) -> int:
+    """תזכורות שהגיע זמנן, ואז סיכום בוקר אם הגיע 06:00 (א׳–ו׳)."""
+    delivered = process_due_reminders(now=now, send=send, token=token)
+    delivered += process_daily_digests(now=now, send=send, token=token)
+    return delivered
+
+
 def run_once(*, long_poll: int = 0, offset: int | None = None) -> int | None:
-    process_due_reminders()
+    process_scheduled()
     token = bot_token()
     if not token:
         print("TELEGRAM_BOT_TOKEN is empty; /start handler skipped", file=sys.stderr)
@@ -128,10 +136,10 @@ def run_loop(
     *,
     stop_event: threading.Event | None = None,
     consume=consume_updates,
-    process=process_due_reminders,
+    process=process_scheduled,
     token_fn=bot_token,
 ) -> None:
-    """תזכורות במחזור שלהן. לחיצות בשרשור נפרד, לא מחכות ל-process."""
+    """תזכורות וסיכום בוקר במחזור שלהן. לחיצות בשרשור נפרד, לא מחכות ל-process."""
     interval = poll_seconds() if interval is None else max(30, min(int(interval), 60))
     stop = stop_event or threading.Event()
     updater = threading.Thread(
@@ -152,11 +160,11 @@ def run_loop(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="שליחת תזכורות טלגרם ותפריט הבוט")
+    parser = argparse.ArgumentParser(description="שליחת תזכורות טלגרם, סיכום בוקר, ותפריט הבוט")
     parser.add_argument(
         "--once",
         action="store_true",
-        help="סבב אחד (due + getUpdates בלי המתנה) ואז יציאה",
+        help="סבב אחד (due + סיכום בוקר + getUpdates בלי המתנה) ואז יציאה",
     )
     parser.add_argument(
         "--interval",
