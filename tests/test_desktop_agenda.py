@@ -116,6 +116,11 @@ def test_desktop_agenda_collapse_is_stored_and_stays_collapsed_on_select(client)
     assert "width: 18px" in side
     assert "top: 50%" in side
     assert "translateY(-50%)" in side
+    assert "inset-inline-end: -9px" in side
+    collapsed_toggle = side.split(
+        ".infinite-calendar.is-agenda-collapsed .day-agenda-toggle {", 1
+    )[1].split("}", 1)[0]
+    assert "inset-inline-end" not in collapsed_toggle
     assert "scrollbar-width: none" in side
     assert "-ms-overflow-style: none" in side
     assert "#calendar-stream::-webkit-scrollbar" in side

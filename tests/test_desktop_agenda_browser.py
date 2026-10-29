@@ -382,6 +382,7 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
                     chevron: parseFloat(svg.width),
                     centered: Math.abs((toggle.top + toggle.height / 2) - mid) < 2,
                     straddles: toggle.left < seam - 1 && toggle.right > seam + 1,
+                    centeredOnSeam: Math.abs((toggle.left + toggle.right) / 2 - seam) < 2,
                     stacked: heb.top + 4 < greg.top,
                     headBorder: parseFloat(head.borderBottomWidth) >= 1,
                     separated: panel.backgroundColor !== card.backgroundColor,
@@ -398,6 +399,7 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
             assert open_state["chevron"] >= 16
             assert open_state["centered"] is True
             assert open_state["straddles"] is True
+            assert open_state["centeredOnSeam"] is True
             assert open_state["stacked"] is True
             assert open_state["headBorder"] is True
             assert open_state["separated"] is True
@@ -430,6 +432,7 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
                 const toggle = document.querySelector('.day-agenda-toggle').getBoundingClientRect();
                 const svg = getComputedStyle(document.querySelector('#day-agenda-toggle svg'));
                 const mid = frame.top + frame.height / 2;
+                const seam = frame.left;
                 return {
                     collapsed: cal.classList.contains('is-agenda-collapsed'),
                     expanded: document.getElementById('day-agenda-toggle').getAttribute('aria-expanded'),
@@ -440,7 +443,8 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
                     streamRatio: stream.width / (card.width - pad),
                     toggleH: toggle.height,
                     toggleW: toggle.width,
-                    toggleAtEdge: Math.abs(toggle.left - frame.left) < 2,
+                    straddles: toggle.left < seam - 1 && toggle.right > seam + 1,
+                    centeredOnSeam: Math.abs((toggle.left + toggle.right) / 2 - seam) < 2,
                     centered: Math.abs((toggle.top + toggle.height / 2) - mid) < 2,
                     arrow: svg.transform,
                     storage: localStorage.getItem('heb-cal-agenda-collapsed'),
@@ -455,7 +459,8 @@ def test_desktop_agenda_collapse_remembers_and_select_stays_closed(live_server, 
             assert closed["streamRatio"] > 0.97
             assert 56 <= closed["toggleH"] <= 64
             assert 16 <= closed["toggleW"] <= 18
-            assert closed["toggleAtEdge"] is True
+            assert closed["straddles"] is True
+            assert closed["centeredOnSeam"] is True
             assert closed["centered"] is True
             assert closed["storage"] == "1"
             assert _matrix_sin(closed["arrow"]) > 0.9
