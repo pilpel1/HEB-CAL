@@ -95,6 +95,7 @@ def execute_update(ops, plan: Plan) -> None:
             ops.ensure_clean()
             ops.fetch(plan.tag)
             ops.ensure_fast_forward(sha, plan.tag)
+            ops.ensure_clean(plan.tag)
             ops.write(step="checkout", message="עובר לגרסה החדשה")
             done.add("checkout")
             ops.checkout(plan.tag)

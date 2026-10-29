@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -17,12 +18,25 @@ from app.updates.gitops import (
     assert_worktree_clean,
     backup_sqlite,
     git_auth_env,
+    parse_porcelain,
     restore_sqlite,
     restart_argv,
 )
-from app.updates.store import acquire_lock, blank_status, public_status, release_lock, write_status
+from app.updates.service import format_checked_at, public_cache
+from app.updates.store import (
+    acquire_lock,
+    blank_status,
+    cache_path,
+    public_status,
+    read_json,
+    release_lock,
+    status_path,
+    write_cache,
+    write_status,
+)
 from app.updates.version import (
     highlights_from_body,
+    installed_version,
     is_newer,
     parse_github_slug,
     parse_version,
@@ -57,7 +71,7 @@ def _update_env(monkeypatch, tmp_path):
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert parse_version(version) == (1, 0, 14)
+    assert parse_version(version) == (1, 0, 15)
     assert f"## {version}" in changelog
     assert "## 1.0.8" in changelog
     assert "## 1.0.3" in changelog
@@ -146,6 +160,8 @@ def test_dirty_tree_and_non_fast_forward_and_bad_tag():
     with pytest.raises(UpdateError) as caught:
         assert_worktree_clean(dirty)
     assert "שינויים מקומיים" in caught.value.message
+    assert "app/x.py" in caught.value.message
+    assert "stash" in caught.value.message
 
     calls = []
 
@@ -280,7 +296,7 @@ class FakeOps:
         self.calls.append(("current_sha",))
         return SHA_A
 
-    def ensure_clean(self):
+    def ensure_clean(self, tag=None):
         self._fail("ensure_clean", "יש שינויים מקומיים בקוד.", "checkout")
 
     def ensure_not_shallow(self):
@@ -396,13 +412,17 @@ def test_settings_and_gear_markup(client):
     assert "עדכן עכשיו" in settings
     assert "סיסמת מנהל" not in settings
     assert "updateLoginForm" not in settings
-    assert ">1.0.14<" in settings
+    assert ">1.0.15<" in settings
+    assert "עדיין לא נבדק" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
     assert 'href="/settings#settingsUpdate"' in page
     script = (REPO / "app/static/js/events/updates.js").read_text(encoding="utf-8")
     assert "textContent" in script
     assert "innerHTML" not in script
+    assert "עדיין לא נבדק" in script
+    assert "checked_label" in script
+    assert "stateFromCache" in script
     assert "ADMIN_PASSWORD" not in script
     assert "/api/updates/login" not in script
     failed_branch = script.split("state === 'failed'", 1)[1][:700]
@@ -413,10 +433,13 @@ def test_settings_and_gear_markup(client):
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
-    assert health.get_json()["version"] == "1.0.14"
+    assert health.get_json()["version"] == "1.0.15"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
-    assert body["current"] == "1.0.14"
+    assert body["current"] == "1.0.15"
+    assert body["cached"]["checked"] is False
+    assert body["cached"]["available"] is False
+    assert "עדיין לא נבדק" in body["cached"]["message"]
     assert "admin" not in body
     assert "admin_configured" not in body
     assert "csrf_token" in body
@@ -466,6 +489,8 @@ def test_check_and_apply_ignore_commands_from_the_request(client, monkeypatch):
     payload = checked.get_json()
     assert payload["available"] is True
     assert payload["latest"] == "1.2.0"
+    assert payload["checked"] is True
+    assert "נבדק לאחרונה" in (payload.get("checked_label") or "")
     assert payload["highlights"][0] == "שורה אחת"
     dumped = json.dumps(payload)
     assert "SUPERSECRET" not in dumped
@@ -555,8 +580,6 @@ def test_runner_refuses_a_tag_that_is_not_a_version(tmp_path):
 
 
 def test_badge_uses_cache_only(client, tmp_path):
-    from app.updates.store import cache_path, write_cache
-
     write_cache(cache_path(tmp_path), {
         "available": True,
         "latest": "1.4.0",
@@ -568,3 +591,190 @@ def test_badge_uses_cache_only(client, tmp_path):
     assert badge["available"] is True
     assert badge["latest"] == "1.4.0"
     assert "highlights" not in badge
+
+
+def test_parse_porcelain_paths():
+    rows = parse_porcelain(" M app/x.py\n?? scripts/restart.sh\nR  old.py -> new.py\n")
+    assert (" M", "app/x.py") in rows
+    assert ("??", "scripts/restart.sh") in rows
+    assert ("R ", "new.py") in rows
+
+
+def test_public_cache_unchecked_never_claims_latest():
+    empty = public_cache(None, "1.0.14")
+    assert empty["checked"] is False
+    assert empty["available"] is False
+    assert empty["message"] == "עדיין לא נבדק."
+    assert public_cache({}, "1.0.14")["checked"] is False
+
+
+def test_public_cache_recomputes_against_installed_version():
+    stale = {
+        "ok": True,
+        "available": True,
+        "latest": "1.0.14",
+        "message": "יש גרסה חדשה: 1.0.14",
+        "current": "1.0.13",
+        "checked_at": "2026-10-29T12:00:00+00:00",
+        "highlights": ["שורה"],
+    }
+    same = public_cache(stale, "1.0.14")
+    assert same["checked"] is True
+    assert same["available"] is False
+    assert "האחרונה" in same["message"]
+    assert same["checked_label"] == "נבדק לאחרונה ב־29.10.2026, 14:00"
+    newer = public_cache(stale, "1.0.13")
+    assert newer["available"] is True
+    assert newer["message"] == "יש גרסה חדשה: 1.0.14"
+
+
+def test_format_checked_at_jerusalem():
+    assert format_checked_at("2026-10-29T12:00:00+00:00") == "נבדק לאחרונה ב־29.10.2026, 14:00"
+    assert format_checked_at("not-a-date") is None
+    assert format_checked_at(None) is None
+
+
+def test_stale_offer_cleared_when_installed_matches(client, tmp_path):
+    current = installed_version()
+    write_cache(cache_path(tmp_path), {
+        "ok": True,
+        "available": True,
+        "latest": current,
+        "message": f"יש גרסה חדשה: {current}",
+        "current": "0.0.1",
+        "highlights": ["ישן"],
+    })
+    write_status(status_path(tmp_path), {
+        **blank_status("0.0.1"),
+        "state": "success",
+        "target": current,
+        "message": "העדכון הושלם. הדף ייטען מחדש.",
+    })
+    body = client.get("/api/updates").get_json()
+    assert body["cached"]["checked"] is True
+    assert body["cached"]["available"] is False
+    assert "האחרונה" in body["cached"]["message"]
+    assert "נבדק לאחרונה" in (body["cached"]["checked_label"] or "")
+    assert "יש גרסה חדשה" not in body["cached"]["message"]
+    assert body["status"]["state"] == "idle"
+    disk = read_json(cache_path(tmp_path))
+    assert disk["available"] is False
+    assert disk["current"] == current
+    assert read_json(status_path(tmp_path))["state"] == "idle"
+
+
+def test_badge_hides_after_installed_matches_cached_latest(client, tmp_path):
+    current = installed_version()
+    write_cache(cache_path(tmp_path), {
+        "ok": True,
+        "available": True,
+        "latest": current,
+        "message": f"יש גרסה חדשה: {current}",
+        "current": "0.0.1",
+    })
+    badge = client.get("/api/updates/badge").get_json()
+    assert badge["available"] is False
+    assert badge["latest"] == current
+
+
+def test_untracked_without_tag_does_not_block():
+    def run(args):
+        return Cmd(0, "?? scripts/restart.sh\n", "")
+
+    assert_worktree_clean(run)
+
+
+def test_untracked_not_in_tag_is_allowed():
+    def run(args):
+        if args[1] == "status":
+            return Cmd(0, "?? scripts/restart.sh\n", "")
+        if args[1] == "cat-file":
+            return Cmd(1, "", "missing")
+        return Cmd(1, "", "")
+
+    assert_worktree_clean(run, tag="v1.2.0")
+
+
+def test_untracked_identical_to_tag_is_removed(tmp_path):
+    folder = tmp_path / "scripts"
+    folder.mkdir()
+    path = folder / "restart.sh"
+    path.write_text("same\n", encoding="utf-8")
+
+    def run(args):
+        if args[1] == "status":
+            return Cmd(0, "?? scripts/restart.sh\n", "")
+        if args[1] == "cat-file":
+            return Cmd(0, "", "")
+        if args[1] == "rev-parse":
+            return Cmd(0, "abc123\n", "")
+        if args[1] == "hash-object":
+            return Cmd(0, "abc123\n", "")
+        return Cmd(0, "", "")
+
+    assert_worktree_clean(run, tag="v1.2.0", repo_root=tmp_path)
+    assert not path.exists()
+
+
+def test_untracked_conflict_lists_file_and_how_to_move_it():
+    def run(args):
+        if args[1] == "status":
+            return Cmd(0, "?? scripts/restart.sh\n", "")
+        if args[1] == "cat-file":
+            return Cmd(0, "", "")
+        if args[1] == "rev-parse":
+            return Cmd(0, "aaa\n", "")
+        if args[1] == "hash-object":
+            return Cmd(0, "bbb\n", "")
+        return Cmd(0, "", "")
+
+    with pytest.raises(UpdateError) as caught:
+        assert_worktree_clean(run, tag="v1.2.0")
+    assert "scripts/restart.sh" in caught.value.message
+    assert "mv scripts/restart.sh scripts/restart.sh.local" in caught.value.message
+    assert "שינויים מקומיים" not in caught.value.message
+
+
+def test_restart_script_is_generic_and_stop_is_safe(tmp_path):
+    src = REPO / "scripts" / "restart.sh"
+    text = src.read_text(encoding="utf-8")
+    assert os.access(src, os.X_OK)
+    assert "HEB_CAL_BIND_HOST" in text
+    assert "HEB_CAL_PORT" in text
+    assert "HEB_CAL_UPDATE_ACTION" in text
+    assert "reminder_worker.py" in text
+    assert "SECRET" not in text
+    assert "TELEGRAM" not in text
+    assert "ghp_" not in text
+    example = (REPO / "scripts" / "restart.example.sh").read_text(encoding="utf-8")
+    assert "restart.sh" in example
+    assert "127.0.0.1 --port 5000" not in example
+
+    root = tmp_path / "home"
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    dest = scripts / "restart.sh"
+    dest.write_text(text, encoding="utf-8")
+    dest.chmod(0o755)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name in ("pgrep", "fuser", "lsof"):
+        stub = bin_dir / name
+        stub.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        stub.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["HEB_CAL_UPDATE_ACTION"] = "stop"
+    proc = subprocess.run(
+        ["sh", str(dest)],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert (root / "data").is_dir()
+    assert (root / "logs").is_dir()
+    assert list((root / "data").iterdir()) == []
