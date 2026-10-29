@@ -1381,7 +1381,8 @@
         opacity: 0;
     }
 
-    /* ידית דקה באמצע גובה הלוח. פתוח: חץ שמאלה (לסגור). סגור: אותה ידית בקצה, חץ ימינה. */
+    /* ידית דקה באמצע גובה הלוח, ממורכזת על התפר (18px → -9px) גם כשהפאנל סגור.
+       פתוח: חץ שמאלה (לסגור). סגור: אותה ידית, חץ ימינה. */
     .day-agenda-toggle {
         display: inline-flex;
         align-items: center;
@@ -1401,7 +1402,7 @@
         box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
         cursor: pointer;
         transform: translateY(-50%);
-        transition: inset-inline-end 180ms ease, background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
     }
 
     .day-agenda-toggle svg {
@@ -1413,7 +1414,6 @@
     }
 
     .infinite-calendar.is-agenda-collapsed .day-agenda-toggle {
-        inset-inline-end: 0;
         background: #eef3fb;
         color: #1d4ed8;
         border-color: #c5d4e8;
