@@ -202,7 +202,7 @@ python scripts/gcal_sync_worker.py
 נפתח תהליך נפרד, והוא נשאר בחיים גם כשהאפליקציה יורדת. המסך בהגדרות שואל כל שנייה וחצי איפה זה עומד, ומרענן כשנגמר.
 
 1. גיבוי של קובץ ה-SQLite לתיקייה `backups/` (אפשר להחליף עם `HEB_CAL_BACKUP_DIR`).
-2. הורדת התג מ-GitHub ב-HTTPS, ומעבר אליו. רק אם אין שינויים מקומיים בקוד, ורק אם התג הוא המשך ישיר (fast-forward). אין `reset --hard`.
+2. הורדת התג מ-GitHub ב-HTTPS, ומעבר אליו. רק אם אין שינויים מקומיים בקוד שבמעקב, ורק אם התג הוא המשך ישיר (fast-forward). אין `reset --hard`. קובץ לא-מעקב שלא קיים בתג לא חוסם; אם הוא ידרוס קובץ מהגרסה החדשה — ההודעה מציינת את הקובץ.
 3. `pip install -r requirements.txt`
 4. מיגרציות (אותן מיגרציות שרצות בהפעלה).
 5. הפעלה מחדש לפי `HEB_CAL_RESTART_COMMAND`.
@@ -216,22 +216,17 @@ python scripts/gcal_sync_worker.py
 
 ### שרת בבית, בלי systemd ובלי sudo
 
-מעתיקים את `scripts/restart.example.sh` לשם אחר, מתאימים פורט אם צריך, ונותנים הרשאת הרצה:
-
-```bash
-cp scripts/restart.example.sh scripts/restart.sh
-chmod +x scripts/restart.sh
-```
-
-ב-`.env`, נתיב יחסי לשורש הפרויקט, או נתיב מלא:
+`scripts/restart.sh` בריפו. כתובת ופורט מ-`HEB_CAL_BIND_HOST` / `HEB_CAL_PORT` (ברירת מחדל `127.0.0.1:5000`). בלי סודות. אם כבר יש עותק מקומי של הקובץ, מעבירים אותו הצידה (`mv scripts/restart.sh scripts/restart.sh.local`) ומגדירים את הכתובת ב-`.env`.
 
 ```env
 HEB_CAL_RESTART_COMMAND=scripts/restart.sh
+HEB_CAL_BIND_HOST=0.0.0.0
+HEB_CAL_PORT=5000
 ```
 
-נתיב שמתחיל ב-`/` (למשל `/home/you/HEB-CAL/scripts/restart.sh`) נשאר כמו שהוא. נתיב יחסי כמו `scripts/restart.sh` מחובר לשורש הפרויקט בזמן הריצה, לא לפי התיקייה שממנה הפעלתם את פלאסק.
+`chmod +x scripts/restart.sh` אם חסר סיביות הרצה. נתיב שמתחיל ב-`/` (למשל `/home/you/HEB-CAL/scripts/restart.sh`) נשאר כמו שהוא. נתיב יחסי כמו `scripts/restart.sh` מחובר לשורש הפרויקט בזמן הריצה, לא לפי התיקייה שממנה הפעלתם את פלאסק.
 
-הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית. כשהעדכון משחזר גיבוי הוא מריץ את אותה פקודה עם `HEB_CAL_UPDATE_ACTION=stop` — הדוגמה אז רק עוצרת. אחר כך היא רצה שוב בלי המשתנה הזה ומעלה את האפליקציה ואת worker התזכורות.
+הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית. כשהעדכון משחזר גיבוי הוא מריץ את אותה פקודה עם `HEB_CAL_UPDATE_ACTION=stop` — אז רק עוצר. אחר כך היא רצה שוב בלי המשתנה הזה ומעלה את האפליקציה ואת worker התזכורות.
 
 ### מאגר פרטי
 

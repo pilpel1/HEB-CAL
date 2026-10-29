@@ -28,7 +28,6 @@ docs
 .vscode
 *.md
 !CHANGELOG.md
-scripts/restart.sh
 **/*.log
 Dockerfile*
 docker-compose*.yml

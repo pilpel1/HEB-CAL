@@ -6,6 +6,7 @@ import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from app.database import BASE_DIR
 from app.updates.envconfig import describe_mode, load_config
@@ -28,6 +29,9 @@ from app.updates.store import (
 )
 from app.updates.version import installed_version, is_newer, parse_version, read_version_file, tag_matches_version, validate_tag
 
+_JERUSALEM = ZoneInfo("Asia/Jerusalem")
+_UNCHECKED = "עדיין לא נבדק."
+
 _HINTS = {
     "git": "העדכון מוריד תג מ-GitHub, מגבה את הנתונים, ומפעיל מחדש.",
     "docker": "בהתקנת Docker לא מעדכנים מתוך המסך.",
@@ -47,26 +51,118 @@ def _testing() -> bool:
     return has_app_context() and bool(current_app.config.get("TESTING"))
 
 
-def _public_cache(payload: dict | None, current: str) -> dict | None:
-    if not payload:
+def format_checked_at(value: str | None) -> str | None:
+    if not isinstance(value, str) or not value.strip():
         return None
-    latest = payload.get("latest")
-    available = isinstance(latest, str) and current != "לא ידועה" and is_newer(latest, current)
-    highlights = payload.get("highlights") if isinstance(payload.get("highlights"), list) else []
+    try:
+        moment = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    local = moment.astimezone(_JERUSALEM)
+    return (
+        f"נבדק לאחרונה ב־{local.day:02d}.{local.month:02d}.{local.year}, "
+        f"{local.hour:02d}:{local.minute:02d}"
+    )
+
+
+def _cache_was_checked(payload: dict) -> bool:
+    if payload.get("checked_at"):
+        return True
+    if payload.get("ok") is True:
+        return True
+    if isinstance(payload.get("latest"), str) and payload.get("latest"):
+        return True
+    if isinstance(payload.get("error"), str) and payload.get("error"):
+        return True
+    return False
+
+
+def _unchecked_cache() -> dict:
     return {
+        "checked": False,
+        "available": False,
+        "latest": None,
+        "highlights": [],
+        "url": None,
+        "checked_at": None,
+        "checked_label": None,
+        "message": _UNCHECKED,
+        "error": None,
+    }
+
+
+def public_cache(payload: dict | None, current: str) -> dict:
+    """סטטוס לבדיקה מול הגרסה המותקנת עכשיו, לא מול ההודעה שנשמרה בזמן הבדיקה."""
+    if not payload or not _cache_was_checked(payload):
+        return _unchecked_cache()
+    latest = payload.get("latest") if isinstance(payload.get("latest"), str) else None
+    available = bool(latest) and current != "לא ידועה" and is_newer(latest, current)
+    highlights = payload.get("highlights") if isinstance(payload.get("highlights"), list) else []
+    error = payload.get("error") if isinstance(payload.get("error"), str) else None
+    failed = payload.get("ok") is False or bool(error)
+    current_parts = parse_version(current)
+    latest_parts = parse_version(latest) if latest else None
+    if failed:
+        message = error or "לא הצלחנו לבדוק."
+        available = False
+    elif available and latest:
+        message = f"יש גרסה חדשה: {latest}"
+    elif current_parts and latest_parts and latest_parts < current_parts:
+        message = "הגרסה המותקנת חדשה ממה שמפורסם."
+    elif current_parts and latest_parts and latest_parts == current_parts:
+        message = "אתם על הגרסה האחרונה."
+    elif not latest:
+        message = "לא פורסמה עדיין גרסה ב-GitHub."
+    else:
+        message = "אתם על הגרסה האחרונה."
+    checked_at = payload.get("checked_at") if isinstance(payload.get("checked_at"), str) else None
+    return {
+        "checked": True,
         "available": available,
-        "latest": latest if isinstance(latest, str) else None,
+        "latest": latest,
         "highlights": [str(line)[:180] for line in highlights[:6]],
         "url": payload.get("url") if isinstance(payload.get("url"), str) else None,
-        "checked_at": payload.get("checked_at"),
-        "message": payload.get("message"),
-        "error": payload.get("error"),
+        "checked_at": checked_at,
+        "checked_label": format_checked_at(checked_at),
+        "message": message,
+        "error": error if failed else None,
     }
+
+
+def reconcile_persisted_state(update_dir: Path, current: str) -> None:
+    """אחרי הפעלה מחדש: לא להציג «יש גרסה חדשה» לגרסה שכבר מותקנת, ולא להשאיר success ישן."""
+    path = status_path(update_dir)
+    payload = read_json(path)
+    if payload and payload.get("state") == "success":
+        target = payload.get("target")
+        if isinstance(target, str) and parse_version(target) == parse_version(current):
+            write_status(path, blank_status(current))
+    cpath = cache_path(update_dir)
+    cache = read_json(cpath)
+    if not cache or not _cache_was_checked(cache):
+        return
+    view = public_cache(cache, current)
+    if (
+        cache.get("available") == view["available"]
+        and cache.get("message") == view["message"]
+        and cache.get("current") == current
+    ):
+        return
+    cache["available"] = view["available"]
+    cache["message"] = view["message"]
+    cache["current"] = current
+    if view["error"] is None:
+        cache["error"] = None
+        cache["ok"] = True
+    write_cache(cpath, cache)
 
 
 def read_public_status() -> dict:
     cfg = load_config()
     current = installed_version()
+    reconcile_persisted_state(cfg.update_dir, current)
     path = status_path(cfg.update_dir)
     payload = read_json(path)
     if payload and payload.get("state") == "running" and not status_is_active(payload):
@@ -87,6 +183,7 @@ def summary() -> dict:
 
     cfg = load_config()
     current = installed_version()
+    reconcile_persisted_state(cfg.update_dir, current)
     info = describe_mode(cfg, git_checkout=is_git_checkout(cfg.repo_root))
     return {
         "current": current,
@@ -99,7 +196,7 @@ def summary() -> dict:
         "instructions": info["instructions"],
         "docker_command": info["docker_command"],
         "hint": _HINTS.get(cfg.mode, ""),
-        "cached": _public_cache(read_json(cache_path(cfg.update_dir)), current),
+        "cached": public_cache(read_json(cache_path(cfg.update_dir)), current),
         "status": read_public_status(),
     }
 
@@ -108,7 +205,8 @@ def badge() -> dict:
     schedule_autocheck()
     cfg = load_config()
     current = installed_version()
-    cached = _public_cache(read_json(cache_path(cfg.update_dir)), current) or {}
+    reconcile_persisted_state(cfg.update_dir, current)
+    cached = public_cache(read_json(cache_path(cfg.update_dir)), current)
     return {
         "available": bool(cached.get("available")),
         "current": current,
@@ -139,7 +237,12 @@ def check_for_updates(fetcher=None) -> dict:
     view["ok"] = True
     view["error"] = None
     saved = write_cache(path, view)
-    view["checked_at"] = saved.get("checked_at")
+    shown = public_cache(saved, current)
+    view["checked_at"] = shown["checked_at"]
+    view["checked_label"] = shown["checked_label"]
+    view["checked"] = True
+    view["available"] = shown["available"]
+    view["message"] = shown["message"]
     return view
 
 

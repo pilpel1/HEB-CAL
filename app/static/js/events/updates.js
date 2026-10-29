@@ -71,13 +71,32 @@
         });
     }
 
+    function stateFromCache(cached) {
+        if (!cached || cached.checked === false) {
+            return (cached && cached.message) || 'עדיין לא נבדק.';
+        }
+        if (cached.available) {
+            return cached.checked_label || '';
+        }
+        var parts = [];
+        if (cached.message) {
+            parts.push(cached.message);
+        }
+        if (cached.checked_label) {
+            parts.push(cached.checked_label);
+        }
+        return parts.join(' ');
+    }
+
     function renderOffer(source, info) {
-        var available = !!(source && source.available);
+        var current = (info && info.current) || '';
+        var offered = (source && source.latest) || '';
+        var available = !!(source && source.available && offered && offered !== current);
         show(byId('updateOffer'), available);
         if (!available) {
             return;
         }
-        latest = source.latest || '';
+        latest = offered;
         setText('updateLatest', latest);
         fillList('updateHighlights', source.highlights || []);
         show(byId('updateEmptyNotes'), !(source.highlights && source.highlights.length));
@@ -142,12 +161,11 @@
         }
         setText('updateCurrentVersion', info.current || '');
         setText('updateModeHint', info.instructions || info.hint || '');
+        var state = stateFromCache(info.cached);
         if (info.block) {
             setText('updateState', info.block);
-        } else if (info.cached && info.cached.message) {
-            setText('updateState', info.cached.message);
         } else {
-            setText('updateState', '');
+            setText('updateState', state);
         }
         show(byId('updateCheckBtn'), true);
         showDockerCommand(info);
@@ -225,9 +243,6 @@
                     }
                     var info = await api('/api/updates');
                     applySummary(info.data || {});
-                    if (result.data && result.data.message) {
-                        setText('updateState', result.data.message);
-                    }
                 } finally {
                     check.disabled = false;
                 }

@@ -108,15 +108,140 @@ def run_argv(args: list[str], *, cwd: Path, env: dict | None = None, timeout: in
         raise UpdateError("לא הצלחנו להריץ פעולה במערכת.", step="error") from exc
 
 
-def assert_worktree_clean(run) -> None:
-    proc = run(["git", "status", "--porcelain"])
+def _safe_relpath(path: str) -> str | None:
+    text = (path or "").strip().replace("\\", "/")
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        text = text[1:-1]
+    if not text or text.startswith("/") or text.startswith("-") or ":" in text:
+        return None
+    parts = [part for part in text.split("/") if part]
+    if not parts or any(part in {".", ".."} for part in parts):
+        return None
+    return "/".join(parts)[:120]
+
+
+def parse_porcelain(stdout: str) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for raw in (stdout or "").splitlines():
+        if not raw:
+            continue
+        if raw.startswith("?? "):
+            path = _safe_relpath(raw[3:])
+            if path:
+                rows.append(("??", path))
+            continue
+        if len(raw) < 4:
+            continue
+        code = raw[:2]
+        path = raw[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[-1]
+        safe = _safe_relpath(path)
+        if safe:
+            rows.append((code, safe))
+    return rows
+
+
+def _file_list(paths: list[str], limit: int = 4) -> str:
+    unique: list[str] = []
+    for path in paths:
+        if path not in unique:
+            unique.append(path)
+    extra = len(unique) - limit
+    shown = ", ".join(unique[:limit])
+    if extra > 0:
+        shown = f"{shown} ועוד {extra}"
+    return shown
+
+
+def _dirty_message(tracked: list[str], conflicts: list[str]) -> str:
+    parts: list[str] = []
+    if tracked:
+        parts.append(
+            "יש שינויים מקומיים בקוד. העדכון רץ רק על עותק נקי. "
+            f"קבצים: {_file_list(tracked)}. "
+            "בטלו (git checkout -- קובץ) או שמרו בצד (git stash) ואז עדכנו שוב."
+        )
+    if conflicts:
+        first = conflicts[0]
+        parts.append(
+            "יש קבצים מקומיים שלא בגיט שיתנגשו עם הגרסה החדשה. "
+            f"קבצים: {_file_list(conflicts)}. "
+            f"העבירו הצידה: mv {first} {first}.local ואז עדכנו שוב."
+        )
+    return " ".join(parts)[:240]
+
+
+def _tag_has_path(run, tag: str, path: str) -> bool:
+    validate_tag(tag)
+    proc = run(["git", "cat-file", "-e", f"refs/tags/{tag}:{path}"])
+    return proc.returncode == 0
+
+
+def _tag_has_prefix(run, tag: str, directory: str) -> bool:
+    validate_tag(tag)
+    prefix = directory.rstrip("/")
+    proc = run(["git", "ls-tree", "-r", "--name-only", f"refs/tags/{tag}", prefix])
+    if proc.returncode != 0:
+        return False
+    for line in (proc.stdout or "").splitlines():
+        name = line.strip()
+        if name == prefix or name.startswith(prefix + "/"):
+            return True
+    return False
+
+
+def _same_blob(run, tag: str, path: str) -> bool:
+    validate_tag(tag)
+    tagged = run(["git", "rev-parse", "--verify", f"refs/tags/{tag}:{path}"])
+    working = run(["git", "hash-object", "--", path])
+    if tagged.returncode != 0 or working.returncode != 0:
+        return False
+    left = (tagged.stdout or "").strip()
+    right = (working.stdout or "").strip()
+    return bool(left) and left == right
+
+
+def _unlink_untracked(repo_root: Path, rel: str) -> None:
+    root = repo_root.resolve()
+    target = (root / rel).resolve()
+    if not target.is_file() or not target.is_relative_to(root):
+        return
+    try:
+        target.unlink()
+    except OSError:
+        return
+
+
+def assert_worktree_clean(run, tag: str | None = None, repo_root: Path | None = None) -> None:
+    """עותק נקי משינויים במעקב. קבצים לא-מעקב מותרים אם הם לא דורסים קובץ בתג."""
+    proc = run(["git", "status", "--porcelain", "--untracked-files=all"])
     if proc.returncode != 0:
         raise UpdateError("לא הצלחנו לבדוק את מצב ה-git.", step="checkout")
-    if (proc.stdout or "").strip():
-        raise UpdateError(
-            "יש שינויים מקומיים בקוד. העדכון רץ רק על עותק נקי.",
-            step="checkout",
-        )
+    tracked: list[str] = []
+    untracked: list[str] = []
+    for code, path in parse_porcelain(proc.stdout or ""):
+        if code == "??":
+            untracked.append(path)
+        else:
+            tracked.append(path)
+    conflicts: list[str] = []
+    if tag:
+        validate_tag(tag)
+        for path in untracked:
+            if path.endswith("/"):
+                if _tag_has_prefix(run, tag, path):
+                    conflicts.append(path.rstrip("/"))
+                continue
+            if not _tag_has_path(run, tag, path):
+                continue
+            if _same_blob(run, tag, path):
+                if repo_root is not None:
+                    _unlink_untracked(repo_root, path)
+                continue
+            conflicts.append(path)
+    if tracked or conflicts:
+        raise UpdateError(_dirty_message(tracked, conflicts), step="checkout")
 
 
 def assert_not_shallow(run) -> None:
@@ -251,8 +376,12 @@ class LiveOps:
     def current_sha(self) -> str:
         return current_head(lambda args: self._git(args[1:]))
 
-    def ensure_clean(self) -> None:
-        assert_worktree_clean(lambda args: self._git(args[1:]))
+    def ensure_clean(self, tag: str | None = None) -> None:
+        assert_worktree_clean(
+            lambda args: self._git(args[1:]),
+            tag=tag,
+            repo_root=self.cfg.repo_root,
+        )
 
     def ensure_not_shallow(self) -> None:
         assert_not_shallow(lambda args: self._git(args[1:]))
