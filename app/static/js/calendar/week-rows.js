@@ -10,17 +10,14 @@ function monthMarkHtml(fullName, shortName) {
 
 function buildDayCell(year, month, day) {
     const cell = document.createElement('td');
-    const today = new Date();
-    const isToday = today.getFullYear() === year
-        && today.getMonth() + 1 === month
-        && today.getDate() === day.gregorian_day;
-
-    if (isToday) {
-        cell.classList.add('current-day');
-    }
-
     const cellDate = new Date(year, month - 1, day.gregorian_day);
     const dateStr = formatDate(cellDate);
+    const today = getTodayDateStr();
+    if (dateStr === today) {
+        cell.classList.add('current-day');
+    } else if (dateStr < today) {
+        cell.classList.add('past-day');
+    }
     cell.setAttribute('data-date', dateStr);
     cell.dataset.year = String(year);
     cell.dataset.month = String(month);
