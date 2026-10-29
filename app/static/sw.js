@@ -1,5 +1,5 @@
 /* מעטפת PWA בסיסית: HTML + CSS/JS מקומי. לא שומר /api ולא משאבי CDN. */
-const CACHE_NAME = 'heb-cal-shell-v1';
+const CACHE_NAME = 'heb-cal-shell-v2';
 
 const SHELL = [
     '/',

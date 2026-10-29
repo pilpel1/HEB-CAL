@@ -71,7 +71,7 @@ def _update_env(monkeypatch, tmp_path):
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert parse_version(version) == (1, 0, 15)
+    assert parse_version(version) == (1, 0, 16)
     assert f"## {version}" in changelog
     assert "## 1.0.8" in changelog
     assert "## 1.0.3" in changelog
@@ -412,7 +412,7 @@ def test_settings_and_gear_markup(client):
     assert "עדכן עכשיו" in settings
     assert "סיסמת מנהל" not in settings
     assert "updateLoginForm" not in settings
-    assert ">1.0.15<" in settings
+    assert ">1.0.16<" in settings
     assert "עדיין לא נבדק" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
@@ -433,10 +433,10 @@ def test_settings_and_gear_markup(client):
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
-    assert health.get_json()["version"] == "1.0.15"
+    assert health.get_json()["version"] == "1.0.16"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
-    assert body["current"] == "1.0.15"
+    assert body["current"] == "1.0.16"
     assert body["cached"]["checked"] is False
     assert body["cached"]["available"] is False
     assert "עדיין לא נבדק" in body["cached"]["message"]
