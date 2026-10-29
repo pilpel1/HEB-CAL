@@ -400,11 +400,19 @@ let pageSize = 20;
 let sortOrder = 'desc';
 
 function getTodayDateStr() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jerusalem',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(new Date());
+    const lookup = {};
+    for (const part of parts) {
+        if (part.type !== 'literal') {
+            lookup[part.type] = part.value;
+        }
+    }
+    return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
 // קטגוריה לפי תאריך לועזי בלבד — בלי קשר לשעה

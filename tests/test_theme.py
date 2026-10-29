@@ -64,5 +64,6 @@ def test_dark_theme_covers_infinite_calendar_chrome(client):
         ".calendar-boot-status",
         ".gregorian-date.month-start",
         ".hebrew-date.month-start",
+        "td.past-day:not(.current-day)",
     ):
         assert selector in css

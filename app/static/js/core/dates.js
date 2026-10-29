@@ -37,8 +37,22 @@ function weekDatesOf(weekStart) {
     return Array.from({ length: 7 }, (_, i) => addDaysToDateStr(weekStart, i));
 }
 
-function getTodayDateStr() {
-    return formatDate(new Date());
+// היום לפי שעון ישראל — לא לפי timezone של הדפדפן
+function getTodayDateStr(now) {
+    const date = now instanceof Date ? now : new Date();
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jerusalem',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(date);
+    const lookup = {};
+    for (const part of parts) {
+        if (part.type !== 'literal') {
+            lookup[part.type] = part.value;
+        }
+    }
+    return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
 // פונקציה לבדיקה אם תאריך נמצא בטווח

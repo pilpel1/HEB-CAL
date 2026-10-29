@@ -612,6 +612,19 @@
     border-bottom: 1px solid #a4eaa8b6;  /* גבול ירוק */
 }
 
+/* ימים שעברו — גוון אפור עדין. היום נשאר ירוק; אירועים בלי שקיפות */
+.calendar-day.past {
+    background-color: #f3f4f6;
+}
+
+.calendar-table td.past-day:not(.current-day) {
+    background-color: #f3f4f6;
+}
+
+.calendar-table td.past-day:not(.current-day) .dates-container {
+    background-color: #e9ecef;
+}
+
 /* תפריט הקשר בלחיצה ימנית על הלוח */
 .calendar-context-menu {
     position: fixed;

@@ -225,6 +225,15 @@
     border-bottom-color: #4caf50;
 }
 
+[data-bs-theme="dark"] .calendar-day.past,
+[data-bs-theme="dark"] .calendar-table td.past-day:not(.current-day) {
+    background-color: rgba(148, 163, 184, 0.10);
+}
+
+[data-bs-theme="dark"] .calendar-table td.past-day:not(.current-day) .dates-container {
+    background-color: rgba(148, 163, 184, 0.16);
+}
+
 /* חגים / צומות / פרשות — הצבע מגיע inline מה-backend (jewish_calendar.py), לכן !important */
 [data-bs-theme="dark"] .holiday { background-color: rgba(231, 76, 60, 0.3); color: #ffa8a0 !important; }
 [data-bs-theme="dark"] .fast { background-color: rgba(255, 165, 0, 0.28); color: #ffc078 !important; }
