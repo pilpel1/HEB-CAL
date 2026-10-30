@@ -23,6 +23,11 @@ def test_pages_link_manifest_and_register_sw(client, page):
     html = client.get(page).get_data(as_text=True)
     assert 'rel="manifest"' in html
     assert "manifest.webmanifest" in html
+    assert 'rel="icon"' in html
+    assert 'type="image/svg+xml"' in html
+    assert "icons/favicon.svg" in html
+    assert "icons/favicon-32.png" in html
+    assert 'sizes="32x32"' in html
     assert 'rel="apple-touch-icon"' in html
     assert "icons/icon-192.png" in html
     assert 'name="theme-color"' in html
@@ -75,3 +80,23 @@ def test_service_worker_is_served_from_root(client):
     assert not (REPO / "app" / "static" / "js" / "sw.js").exists()
     static_copy = client.get("/static/sw.js")
     assert static_copy.status_code == 200
+    assert "heb-cal-shell-v2" in body
+
+
+def test_favicon_files_and_ico_route(client):
+    svg = client.get("/static/icons/favicon.svg")
+    assert svg.status_code == 200
+    svg_body = svg.get_data()
+    assert b"<svg" in svg_body
+    ctype = svg.headers.get("Content-Type", "")
+    assert "svg" in ctype
+
+    png32 = client.get("/static/icons/favicon-32.png")
+    assert png32.status_code == 200
+    png32_body = png32.get_data()
+    assert _png_size(png32_body) == (32, 32)
+
+    ico = client.get("/favicon.ico")
+    assert ico.status_code == 200
+    assert ico.get_data() == png32_body
+    assert "image/png" in ico.headers.get("Content-Type", "")

@@ -51,6 +51,15 @@ def settings():
     return render_template('settings.html', app_version=installed_version())
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(
+        os.path.join(app.static_folder, "icons"),
+        "favicon-32.png",
+        mimetype="image/png",
+    )
+
+
 @app.route("/sw.js")
 def service_worker():
     # מהשורש כדי ש-scope של ה-worker יהיה `/` (לא `/static/`).
