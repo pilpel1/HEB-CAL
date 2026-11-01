@@ -82,7 +82,7 @@ async function deleteEvent(eventId, options) {
         ? 'למחוק את כל הסדרה?'
         : 'למחוק את האירוע?';
     if (!confirm(message)) {
-        return;
+        return false;
     }
 
     try {
@@ -106,18 +106,21 @@ async function deleteEvent(eventId, options) {
             
             showMessage('האירוע נמחק');
             await refreshEventsViews();
-        } else {
-            alert('לא הצלחנו למחוק');
+            return true;
         }
+
+        alert('לא הצלחנו למחוק');
+        return false;
     } catch (error) {
         console.error('Error deleting event:', error);
         alert('לא הצלחנו למחוק');
+        return false;
     }
 }
 
 async function deleteEventOccurrence(eventId, occurrenceDate) {
     if (!confirm('למחוק רק את המופע הזה? שאר הסדרה נשארת.')) {
-        return;
+        return false;
     }
     try {
         const response = await fetch(
@@ -128,12 +131,14 @@ async function deleteEventOccurrence(eventId, occurrenceDate) {
         if (result.success) {
             showMessage('המופע נמחק');
             await refreshEventsViews();
-            return;
+            return true;
         }
         alert(result.error || 'לא הצלחנו למחוק');
+        return false;
     } catch (error) {
         console.error('Error deleting occurrence:', error);
         alert('לא הצלחנו למחוק');
+        return false;
     }
 }
 
