@@ -60,6 +60,15 @@
                     <input class="form-check-input" type="checkbox" role="switch" id="densitySwitch" data-density-switch>
                 </div>
             </div>
+            <div class="settings-switch-row">
+                <label class="settings-switch-label" for="fullEventFormSwitch">
+                    תמיד להציג טופס מלא במכשיר זה
+                    <span class="settings-switch-hint text-muted">טלפון יכול להישאר פשוט, מחשב עם טופס מלא. נשמר במכשיר הזה</span>
+                </label>
+                <div class="form-check form-switch settings-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="fullEventFormSwitch" data-full-form-switch>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -156,6 +165,10 @@
             try { density = localStorage.getItem('heb-cal-density'); } catch (e) {}
             var densityInput = document.getElementById('densitySwitch');
             if (densityInput) densityInput.checked = density === 'compact';
+            var fullForm = null;
+            try { fullForm = localStorage.getItem('heb-cal-full-event-form'); } catch (e) {}
+            var fullFormInput = document.getElementById('fullEventFormSwitch');
+            if (fullFormInput) fullFormInput.checked = fullForm === '1';
             var autoBackup = null;
             var autoRetention = null;
             try {

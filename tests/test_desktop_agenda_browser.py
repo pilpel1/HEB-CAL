@@ -326,15 +326,22 @@ def test_settings_hints_share_the_toggle_row(live_server):
                         noSeparateParagraph: !label.closest('.card-body').querySelector('p.text-muted.small.mb-0'),
                     };
                 }
-                return { theme: row('themeSwitch'), density: row('densitySwitch') };
+                return {
+                    theme: row('themeSwitch'),
+                    density: row('densitySwitch'),
+                    fullForm: row('fullEventFormSwitch'),
+                };
             }""")
             assert info["theme"]["hintInLabel"]
             assert info["density"]["hintInLabel"]
+            assert info["fullForm"]["hintInLabel"]
             assert info["theme"]["switchOverlapsLabel"]
             assert info["density"]["switchOverlapsLabel"]
+            assert info["fullForm"]["switchOverlapsLabel"]
             assert info["theme"]["noSeparateParagraph"]
             assert "נשמר במכשיר הזה" in page.inner_text("label[for=themeSwitch]")
             assert "בטלפון יותר שבועות" in page.inner_text("label[for=densitySwitch]")
+            assert "תמיד להציג טופס מלא במכשיר זה" in page.inner_text("label[for=fullEventFormSwitch]")
         finally:
             browser.close()
 

@@ -105,16 +105,22 @@ def test_phone_comfortable_shows_all_events_plus_n_only_in_compact():
 def test_settings_hints_are_inline_and_events_list_drops_reminders_link(client):
     settings = client.get("/settings").get_data(as_text=True)
     display = settings.split('id="settings-display-title"', 1)[1].split('id="settingsColors"', 1)[0]
-    assert display.count("settings-switch-hint") == 2
-    assert display.count("נשמר במכשיר הזה") == 2
+    assert display.count("settings-switch-hint") == 3
+    assert display.count("נשמר במכשיר הזה") == 3
     assert "בטלפון יותר שבועות, במסך רחב תאים וצ'יפים קטנים יותר." in display
+    assert "תמיד להציג טופס מלא במכשיר זה" in display
+    assert 'id="fullEventFormSwitch"' in display
+    assert "heb-cal-full-event-form" in settings
     assert "בטלפון, תצוגה צפופה מציגה יותר שבועות" not in settings
     assert '<p class="text-muted small mb-0">' not in display
     # הרמז יושב בתוך הלייבל, לא בשורה נפרדת מתחת למתג
     theme_label = display.split('for="themeSwitch"', 1)[1].split("</label>", 1)[0]
     density_label = display.split('for="densitySwitch"', 1)[1].split("</label>", 1)[0]
+    full_label = display.split('for="fullEventFormSwitch"', 1)[1].split("</label>", 1)[0]
     assert "נשמר במכשיר הזה" in theme_label
     assert "בטלפון יותר שבועות" in density_label
+    assert "במכשיר זה" in full_label
+    assert "household_settings" not in display
     forms = FORMS_CSS.read_text(encoding="utf-8")
     assert ".settings-switch-hint" in forms
     assert "flex-wrap" in forms or "min-width: 0" in forms

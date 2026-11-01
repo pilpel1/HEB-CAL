@@ -66,8 +66,11 @@ def main() -> int:
         page.click("#addEventFromCalendarBtn")
         modal = page.locator("#quickEventModal")
         expect(modal).to_be_visible()
+        expect(page.locator("#quick_advanced")).to_be_hidden()
         expect(page.locator("#quick_reminder_panel")).to_be_hidden()
 
+        page.click("#quick_advanced_toggle")
+        expect(page.locator("#quick_advanced")).to_be_visible()
         page.click("#quick_reminder_enabled")
         panel = page.locator("#quick_reminder_panel")
         expect(panel).to_be_visible()

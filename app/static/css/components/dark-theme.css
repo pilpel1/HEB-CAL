@@ -203,12 +203,7 @@
     border-color: #93c5fd;
 }
 
-[data-bs-theme="dark"] .quick-field-hebrew .form-control {
-    color: var(--bs-secondary-color);
-    background: transparent;
-}
-
-[data-bs-theme="dark"] .quick-end-toggle {
+[data-bs-theme="dark"] .quick-advanced-toggle {
     color: #93c5fd;
     background: transparent;
 }

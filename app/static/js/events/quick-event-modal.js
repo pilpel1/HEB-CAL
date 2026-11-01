@@ -13,6 +13,113 @@ let hebrewPickerContextYear = null;
 let dateEntrySource = null;
 // true אחרי בחירה מפורשת של לוח החזרה, או כשעורכים אירוע שכבר חוזר
 let recurrenceCalendarTouched = false;
+let quickModalEpoch = 0;
+
+const FULL_EVENT_FORM_KEY = 'heb-cal-full-event-form';
+
+function prefersFullEventForm() {
+    try {
+        return localStorage.getItem(FULL_EVENT_FORM_KEY) === '1';
+    } catch (error) {
+        return false;
+    }
+}
+
+function setPrefersFullEventForm(on) {
+    try {
+        if (on) {
+            localStorage.setItem(FULL_EVENT_FORM_KEY, '1');
+        } else {
+            localStorage.removeItem(FULL_EVENT_FORM_KEY);
+        }
+    } catch (error) {
+        // localStorage חסום (מצב פרטי) — הבחירה תחזיק רק עד רענון
+    }
+    syncFullEventFormSwitch();
+}
+
+function syncFullEventFormSwitch() {
+    const on = prefersFullEventForm();
+    document.querySelectorAll('[data-full-form-switch]').forEach((input) => {
+        input.checked = on;
+    });
+}
+
+function eventUsesAdvancedFields(eventData) {
+    if (!eventData || typeof eventData !== 'object') {
+        return false;
+    }
+    if (eventData.end_date) {
+        return true;
+    }
+    if (eventData.recurrence_freq) {
+        return true;
+    }
+    if (eventData.is_shift || eventData.shift_label) {
+        return true;
+    }
+    if (String(eventData.description || '').trim()) {
+        return true;
+    }
+    if (Array.isArray(eventData.reminders) && eventData.reminders.length) {
+        return true;
+    }
+    return false;
+}
+
+function isQuickAdvancedOpen() {
+    const toggle = document.getElementById('quick_advanced_toggle');
+    return toggle ? toggle.getAttribute('aria-expanded') === 'true' : false;
+}
+
+function setQuickAdvancedOpen(open) {
+    const isOpen = Boolean(open);
+    const modal = document.getElementById('quickEventModal');
+    const panel = document.getElementById('quick_advanced');
+    const toggle = document.getElementById('quick_advanced_toggle');
+    if (modal) {
+        modal.classList.toggle('is-advanced', isOpen);
+    }
+    if (panel) {
+        panel.hidden = !isOpen;
+    }
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+}
+
+function applyQuickAdvancedDefault(eventData) {
+    setQuickAdvancedOpen(prefersFullEventForm() || eventUsesAdvancedFields(eventData));
+}
+
+function syncQuickModalToVisualViewport() {
+    const modal = document.getElementById('quickEventModal');
+    if (!modal || !modal.classList.contains('show')) {
+        return;
+    }
+    const vv = window.visualViewport;
+    const height = Math.round(vv ? vv.height : window.innerHeight);
+    const width = Math.round(vv ? vv.width : window.innerWidth);
+    const offsetTop = Math.round(vv ? vv.offsetTop : 0);
+    const offsetLeft = Math.round(vv ? vv.offsetLeft : 0);
+    modal.style.top = `${offsetTop}px`;
+    modal.style.left = `${offsetLeft}px`;
+    modal.style.height = `${height}px`;
+    modal.style.width = `${width}px`;
+    modal.style.setProperty('--quick-vv-height', `${height}px`);
+}
+
+function clearQuickModalViewportPin() {
+    const modal = document.getElementById('quickEventModal');
+    if (!modal) {
+        return;
+    }
+    modal.style.top = '';
+    modal.style.left = '';
+    modal.style.height = '';
+    modal.style.width = '';
+    modal.style.removeProperty('--quick-vv-height');
+}
 
 function loadHebrewYearLabels() {
     if (!hebrewYearsPromise) {
@@ -262,6 +369,7 @@ function setQuickEventReadonly(readonly) {
                 el.hasAttribute('data-bs-dismiss')
                 || el.id === 'quick_submit_btn'
                 || el.id === 'quick_delete_btn'
+                || el.id === 'quick_advanced_toggle'
             ) {
                 return;
             }
@@ -445,11 +553,13 @@ function currentEditScope() {
 
 function setEndDateOpen(isOpen) {
     const wrap = document.querySelector('#quickEventModal .quick-end-wrap');
+    if (wrap) {
+        wrap.classList.toggle('is-open', Boolean(isOpen));
+    }
     const toggle = document.getElementById('quick_end_toggle');
-    if (!wrap || !toggle) {
+    if (!toggle) {
         return;
     }
-    wrap.classList.toggle('is-open', Boolean(isOpen));
     toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     toggle.textContent = isOpen ? 'הסר תאריך סיום' : '+ תאריך סיום';
 }
@@ -593,6 +703,7 @@ function fillQuickEventForm(eventData = {}, options = {}) {
             shiftUiState.quickShiftFill = pending;
         }
     }
+    applyQuickAdvancedDefault(eventData);
     const finishFill = () => {
         quickEventFormDirty = false;
         quickEventFormMute = false;
@@ -625,6 +736,7 @@ async function openQuickEventModal(dateStr) {
     if (!modalElement) {
         return;
     }
+    const epoch = ++quickModalEpoch;
 
     const form = document.getElementById('quickEventForm');
     if (form) {
@@ -635,10 +747,13 @@ async function openQuickEventModal(dateStr) {
     const pendingHebrew = fillQuickEventForm({ gregorian_date: dateStr });
     // אחרי reset — מוודאים שוב שה-min על תאריך הסיום ננעל לתאריך ההתחלה
     syncEndDateMin(dateStr, document.getElementById('quick_end_date'));
-    await pendingHebrew;
     setQuickEventModalMode(false);
-
     bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    await pendingHebrew;
+    if (epoch !== quickModalEpoch) {
+        return;
+    }
+    setQuickEventModalMode(false);
 }
 
 async function openEditEventModal(eventId, occurrenceDate) {
@@ -646,6 +761,7 @@ async function openEditEventModal(eventId, occurrenceDate) {
     if (!modalElement) {
         return;
     }
+    const epoch = ++quickModalEpoch;
 
     try {
         const url = occurrenceDate
@@ -662,6 +778,9 @@ async function openEditEventModal(eventId, occurrenceDate) {
         quickOccurrenceSnapshot = series ? { ...event } : null;
         quickSeriesSnapshot = series;
         await fillQuickEventForm(event, { keepScope: Boolean(series) });
+        if (epoch !== quickModalEpoch) {
+            return;
+        }
         if (series) {
             setRecurrenceScopeVisible(true, 'occurrence');
         }
@@ -676,6 +795,17 @@ async function openEditEventModal(eventId, occurrenceDate) {
 }
 
 function initQuickEventModal() {
+    syncFullEventFormSwitch();
+    if (!initQuickEventModal._boundFullForm) {
+        document.addEventListener('change', (event) => {
+            const input = event.target.closest('[data-full-form-switch]');
+            if (!input) {
+                return;
+            }
+            setPrefersFullEventForm(input.checked);
+        });
+        initQuickEventModal._boundFullForm = true;
+    }
     const modalElement = document.getElementById('quickEventModal');
     const quickForm = document.getElementById('quickEventForm');
     if (!modalElement || !quickForm) {
@@ -706,9 +836,21 @@ function initQuickEventModal() {
         deleteFromQuickEventModal();
     });
 
+    document.getElementById('quick_advanced_toggle')?.addEventListener('click', () => {
+        setQuickAdvancedOpen(!isQuickAdvancedOpen());
+    });
+
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', syncQuickModalToVisualViewport);
+        window.visualViewport.addEventListener('scroll', syncQuickModalToVisualViewport);
+    }
+    window.addEventListener('resize', syncQuickModalToVisualViewport);
+
     // אחרי סיום הפתיחה של Bootstrap — פוקוס יציב על הכותרת
     modalElement.addEventListener('shown.bs.modal', () => {
+        syncQuickModalToVisualViewport();
         requestAnimationFrame(() => {
+            syncQuickModalToVisualViewport();
             const titleInput = document.getElementById('quick_title');
             if (titleInput) {
                 titleInput.focus({ preventScroll: true });
@@ -717,13 +859,17 @@ function initQuickEventModal() {
     });
 
     modalElement.addEventListener('hidden.bs.modal', () => {
+        const epochAtClose = quickModalEpoch;
+        clearQuickModalViewportPin();
         // סגירה ואז פתיחה מיידית: אל תאפסו טופס שכבר נפתח מחדש
-        if (modalElement.classList.contains('show')) {
-            return;
-        }
-        setQuickEventReadonly(false);
-        fillQuickEventForm();
-        setQuickEventModalMode(false);
+        requestAnimationFrame(() => {
+            if (modalElement.classList.contains('show') || epochAtClose !== quickModalEpoch) {
+                return;
+            }
+            setQuickEventReadonly(false);
+            fillQuickEventForm();
+            setQuickEventModalMode(false);
+        });
     });
 
     const calendarRoot = document.getElementById('calendar-stream');
