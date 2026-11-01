@@ -295,6 +295,20 @@ function applyChipPrefix(content, hideable, keep) {
 }
 
 /**
+ * "+N" רק בטלפון ובצפיפות. במצב רגיל התא גדל וכל האירועים נשארים.
+ * בדסקטופ לא חותכים — גם לא בצפיפות.
+ */
+function clipsOverflowChips() {
+    if (typeof isCompactCalendar !== 'function' || !isCompactCalendar()) {
+        return false;
+    }
+    if (typeof isCompactDensity === 'function') {
+        return isCompactDensity();
+    }
+    return document.documentElement.getAttribute('data-cal-density') === 'compact';
+}
+
+/**
  * בטלפון הכותרת עד שתי שורות, וכמה שיותר צ'יפים כאלה נכנסים לגובה.
  * "+N" רק על מה שלא נכנס. אם אף צ'יפ בשתי שורות לא נכנס יחד עם שורת "+N",
  * הצ'יפ הראשון יורד לשורה אחת עם אליפסיס — ואז "+N". אף פעם לא "+N" לבד.
@@ -306,7 +320,7 @@ function fitCellChips(cell) {
     if (!cell.isConnected) {
         return;
     }
-    if (typeof isCompactCalendar !== 'function' || !isCompactCalendar()) {
+    if (!clipsOverflowChips()) {
         return;
     }
 

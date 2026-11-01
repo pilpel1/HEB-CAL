@@ -1086,12 +1086,21 @@
     }
 }
 
-/* במצב צפוף בטלפון: מגבילים את גובה התא */
+/* במצב צפוף בטלפון: מגבילים את גובה התא. במצב רגיל השורה גדלה עם האירועים.
+   min-height על <tr> לא תופס — לכן המינימום על .day-cell. height של השורה
+   נשאר --week-row-height (בטבלה זה מינימום) כדי שתאים ריקים לא יתכווצו. */
 /* בדסקטופ compact: הכלל נמצא ב-@media (min-width: 481px) */
 @media (max-width: 480px) {
     :root[data-cal-density="compact"] .day-cell {
         max-height: calc(var(--week-row-height) - 1px);
         overflow: hidden;
+    }
+
+    html[data-cal-density="comfortable"] .day-cell {
+        height: auto;
+        min-height: var(--week-row-height);
+        max-height: none;
+        overflow: visible;
     }
 }
 
