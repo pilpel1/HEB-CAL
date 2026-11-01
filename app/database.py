@@ -20,9 +20,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # גרסה 4: דגלי receives_reminders / works_shifts על reminder_people, עם backfill.
 # גרסה 5: מקורות iCal של יומן גוגל, ומזהה מקור+UID על events. בלי מחיקת שורות.
 # גרסה 6: סיכום בוקר בטלגרם — daily_digest_enabled / daily_digest_last_sent על reminder_people.
+# גרסה 7: אינדקס ייחודי על שם מנורמל ב-reminder_people, אחרי מיזוג כפילויות תואמות.
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
@@ -198,6 +199,9 @@ def apply_pending_migrations(db) -> None:
         from app.reminders.repository import backfill_people_role_flags
 
         backfill_people_role_flags(db)
+        from app.reminders.repository import ensure_unique_people_names
+
+        ensure_unique_people_names(db)
         _write_user_version(db, SCHEMA_VERSION)
 
 
@@ -210,6 +214,9 @@ def init_db():
 
     ensure_bot_schema(db)
     ensure_live_sync_schema(db)
+    from app.reminders.repository import ensure_unique_people_names
+
+    ensure_unique_people_names(db)
 
 
 _RECURRENCE_COLUMNS = (

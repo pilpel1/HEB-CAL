@@ -437,15 +437,21 @@ def test_search_finds_future_occurrence_date(client):
 
 def test_delete_person_strips_recipient_ids(client):
     person = _person(client, chat_id="777")
+    other = _person(client, name="נועה", chat_id="778")
     created = _event(
         client,
         reminders=[{"offset_minutes": 5, "recipient_ids": [person["id"]]}],
     )
     event_id = created.get_json()["id"]
-    assert client.delete(f"/api/reminder-people/{person['id']}").status_code == 200
+    blocked = client.delete(f"/api/reminder-people/{person['id']}")
+    assert blocked.status_code == 409
+    assert client.delete(
+        f"/api/reminder-people/{person['id']}?reassign_to={other['id']}"
+    ).status_code == 200
     body = client.get(f"/api/events/{event_id}").get_json()
     leftover = [rid for item in body["reminders"] for rid in item["recipient_ids"]]
     assert person["id"] not in leftover
+    assert other["id"] in leftover
 
 
 def test_events_list_escapes_user_text():

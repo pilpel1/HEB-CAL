@@ -407,6 +407,16 @@
     border-bottom-color: var(--bs-border-color);
 }
 
+[data-bs-theme="dark"] .reminder-person-status.is-linked {
+    color: #75b798;
+}
+
+[data-bs-theme="dark"] .reminder-person-status.is-missing,
+[data-bs-theme="dark"] .reminder-form-warn,
+[data-bs-theme="dark"] .reminder-recipient-no-chat {
+    color: #ffb4ab;
+}
+
 [data-bs-theme="dark"] .shift-matrix th,
 [data-bs-theme="dark"] .shift-matrix td {
     border-bottom-color: var(--bs-border-color);

@@ -883,6 +883,66 @@
     font-variant-numeric: tabular-nums;
 }
 
+.reminder-person-text {
+    min-width: 0;
+    flex: 1 1 12rem;
+}
+
+.reminder-person-status.is-linked {
+    color: #157347;
+}
+
+.reminder-person-status.is-missing {
+    color: #b42318;
+}
+
+.reminder-person-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
+    margin-top: 0.35rem;
+}
+
+.reminder-person-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.reminder-person-flag .form-check-input {
+    float: none;
+    margin: 0;
+    cursor: pointer;
+}
+
+.reminder-person-suggest {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.reminder-person-reassign .form-select {
+    max-width: 16rem;
+}
+
+.reminder-form-warn {
+    color: #9a5b00;
+    font-size: 0.8rem;
+    margin: 0.35rem 0 0;
+}
+
+.reminder-recipient-no-chat {
+    font-size: 0.75rem;
+    color: #9a5b00;
+}
+
 #personShiftFields[hidden],
 #shiftPeoplePanel[hidden],
 .shift-week-nav[hidden],

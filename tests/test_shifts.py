@@ -905,6 +905,9 @@ def test_calendar_and_settings_markup(client):
     people_js = client.get("/static/js/events/reminder-people.js").get_data(as_text=True)
     assert "personShiftPayload" not in people_js
     assert "receives_reminders" in people_js
+    assert "works_shifts" in people_js
+    assert "filter((person) => person.receives_reminders)" not in people_js
+    assert "appendPersonRoleSwitch" in people_js
 
 
 def test_people_role_filters_and_api_validation(client):

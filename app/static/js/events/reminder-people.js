@@ -1,5 +1,67 @@
 // עמוד «אנשים לתזכורות». רץ רק אם #reminderPeopleApp קיים.
 
+const reminderPeopleState = {
+    people: [],
+    deletingId: null,
+};
+
+function normalizePersonName(name) {
+    return String(name || '').trim().toLowerCase().replace(/[\s'"׳״]+/g, '');
+}
+
+function personNameEditDistance(left, right) {
+    if (left === right) {
+        return 0;
+    }
+    const rows = left.length + 1;
+    const cols = right.length + 1;
+    const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    for (let i = 0; i < rows; i += 1) {
+        grid[i][0] = i;
+    }
+    for (let j = 0; j < cols; j += 1) {
+        grid[0][j] = j;
+    }
+    for (let i = 1; i < rows; i += 1) {
+        for (let j = 1; j < cols; j += 1) {
+            const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+            grid[i][j] = Math.min(
+                grid[i - 1][j] + 1,
+                grid[i][j - 1] + 1,
+                grid[i - 1][j - 1] + cost,
+            );
+        }
+    }
+    return grid[left.length][right.length];
+}
+
+function personNameSimilarity(left, right) {
+    const a = normalizePersonName(left);
+    const b = normalizePersonName(right);
+    if (!a || !b) {
+        return '';
+    }
+    if (a === b) {
+        return 'exact';
+    }
+    if (a.length >= 2 && b.length >= 2 && (a.includes(b) || b.includes(a))) {
+        return 'similar';
+    }
+    if (Math.min(a.length, b.length) >= 3 && Math.abs(a.length - b.length) <= 1
+        && personNameEditDistance(a, b) <= 1) {
+        return 'similar';
+    }
+    return '';
+}
+
+function telegramLinkStatus(person) {
+    const chat = (person && person.telegram_chat_id) || '';
+    if (chat) {
+        return { linked: true, text: `מחובר לטלגרם · ${chat}` };
+    }
+    return { linked: false, text: 'אין קישור לטלגרם' };
+}
+
 function initReminderPeoplePage() {
     const root = document.getElementById('reminderPeopleApp');
     const form = document.getElementById('reminderPersonForm');
@@ -8,6 +70,8 @@ function initReminderPeoplePage() {
     }
     form.addEventListener('submit', saveReminderPerson);
     document.getElementById('reminderPersonCancel')?.addEventListener('click', resetReminderPersonForm);
+    document.getElementById('reminderPersonName')?.addEventListener('input', suggestSimilarReminderPerson);
+    document.getElementById('reminderPersonReassignBtn')?.addEventListener('click', confirmReassignDeletePerson);
     initChatIdHelp();
     loadReminderPeople();
 }
@@ -130,6 +194,8 @@ function resetReminderPersonForm() {
     setReminderPersonError('');
     setReminderPersonSaved(false);
     setReminderPersonContext(null);
+    hidePersonReassign();
+    suggestSimilarReminderPerson();
 }
 
 function startEditReminderPerson(person) {
@@ -141,8 +207,10 @@ function startEditReminderPerson(person) {
     setReminderPersonError('');
     setReminderPersonSaved(false);
     setReminderPersonContext(person);
+    hidePersonReassign();
     document.getElementById('reminderPersonName').focus();
     highlightReminderPersonRow(person.id);
+    suggestSimilarReminderPerson();
 }
 
 function highlightReminderPersonRow(personId) {
@@ -151,14 +219,29 @@ function highlightReminderPersonRow(personId) {
     });
 }
 
+function appendPersonRoleSwitch(parent, person, flag, label) {
+    const wrap = document.createElement('label');
+    wrap.className = 'reminder-person-flag';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'form-check-input';
+    input.checked = Boolean(person[flag]);
+    input.setAttribute('aria-label', `${label} ל${person.name}`);
+    input.addEventListener('change', () => toggleReminderPersonFlag(person, flag, input.checked, input));
+    const text = document.createElement('span');
+    text.textContent = label;
+    wrap.append(input, text);
+    parent.append(wrap);
+}
+
 function renderReminderPeople(people) {
     const list = document.getElementById('reminderPeopleList');
     if (!list) {
         return;
     }
-    const reminderPeople = (people || []).filter((person) => person.receives_reminders);
+    const allPeople = people || [];
     list.replaceChildren();
-    if (!reminderPeople.length) {
+    if (!allPeople.length) {
         const empty = document.createElement('p');
         empty.className = 'text-muted mb-0';
         empty.textContent = 'עדיין אין אנשים.';
@@ -166,7 +249,7 @@ function renderReminderPeople(people) {
         return;
     }
     const editingId = document.getElementById('reminderPersonId')?.value;
-    reminderPeople.forEach((person) => {
+    allPeople.forEach((person) => {
         const row = document.createElement('div');
         row.className = 'reminder-person-row';
         row.dataset.personId = String(person.id);
@@ -177,10 +260,16 @@ function renderReminderPeople(people) {
         text.className = 'reminder-person-text';
         const name = document.createElement('div');
         name.textContent = person.name;
+        const status = telegramLinkStatus(person);
         const chat = document.createElement('div');
-        chat.className = 'reminder-person-chat text-muted small';
-        chat.textContent = person.telegram_chat_id || 'בלי מזהה';
+        chat.className = `reminder-person-status small ${status.linked ? 'is-linked' : 'is-missing'}`;
+        chat.textContent = status.text;
         text.append(name, chat);
+        const flags = document.createElement('div');
+        flags.className = 'reminder-person-flags';
+        appendPersonRoleSwitch(flags, person, 'receives_reminders', 'תזכורות');
+        appendPersonRoleSwitch(flags, person, 'works_shifts', 'משמרות');
+        text.append(flags);
         const actions = document.createElement('div');
         actions.className = 'd-flex gap-2';
         const edit = document.createElement('button');
@@ -210,6 +299,7 @@ async function loadReminderPeople() {
     }
     const people = await response.json();
     const list = Array.isArray(people) ? people : [];
+    reminderPeopleState.people = list;
     if (typeof noteShiftPeople === 'function') {
         noteShiftPeople(list);
     }
@@ -220,6 +310,7 @@ async function loadReminderPeople() {
     if (typeof fillShiftPersonSource === 'function') {
         fillShiftPersonSource(list);
     }
+    suggestSimilarReminderPerson();
 }
 
 function cleanChatId(value) {
@@ -277,35 +368,164 @@ async function saveReminderPerson(event) {
     }
 }
 
+function personWritePayload(person, extra) {
+    return {
+        name: person.name,
+        telegram_chat_id: person.telegram_chat_id || null,
+        color: person.color,
+        shift_allowed: person.shift_allowed,
+        receives_reminders: person.receives_reminders,
+        works_shifts: person.works_shifts,
+        ...extra,
+    };
+}
+
+async function toggleReminderPersonFlag(person, flag, value, input) {
+    const response = await fetch(`/api/reminder-people/${person.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(personWritePayload(person, { [flag]: value })),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        if (input) {
+            input.checked = !value;
+        }
+        setReminderPersonError(result.error || 'שמירה נכשלה');
+        return;
+    }
+    setReminderPersonError('');
+    await loadReminderPeople();
+}
+
+function hidePersonReassign() {
+    reminderPeopleState.deletingId = null;
+    const box = document.getElementById('reminderPersonReassign');
+    if (box) {
+        box.hidden = true;
+    }
+}
+
+function showPersonReassign(person, message) {
+    reminderPeopleState.deletingId = person.id;
+    setReminderPersonError(message);
+    const box = document.getElementById('reminderPersonReassign');
+    const select = document.getElementById('reminderPersonReassignTo');
+    if (!box || !select) {
+        return;
+    }
+    const others = (reminderPeopleState.people || []).filter((item) => (
+        String(item.id) !== String(person.id)
+    ));
+    select.replaceChildren();
+    others.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = String(item.id);
+        option.textContent = item.name;
+        select.append(option);
+    });
+    box.hidden = others.length === 0;
+}
+
+function suggestSimilarReminderPerson() {
+    const node = document.getElementById('reminderPersonSuggest');
+    const nameInput = document.getElementById('reminderPersonName');
+    if (!node || !nameInput) {
+        return;
+    }
+    const typed = nameInput.value.trim();
+    const editingId = document.getElementById('reminderPersonId')?.value || '';
+    node.replaceChildren();
+    if (!typed) {
+        node.hidden = true;
+        return;
+    }
+    const matches = (reminderPeopleState.people || [])
+        .map((person) => ({ person, kind: personNameSimilarity(typed, person.name) }))
+        .filter((item) => item.kind && String(item.person.id) !== String(editingId));
+    if (!matches.length) {
+        node.hidden = true;
+        return;
+    }
+    matches.sort((left, right) => {
+        if (left.kind === right.kind) {
+            return left.person.id - right.person.id;
+        }
+        return left.kind === 'exact' ? -1 : 1;
+    });
+    const { person, kind } = matches[0];
+    const status = telegramLinkStatus(person);
+    const roles = [];
+    if (person.receives_reminders) {
+        roles.push('תזכורות');
+    }
+    if (person.works_shifts) {
+        roles.push('משמרות');
+    }
+    const bits = [status.text];
+    if (roles.length) {
+        bits.unshift(roles.join(' ו'));
+    }
+    const text = document.createElement('span');
+    text.textContent = kind === 'exact'
+        ? `כבר יש ${person.name} (${bits.join(' · ')}). הוספה תעדכן את אותה שורה.`
+        : `שם דומה: ${person.name} (${bits.join(' · ')}). להשתמש בה במקום ליצור אדם חדש?`;
+    const use = document.createElement('button');
+    use.type = 'button';
+    use.className = 'btn btn-outline-secondary btn-sm';
+    use.textContent = `עריכת ${person.name}`;
+    use.addEventListener('click', () => startEditReminderPerson(person));
+    node.append(text, use);
+    node.hidden = false;
+}
+
+async function sendDeleteReminderPerson(person, reassignTo) {
+    const url = reassignTo
+        ? `/api/reminder-people/${person.id}?reassign_to=${encodeURIComponent(reassignTo)}`
+        : `/api/reminder-people/${person.id}`;
+    const response = await fetch(url, { method: 'DELETE' });
+    const result = await response.json().catch(() => ({}));
+    return { response, result };
+}
+
 async function deleteReminderPerson(person) {
-    const alsoShifts = Boolean(person.works_shifts);
-    const question = alsoShifts
-        ? `להסיר את ${person.name} מתזכורות? המשמרות יישארו.`
+    const question = person.works_shifts
+        ? `למחוק את ${person.name}? גם כללי המשמרות יימחקו.`
         : `למחוק את ${person.name}?`;
     if (!confirm(question)) {
         return;
     }
-    let response;
-    if (alsoShifts) {
-        response = await fetch(`/api/reminder-people/${person.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: person.name,
-                telegram_chat_id: person.telegram_chat_id || null,
-                color: person.color,
-                shift_allowed: person.shift_allowed,
-                works_shifts: true,
-                receives_reminders: false,
-            }),
-        });
-    } else {
-        response = await fetch(`/api/reminder-people/${person.id}`, { method: 'DELETE' });
-    }
-    if (!response.ok) {
-        setReminderPersonError('מחיקה נכשלה');
+    const { response, result } = await sendDeleteReminderPerson(person);
+    if (response.status === 409) {
+        showPersonReassign(person, result.error || 'אי אפשר למחוק בלי להעביר תזכורות');
         return;
     }
+    if (!response.ok) {
+        setReminderPersonError(result.error || 'מחיקה נכשלה');
+        return;
+    }
+    hidePersonReassign();
+    if (document.getElementById('reminderPersonId').value === String(person.id)) {
+        resetReminderPersonForm();
+    }
+    await loadReminderPeople();
+}
+
+async function confirmReassignDeletePerson() {
+    const personId = reminderPeopleState.deletingId;
+    const select = document.getElementById('reminderPersonReassignTo');
+    const targetId = select?.value;
+    const person = (reminderPeopleState.people || []).find((item) => String(item.id) === String(personId));
+    if (!person || !targetId) {
+        setReminderPersonError('בחרו למי להעביר את התזכורות');
+        return;
+    }
+    const { response, result } = await sendDeleteReminderPerson(person, targetId);
+    if (!response.ok) {
+        setReminderPersonError(result.error || 'מחיקה נכשלה');
+        return;
+    }
+    hidePersonReassign();
     if (document.getElementById('reminderPersonId').value === String(person.id)) {
         resetReminderPersonForm();
     }
