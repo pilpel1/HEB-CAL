@@ -133,7 +133,7 @@ HEB_CAL_UPDATE_AUTOCHECK=1
 
 ```bash
 source .venv/bin/activate
-python -m flask --app app run
+python -m flask --app app run --with-threads
 ```
 
 או:

@@ -199,6 +199,9 @@ def update_source(source_id: int, payload: dict) -> dict:
                 "UPDATE events SET color = ? WHERE gcal_source_id = ?",
                 (color, source_id),
             )
+            from app.live_sync import bump_events_revision
+
+            bump_events_revision(action="changed", commit=False)
         db.commit()
     except sqlite3.Error as exc:
         db.rollback()
@@ -225,6 +228,10 @@ def delete_source(source_id: int) -> bool:
         ]
         _delete_event_ids(db, ids)
         db.execute("DELETE FROM gcal_sources WHERE id = ?", (source_id,))
+        if ids:
+            from app.live_sync import bump_events_revision
+
+            bump_events_revision(event_ids=ids, action="deleted", commit=False)
         db.commit()
     except sqlite3.Error as exc:
         db.rollback()

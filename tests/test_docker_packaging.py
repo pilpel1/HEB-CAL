@@ -22,6 +22,7 @@ def test_dockerfile_binds_all_interfaces_and_copies_no_secrets():
     assert "AS runtime" in text
     assert '--host", "0.0.0.0"' in text
     assert '"5000"' in text
+    assert "--with-threads" in text
     assert "COPY .env" not in text
     assert not any(line.strip().startswith("ARG ") for line in text.splitlines())
     assert "COPY . " not in text
@@ -85,7 +86,7 @@ def test_readme_update_command_matches_docker_mode():
     assert "gcal_sync_worker.py" in readme
     changelog = _text("CHANGELOG.md")
     version = _text("VERSION").strip()
-    assert version == "1.0.18"
+    assert version == "1.0.19"
     assert f"## {version}" in changelog
     assert "Docker" in changelog
 
@@ -158,6 +159,9 @@ def test_household_install_scripts_and_ghcr_workflow():
     assert "@INSTALL_DIR@" in unit
     assert "@DOCKER_BIN@" in unit
     assert "compose up -d" in unit
+    restart = _text("scripts/restart.sh")
+    assert "--with-threads" in restart
+    assert "flask --app app run" in restart
     assert "packages: write" in wf
     assert "secrets.GITHUB_TOKEN" in wf
     assert "provenance: false" in wf

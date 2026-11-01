@@ -54,5 +54,12 @@ def _empty_events_table(app):
             "DELETE FROM event_colors WHERE lower(color_code) NOT IN ('cyan', 'yellow', 'orange', 'green')"
         )
         db.execute("UPDATE household_settings SET shifts_enabled = 0 WHERE id = 1")
+        if db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'live_sync'"
+        ).fetchone():
+            db.execute(
+                "UPDATE live_sync SET revision = 0, origin = NULL, event_ids = '[]', "
+                "action = NULL, updated_at = NULL WHERE id = 1"
+            )
         db.commit()
     yield

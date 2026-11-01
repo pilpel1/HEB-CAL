@@ -81,6 +81,7 @@ def hebrew_years():
     return jsonify({'years': years})
 
 from . import events
+from . import live  # noqa: E402,F401
 from . import colors  # noqa: E402,F401
 from . import reminders  # noqa: E402,F401
 from . import shifts  # noqa: E402,F401

@@ -16,7 +16,7 @@ FORMS = REPO / "app/static/css/components/forms.css"
 
 @pytest.fixture(scope="module")
 def live_server(app):
-    server = make_server("127.0.0.1", 0, app)
+    server = make_server("127.0.0.1", 0, app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -68,7 +68,7 @@ def test_settings_nav_sticks_and_anchor_stays_clear(live_server, width, height):
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": width, "height": height})
-        page.goto(live_server + "/settings#settings-reminders", wait_until="networkidle")
+        page.goto(live_server + "/settings#settings-reminders", wait_until="load")
         page.evaluate("() => document.documentElement.setAttribute('data-bs-theme', 'light')")
         page.evaluate(
             "() => document.getElementById('settings-reminders').scrollIntoView({block: 'start'})"

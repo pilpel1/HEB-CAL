@@ -194,6 +194,10 @@ def update_color(color_id: int, name, color_code) -> dict:
             (cleaned_name, color_code_value, background, color_id),
         )
         _retarget_color_code(db, existing["color_code"], color_code_value)
+        if existing["color_code"] != color_code_value:
+            from app.live_sync import bump_events_revision
+
+            bump_events_revision(action="changed", commit=False)
         db.commit()
     except sqlite3.Error as exc:
         raise ColorError("אי אפשר לעדכן את הצבע") from exc

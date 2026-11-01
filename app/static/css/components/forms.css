@@ -685,6 +685,14 @@
     font-weight: 600;
 }
 
+.quick-live-notice {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    background: rgba(245, 158, 11, 0.18);
+    font-weight: 600;
+}
+
 .settings-page {
     max-width: 40rem;
     margin-inline: auto;

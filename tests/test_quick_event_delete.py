@@ -70,7 +70,7 @@ def live_server(app):
     pytest.importorskip("playwright.sync_api")
     from werkzeug.serving import make_server
 
-    server = make_server("127.0.0.1", 0, app)
+    server = make_server("127.0.0.1", 0, app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
