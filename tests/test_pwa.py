@@ -76,6 +76,8 @@ def test_service_worker_is_served_from_root(client):
     assert "caches" in body
     assert "/api/" in body
     assert "pathname.startsWith('/api/')" in body or 'pathname.startsWith("/api/")' in body
+    assert "/api/events/stream" in body
+    assert "text/event-stream" in body
     # לא תחת js/ — test_static_scripts דורש שכל קובץ שם ייטען כ־<script src>
     assert not (REPO / "app" / "static" / "js" / "sw.js").exists()
     static_copy = client.get("/static/sw.js")

@@ -206,8 +206,10 @@ def init_db():
     apply_pending_migrations(db)
     _migrate_hebrew_years_to_letters(db)
     from app.bot.session import ensure_bot_schema
+    from app.live_sync import ensure_live_sync_schema
 
     ensure_bot_schema(db)
+    ensure_live_sync_schema(db)
 
 
 _RECURRENCE_COLUMNS = (
@@ -741,6 +743,7 @@ def import_data(payload, mode="replace"):
                     replace=True,
                 )
 
+        _bump_live_sync(action="changed", commit=False)
         db.commit()
         return {
             "success": True,
@@ -755,6 +758,12 @@ def import_data(payload, mode="replace"):
         raise
 
 # פונקציות CRUD
+
+def _bump_live_sync(*, event_ids=None, action="changed", commit=False):
+    from app.live_sync import bump_events_revision
+
+    bump_events_revision(event_ids=event_ids, action=action, commit=commit)
+
 
 def _with_recurrence(data):
     data.update(recurrence_fields(data))
@@ -815,6 +824,7 @@ def create_event(
                 shift_label,
             ),
         )
+        _bump_live_sync(event_ids=[cursor.lastrowid], action="created", commit=False)
         db.commit()
         return cursor.lastrowid
     except sqlite3.Error as e:
@@ -914,6 +924,7 @@ def update_event(
             )
         if clear_exceptions:
             db.execute("DELETE FROM event_exceptions WHERE event_id = ?", (event_id,))
+        _bump_live_sync(event_ids=[event_id], action="updated", commit=False)
         db.commit()
         return True
     except sqlite3.Error as e:
@@ -930,6 +941,8 @@ def delete_event(event_id):
         db.execute("DELETE FROM reminders WHERE event_id = ?", (event_id,))
         db.execute("DELETE FROM event_exceptions WHERE event_id = ?", (event_id,))
         cursor = db.execute("DELETE FROM events WHERE id = ?", (event_id,))
+        if cursor.rowcount > 0:
+            _bump_live_sync(event_ids=[event_id], action="deleted", commit=False)
         db.commit()
         return cursor.rowcount > 0
     except sqlite3.Error as e:
@@ -996,6 +1009,8 @@ def upsert_exception(event_id, original_date, kind, fields=None, commit=True):
         ),
     )
     if commit:
+        action = "deleted" if kind == "deleted" else "updated"
+        _bump_live_sync(event_ids=[event_id], action=action, commit=False)
         db.commit()
     return True
 

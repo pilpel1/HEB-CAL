@@ -2,6 +2,8 @@
 
 let quickSeriesSnapshot = null;
 let quickOccurrenceSnapshot = null;
+let quickEventFormDirty = false;
+let quickEventFormMute = false;
 let hebrewDateToken = 0;
 let hebrewPickerMute = false;
 let hebrewYearsPromise = null;
@@ -541,7 +543,26 @@ function applyTimeFromTitlePrefix(titleValue) {
     return true;
 }
 
+function isQuickEventFormDirty() {
+    return quickEventFormDirty;
+}
+
+function isQuickEventModalOpen() {
+    const el = document.getElementById('quickEventModal');
+    return Boolean(el && el.classList.contains('show'));
+}
+
+function getOpenQuickEventId() {
+    const raw = document.getElementById('quick_event_id')?.value;
+    const number = Number(raw);
+    return Number.isInteger(number) && number > 0 ? number : null;
+}
+
 function fillQuickEventForm(eventData = {}, options = {}) {
+    quickEventFormMute = true;
+    if (typeof hideLiveSyncModalNotice === 'function') {
+        hideLiveSyncModalNotice();
+    }
     document.getElementById('quick_event_id').value = eventData.id || '';
     document.getElementById('quick_title').value = eventData.title || '';
     document.getElementById('quick_gregorian_date').value = eventData.gregorian_date || '';
@@ -572,9 +593,15 @@ function fillQuickEventForm(eventData = {}, options = {}) {
             shiftUiState.quickShiftFill = pending;
         }
     }
+    const finishFill = () => {
+        quickEventFormDirty = false;
+        quickEventFormMute = false;
+    };
     if (eventData.gregorian_date) {
-        return fillHebrewDateFromGregorian(eventData.gregorian_date, 'quick_hebrew_date');
+        return fillHebrewDateFromGregorian(eventData.gregorian_date, 'quick_hebrew_date')
+            .then(finishFill, finishFill);
     }
+    finishFill();
     return Promise.resolve();
 }
 
@@ -662,6 +689,18 @@ function initQuickEventModal() {
     if (typeof initQuickShiftFields === 'function') {
         initQuickShiftFields();
     }
+    const markDirty = () => {
+        if (!quickEventFormMute) {
+            quickEventFormDirty = true;
+        }
+    };
+    quickForm.addEventListener('input', markDirty);
+    quickForm.addEventListener('change', markDirty);
+    modalElement.addEventListener('click', (event) => {
+        if (!quickEventFormMute && event.target.closest('.quick-color-swatch, .quick-shift-pick')) {
+            quickEventFormDirty = true;
+        }
+    });
 
     document.getElementById('quick_delete_btn')?.addEventListener('click', () => {
         deleteFromQuickEventModal();

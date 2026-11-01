@@ -576,6 +576,13 @@ def save_shift_week(person: dict, week_start: date, cells) -> dict:
                 ),
             )
             created.append(cursor.lastrowid)
+        from app.live_sync import bump_events_revision
+
+        bump_events_revision(
+            event_ids=created + deleted,
+            action="changed",
+            commit=False,
+        )
         db.commit()
     except Exception:
         db.rollback()

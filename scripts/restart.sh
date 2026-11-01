@@ -107,7 +107,7 @@ fi
 
 # FLASK_DEBUG כבוי: רילודר של פיתוח מתבלבל בזמן עדכון קבצים.
 export FLASK_DEBUG=0
-nohup "$PYTHON" -m flask --app app run --host "$HOST" --port "$PORT" >> logs/flask.log 2>&1 &
+nohup "$PYTHON" -m flask --app app run --host "$HOST" --port "$PORT" --with-threads >> logs/flask.log 2>&1 &
 echo $! > data/flask.pid
 nohup "$PYTHON" scripts/reminder_worker.py >> logs/worker.log 2>&1 &
 echo $! > data/worker.pid

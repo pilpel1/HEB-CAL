@@ -153,7 +153,7 @@ async function refreshEventsViews() {
 
     // loadAllEvents מוגדר ב-events_list.html ומרנדר את טבלת האירועים
     if (typeof loadAllEvents === 'function') {
-        await loadAllEvents();
+        await loadAllEvents({ restorePage: true });
     }
 }
 

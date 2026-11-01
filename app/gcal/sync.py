@@ -169,7 +169,8 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
     db = get_db()
     existing = db.execute(
         """
-        SELECT id, gcal_uid, gcal_recurrence_id, gregorian_date, end_date
+        SELECT id, gcal_uid, gcal_recurrence_id, title, gregorian_date, hebrew_date,
+               time, description, end_date, color
         FROM events
         WHERE gcal_source_id = ?
         """,
@@ -215,6 +216,17 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
                 by_key[key] = {"id": cursor.lastrowid}
                 inserted += 1
                 continue
+            same = (
+                (current["title"] or "") == (item["title"] or "")
+                and (current["gregorian_date"] or "")[:10] == (item["gregorian_date"] or "")[:10]
+                and (current["hebrew_date"] or "") == (hebrew or "")
+                and (current["time"] or None) == (item["time"] or None)
+                and (current["description"] or "") == (item["description"] or "")
+                and (current["end_date"] or None) == (item["end_date"] or None)
+                and (current["color"] or None) == (color or None)
+            )
+            if same:
+                continue
             db.execute(
                 """
                 UPDATE events
@@ -246,6 +258,10 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
         from app.gcal.repository import _delete_event_ids
 
         _delete_event_ids(db, stale)
+        if inserted or updated or stale:
+            from app.live_sync import bump_events_revision
+
+            bump_events_revision(action="changed", commit=False)
         db.commit()
     except Exception:
         db.rollback()

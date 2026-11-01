@@ -21,6 +21,9 @@ function isShellRequest(url) {
     if (url.pathname.startsWith('/api/')) {
         return false;
     }
+    if (url.pathname === '/api/events/stream' || url.pathname.startsWith('/api/events/stream')) {
+        return false;
+    }
     if (url.pathname === '/sw.js') {
         return false;
     }
@@ -64,6 +67,14 @@ self.addEventListener('fetch', (event) => {
     try {
         url = new URL(event.request.url);
     } catch (err) {
+        return;
+    }
+    const accept = event.request.headers.get('Accept') || '';
+    if (
+        url.pathname === '/api/events/stream'
+        || url.pathname.startsWith('/api/events/stream')
+        || accept.includes('text/event-stream')
+    ) {
         return;
     }
     if (!isShellRequest(url)) {

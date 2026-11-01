@@ -57,4 +57,4 @@ LABEL org.opencontainers.image.source="https://github.com/pilpel1/HEB-CAL" \
 EXPOSE 5000
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "-m", "flask", "--app", "app", "run", "--host", "0.0.0.0", "--port", "5000", "--no-reload", "--no-debugger"]
+CMD ["python", "-m", "flask", "--app", "app", "run", "--host", "0.0.0.0", "--port", "5000", "--no-reload", "--no-debugger", "--with-threads"]

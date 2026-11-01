@@ -24,7 +24,7 @@ Copy `.env.example` to `.env` and adjust values. **Never commit `.env` or secret
 
 ```bash
 source .venv/bin/activate
-python -m flask --app app run
+python -m flask --app app run --with-threads
 ```
 
 Alternative entry: `python app/main.py` (same app).
@@ -75,6 +75,8 @@ Manual checks:
 | `app/static/js/core/dates.js` | `YYYY-MM-DD` helpers, week/month math, date-range checks |
 | `app/static/js/core/hebrew-format.js` | Hebrew day letters, month names, toolbar label, short dates in the modal title |
 | `app/static/js/core/api.js` | `fetch` GET helpers: month calendar, Jewish events, `/api/events` |
+| `app/static/js/core/live-sync.js` | SSE from `/api/events/stream`: debounce, skip own client id, in-place calendar/list refresh |
+| `app/live_sync.py` | SQLite revision + SSE generator. Bot/gcal bumps the same row so other devices refresh |
 | `app/static/js/calendar/infinite-state.js` | `INFINITE_CONFIG`, the `infiniteCalendar` state object, page detection |
 | `app/static/js/calendar/month-data.js` | Month fetch + cache, "is this week fully loaded" |
 | `app/static/js/calendar/event-render.js` | Paint a cell: holidays, multi-day rail, single-day events, color map |

@@ -12,6 +12,9 @@
 
 // אתחול הדף
 document.addEventListener('DOMContentLoaded', async () => {
+    if (typeof initLiveSync === 'function') {
+        initLiveSync();
+    }
     initQuickEventModal();
     if (typeof initReminderNotifications === 'function') {
         initReminderNotifications();
