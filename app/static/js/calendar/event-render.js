@@ -153,8 +153,34 @@ function repeatIconHtml(event) {
 }
 
 function compareEventsByTime(a, b) {
-    const ta = a.time || '99:99';
-    const tb = b.time || '99:99';
+    // אירועים ללא שעה (חגים, משמרות, כל-היום) קודם
+    const aHasTime = Boolean(a.time);
+    const bHasTime = Boolean(b.time);
+    
+    if (!aHasTime && !bHasTime) {
+        // שניהם ללא שעה: חגים/פרשה/צום (is_jewish), משמרות (is_shift), אחרים
+        const aIsJewish = Boolean(a.is_jewish);
+        const bIsJewish = Boolean(b.is_jewish);
+        const aIsShift = Boolean(a.is_shift);
+        const bIsShift = Boolean(b.is_shift);
+        
+        if (aIsJewish !== bIsJewish) {
+            return aIsJewish ? -1 : 1;
+        }
+        if (aIsShift !== bIsShift) {
+            return aIsShift ? -1 : 1;
+        }
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
+    }
+    
+    // אם רק אחד עם שעה, ללא-שעה קודם
+    if (aHasTime !== bHasTime) {
+        return aHasTime ? 1 : -1;
+    }
+    
+    // שניהם עם שעה: מיון לפי שעה
+    const ta = a.time || '';
+    const tb = b.time || '';
     if (ta !== tb) {
         return ta < tb ? -1 : 1;
     }

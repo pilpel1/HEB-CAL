@@ -296,11 +296,15 @@ function readReminderFields() {
         setReminderError('בחרו מתי להזכיר, או בטלו את התזכורת');
         return null;
     }
-    setReminderError('');
     const recipientIds = [];
     document.querySelectorAll('#quick_reminder_recipients input:checked').forEach((input) => {
         recipientIds.push(Number(input.value));
     });
+    if (recipientIds.length === 0) {
+        setReminderError('נא לבחור לפחות נמען אחד לתזכורת');
+        return null;
+    }
+    setReminderError('');
     return [...offsets].sort((a, b) => a - b).map((offset) => ({
         offset_minutes: offset,
         recipient_ids: recipientIds,

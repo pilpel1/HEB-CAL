@@ -417,6 +417,9 @@ function jumpToMonth(year, month) {
 }
 
 function goToToday() {
+    if (typeof refreshTodayHighlight === 'function') {
+        refreshTodayHighlight();
+    }
     scrollToDate(getTodayDateStr(), 'center');
 }
 

@@ -1015,9 +1015,6 @@
     .day-cell {
         min-height: 0;
         height: 100%;
-        /* לא נמתח מעבר לצפיפות. px אחד יורד בגלל border-collapse. */
-        max-height: calc(var(--week-row-height) - 1px);
-        overflow: hidden;
     }
 
     /* כותרת הצ'יפ עד שתי שורות. "+N" מגיע רק כשהגובה נגמר.
@@ -1086,6 +1083,15 @@
         .calendar-table td .event-lane-spacer {
             pointer-events: none;
         }
+    }
+}
+
+/* במצב צפוף בטלפון: מגבילים את גובה התא */
+/* בדסקטופ compact: הכלל נמצא ב-@media (min-width: 481px) */
+@media (max-width: 480px) {
+    :root[data-cal-density="compact"] .day-cell {
+        max-height: calc(var(--week-row-height) - 1px);
+        overflow: hidden;
     }
 }
 

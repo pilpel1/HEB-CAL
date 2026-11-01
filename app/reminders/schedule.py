@@ -157,6 +157,10 @@ def normalize_reminder_item(item) -> dict:
             raise OffsetError("מזהה נמען חייב להיות מספר")
         if person_id not in recipient_ids:
             recipient_ids.append(person_id)
+    
+    if len(recipient_ids) == 0:
+        raise OffsetError("נא לבחור לפחות נמען אחד לתזכורת")
+    
     return {"offset_minutes": minutes, "recipient_ids": recipient_ids}
 
 
