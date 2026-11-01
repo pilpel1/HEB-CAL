@@ -1119,6 +1119,9 @@ class Bot:
         return self.settings(note=f"{person['name']} נותק מהצ'אט.")
 
     def _create_person(self, text: str) -> dict:
+        from app.reminders.repository import find_person_by_normalized_name
+
+        existed = find_person_by_normalized_name(clean_line(text))
         try:
             person = directory.add_linked_person(clean_line(text), self.chat_id)
         except ValueError as exc:
@@ -1126,6 +1129,8 @@ class Bot:
         self.reload_people()
         self._clear_flow()
         self.toast = "חובר"
+        if existed:
+            return self.settings(note=f"חובר אל {person['name']}.")
         return self.settings(note=f"נוצר וחובר אל {person['name']}.")
 
     def _flip_worker(self, person_id: int) -> dict:

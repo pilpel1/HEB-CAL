@@ -5,8 +5,10 @@ from app.reminders.due import browser_due
 from app.reminders.repository import (
     create_person,
     delete_person,
+    find_person_by_normalized_name,
     get_person,
     list_people,
+    reminder_recipient_event_ids,
     update_person,
 )
 from app.reminders.schedule import reminder_timezone
@@ -46,6 +48,7 @@ def get_reminder_people():
 @api.route("/reminder-people", methods=["POST"])
 def add_reminder_person():
     data = _payload()
+    existed = find_person_by_normalized_name(data.get("name") or "")
     try:
         person = create_person(
             data.get("name"),
@@ -54,7 +57,7 @@ def add_reminder_person():
         )
     except ValueError as exc:
         return _person_error(exc)
-    return jsonify(person), 201
+    return jsonify(person), 200 if existed else 201
 
 
 @api.route("/reminder-people/<int:person_id>", methods=["PUT"])
@@ -74,9 +77,30 @@ def edit_reminder_person(person_id):
     return jsonify(person)
 
 
+def _reassign_to_value(data: dict):
+    raw = request.args.get("reassign_to")
+    if raw is None or str(raw).strip() == "":
+        raw = data.get("reassign_to") if isinstance(data, dict) else None
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("האדם להעברה לא נמצא") from exc
+
+
 @api.route("/reminder-people/<int:person_id>", methods=["DELETE"])
 def remove_reminder_person(person_id):
-    if not delete_person(person_id):
+    try:
+        reassign_to = _reassign_to_value(_payload())
+        deleted = delete_person(person_id, reassign_to=reassign_to)
+    except ValueError as exc:
+        status = 409 if "תזכורות" in str(exc) else 400
+        payload = {"error": str(exc), "success": False}
+        if status == 409:
+            payload["referenced_event_ids"] = reminder_recipient_event_ids(person_id)
+        return jsonify(payload), status
+    if not deleted:
         return jsonify({"error": "האדם לא נמצא", "success": False}), 404
     return jsonify({"success": True})
 

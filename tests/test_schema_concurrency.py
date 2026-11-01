@@ -136,6 +136,9 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
         assert conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_events_shift'"
         ).fetchone()
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_reminder_people_name_norm'"
+        ).fetchone()
         colors = [row["name"] for row in conn.execute("SELECT name FROM event_colors ORDER BY id")]
         assert colors == ["ציאן", "צהוב", "כתום", "ירוק"]
         settings = conn.execute("SELECT id, shifts_enabled FROM household_settings").fetchall()

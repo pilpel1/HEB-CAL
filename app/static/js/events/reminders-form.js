@@ -100,6 +100,46 @@ function renderCustomOffsets() {
     });
 }
 
+function hebrewAndNames(names) {
+    if (!names.length) {
+        return '';
+    }
+    if (names.length === 1) {
+        return `ל${names[0]}`;
+    }
+    if (names.length === 2) {
+        return `ל${names[0]} ול${names[1]}`;
+    }
+    const head = names.slice(0, -1).map((name) => `ל${name}`).join(', ');
+    return `${head} ול${names[names.length - 1]}`;
+}
+
+function setReminderChatWarn(message) {
+    const node = document.getElementById('quick_reminder_chat_warn');
+    if (!node) {
+        return;
+    }
+    node.textContent = message || '';
+    node.hidden = !message;
+}
+
+function updateReminderChatWarning(people) {
+    const selected = new Set();
+    document.querySelectorAll('#quick_reminder_recipients input:checked').forEach((input) => {
+        selected.add(Number(input.value));
+    });
+    const missing = (people || []).filter((person) => (
+        selected.has(Number(person.id)) && !(person.telegram_chat_id || '').trim()
+    ));
+    if (!missing.length) {
+        setReminderChatWarn('');
+        return;
+    }
+    setReminderChatWarn(
+        `${hebrewAndNames(missing.map((person) => person.name))} אין קישור לטלגרם — התזכורת תופיע רק בדפדפן כשהלוח פתוח.`
+    );
+}
+
 function renderReminderRecipients(people, selected) {
     const root = document.getElementById('quick_reminder_recipients');
     if (!root) {
@@ -111,6 +151,7 @@ function renderReminderRecipients(people, selected) {
         empty.className = 'reminder-empty-people';
         empty.textContent = 'עדיין אין אנשים. בלי נמען התזכורת תופיע בדפדפן כשהלוח פתוח.';
         root.append(empty);
+        setReminderChatWarn('');
         return;
     }
     const wrap = document.createElement('div');
@@ -121,12 +162,20 @@ function renderReminderRecipients(people, selected) {
         input.type = 'checkbox';
         input.value = String(person.id);
         input.checked = selected.has(Number(person.id));
+        input.addEventListener('change', () => updateReminderChatWarning(people));
         const name = document.createElement('span');
         name.textContent = person.name;
         label.append(input, name);
+        if (!(person.telegram_chat_id || '').trim()) {
+            const note = document.createElement('span');
+            note.className = 'reminder-recipient-no-chat';
+            note.textContent = 'בלי טלגרם';
+            label.append(note);
+        }
         wrap.append(label);
     });
     root.append(wrap);
+    updateReminderChatWarning(people);
 }
 
 function selectPreset(minutes) {

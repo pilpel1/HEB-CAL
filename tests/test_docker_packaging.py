@@ -86,7 +86,7 @@ def test_readme_update_command_matches_docker_mode():
     assert "gcal_sync_worker.py" in readme
     changelog = _text("CHANGELOG.md")
     version = _text("VERSION").strip()
-    assert version == "1.0.19"
+    assert version == "1.0.20"
     assert f"## {version}" in changelog
     assert "Docker" in changelog
 

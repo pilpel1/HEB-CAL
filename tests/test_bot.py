@@ -1429,3 +1429,36 @@ def test_digest_toggle_in_settings_and_slash_command(app):
     unlinked = _go(app, _msg("/digest", chat=99))
     assert "קודם מחברים" in unlinked["text"]
     assert "סיכום בוקר יומי" not in [button["text"] for button in _buttons(unlinked)]
+
+
+def test_bot_create_person_reuses_existing_shift_worker(app):
+    shira = _person(app, "שירה", works_shifts=1, receives_reminders=0)
+    settings = _go(app, _msg("/settings", chat=7))
+    picker = _press(app, settings, "חיבור לאדם", chat=7)
+    fresh = _press(app, picker, "אני לא ברשימה", chat=7)
+    reused = _go(app, _msg("  שירה ", chat=7))
+    assert "שירה" in reused["text"]
+    assert "נוצר" not in reused["text"]
+    with app.app_context():
+        from app.reminders.repository import list_people
+
+        people = list_people()
+        assert len(people) == 1
+        person = people[0]
+        assert person["id"] == shira["id"]
+        assert person["telegram_chat_id"] == "7"
+        assert person["receives_reminders"] is True
+        assert person["works_shifts"] is True
+
+
+def test_bot_create_person_conflicts_on_other_chat(app):
+    _person(app, "שירה", chat=99, works_shifts=1)
+    settings = _go(app, _msg("/settings", chat=7))
+    picker = _press(app, settings, "חיבור לאדם", chat=7)
+    _press(app, picker, "אני לא ברשימה", chat=7)
+    conflict = _go(app, _msg("שירה", chat=7))
+    assert "צ׳אט" in conflict["text"]
+    with app.app_context():
+        from app.reminders.repository import list_people
+
+        assert len(list_people()) == 1

@@ -225,7 +225,7 @@
     <div class="card mb-3" id="settings-reminders">
         <div class="card-body">
             <h2 class="h5">תזכורות</h2>
-            <p class="mb-3">שם ומזהה צ׳אט בטלגרם. בלי מזהה התזכורת תופיע רק בדפדפן כשהלוח פתוח.</p>
+            <p class="mb-3">כל האנשים במקום אחד: תזכורות, משמרות, וקישור לטלגרם. אותו שם מעדכן את השורה הקיימת במקום ליצור כפילות. בלי מזהה צ׳אט התזכורת תופיע רק בדפדפן כשהלוח פתוח.</p>
             <p id="reminderPersonContext" class="person-edit-context">אדם חדש</p>
             <form id="reminderPersonForm" class="row g-2 align-items-end">
                 <input type="hidden" id="reminderPersonId" value="">
@@ -258,8 +258,16 @@
                     <button type="button" class="btn btn-outline-secondary" id="reminderPersonCancel" hidden>ביטול</button>
                 </div>
             </form>
+            <p id="reminderPersonSuggest" class="reminder-person-suggest mt-2" hidden></p>
             <p id="reminderPersonError" class="reminder-form-error mt-2" hidden></p>
             <p id="reminderPersonSaved" class="person-saved-flag mt-2" hidden>נשמר</p>
+            <div id="reminderPersonReassign" class="reminder-person-reassign mt-2" hidden>
+                <label for="reminderPersonReassignTo" class="form-label">העבר תזכורות אל</label>
+                <div class="d-flex flex-wrap gap-2">
+                    <select id="reminderPersonReassignTo" class="form-select"></select>
+                    <button type="button" class="btn btn-danger" id="reminderPersonReassignBtn">העבר ומחק</button>
+                </div>
+            </div>
             <div id="reminderPeopleList" class="mt-3"></div>
         </div>
     </div>
