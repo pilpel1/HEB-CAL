@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof initShiftEntry === 'function') {
         initShiftEntry();
     }
+    if (typeof initTodayRefresh === 'function') {
+        initTodayRefresh();
+    }
 
     if (isInfiniteCalendarPage()) {
         await initInfiniteCalendar();

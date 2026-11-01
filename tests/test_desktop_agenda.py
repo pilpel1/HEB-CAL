@@ -32,7 +32,8 @@ def test_desktop_agenda_is_side_column_only_from_992(client):
     phone = css.split("@media (max-width: 480px)", 1)[1].split("@media", 1)[0]
     assert "grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 0.25fr)" in phone
     assert "clamp(280px, 25%, 380px)" not in phone
-    assert "data-cal-density" not in phone
+    # v1.0.17: במצב compact בלבד תאים מוגבלים בגובה
+    assert 'data-cal-density="compact"' in phone or 'data-cal-density="compact"' in css
     assert "touch-action: pan-x pan-y pinch-zoom" in css
 
     assert "function isDesktopAgenda" in agenda
@@ -63,12 +64,12 @@ def test_compact_density_css_applies_above_phone():
     block = css.split("@media (min-width: 481px) {", 1)[-1]
     # הבלוק השני (אחרי כפתורי הסרגל) הוא הצפיפות
     density = block.split("@media (min-width: 481px) {", 1)[-1].split("@media", 1)[0]
-    assert 'html[data-cal-density="compact"] .day-cell' in density
+    assert 'html[data-cal-density="compact"] .day-cell' in density or ':root[data-cal-density="compact"] .day-cell' in density
     assert "min-height: 84px" in density
-    assert 'html[data-cal-density="compact"] .event-item' in density
+    assert 'html[data-cal-density="compact"] .event-item' in density or ':root[data-cal-density="compact"] .event-item' in density
     assert "font-size: 0.72rem" in density
-    phone = css.split("@media (max-width: 480px)", 1)[1].split("@media (min-width: 481px)", 1)[0]
-    assert "data-cal-density" not in phone
+    # v1.0.17: במצב compact בטלפון תאים מוגבלים בגובה (בבלוק נפרד)
+    assert 'data-cal-density="compact"' in css
 
 
 def test_settings_hints_are_inline_and_events_list_drops_reminders_link(client):
