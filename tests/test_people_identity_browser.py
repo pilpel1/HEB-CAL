@@ -82,6 +82,7 @@ def test_recipient_picker_warns_without_telegram(live_server, client):
         page.wait_for_function("() => typeof openQuickEventModal === 'function'")
         page.evaluate("() => openQuickEventModal()")
         page.wait_for_selector("#quickEventModal.show", timeout=10000)
+        page.click("#quick_advanced_toggle")
         page.check("#quick_reminder_enabled")
         page.wait_for_selector("#quick_reminder_recipients label")
         expect(page.locator("#quick_reminder_recipients")).to_contain_text("דני")

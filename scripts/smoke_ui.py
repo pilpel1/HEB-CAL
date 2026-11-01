@@ -148,7 +148,7 @@ def check_calendar(page: Page, base: str, snap: dict) -> None:
     page.fill("#quick_title", "סמוק ערוך")
     end_input = page.locator("#quick_end_date")
     if not end_input.is_visible():
-        page.click("#quick_end_toggle")
+        page.click("#quick_advanced_toggle")
     page.fill("#quick_end_date", in3)
     submit_modal(page)
     expect(page.locator("#success-message")).to_have_text("האירוע עודכן")

@@ -21,6 +21,7 @@ CALENDAR_CSS = REPO / "app/static/css/components/calendar.css"
 # (עמוד, רוחב, גובה, לפתוח תזכורת+חזרה)
 VIEWPORTS = [
     ("calendar", 1280, 700, False),
+    ("calendar", 360, 640, False),
     ("calendar", 1280, 700, True),
     ("calendar", 1366, 768, True),
     ("calendar", 1440, 900, True),
@@ -63,11 +64,14 @@ def test_modal_scroll_css_applies_at_every_width():
     assert "position: sticky" in head
     assert "overscroll-behavior: contain" in head
 
-    # יעדי מגע וסגירת תאריך הסיום נשארים רק בטלפון
+    # יעדי מגע ושורה קומפקטית בטלפון. תאריך סיום חי ב«מתקדם», לא בטוגל נפרד
     assert "font-size: 16px" in mobile
     assert "min-height: 40px" in mobile
-    assert ".quick-end-wrap:not(.is-open) .quick-end-field" in mobile
+    assert ".quick-when .form-label" in mobile
+    assert "display: none" in mobile
     assert "overflow-y: auto" not in mobile
+    assert "quick-advanced-toggle" in head
+    assert "visualViewport" in (REPO / "app/static/js/events/quick-event-modal.js").read_text(encoding="utf-8")
 
     assert "height: calc(100dvh - 1.5rem)" in after_mobile
     assert "#quickEventModal .modal-footer" in after_mobile
@@ -188,7 +192,7 @@ def _open_modal(page, kind):
     if kind == "calendar":
         page.goto(page.context._base + "/", wait_until="domcontentloaded")
         page.wait_for_function("() => window.bootstrap && typeof openQuickEventModal === 'function'")
-        page.click("#addEventFromCalendarBtn")
+        page.evaluate("async () => { await openQuickEventModal(getTodayDateStr()); }")
     else:
         page.goto(page.context._base + "/events_list", wait_until="domcontentloaded")
         page.wait_for_function("() => window.bootstrap && typeof openQuickEventModal === 'function'")
@@ -210,14 +214,16 @@ def _open_modal(page, kind):
     return dialog
 
 
-def _expand(page, width):
+def _expand(page, _width):
+    toggle = page.locator("#quick_advanced_toggle")
+    if toggle.get_attribute("aria-expanded") != "true":
+        toggle.click()
+    expect(page.locator("#quick_advanced")).to_be_visible()
     page.select_option("#quick_recurrence_freq", "yearly")
     page.select_option("#quick_recurrence_end_mode", "until")
     expect(page.locator("#quick_recurrence_until")).to_be_visible()
-    if width <= 480:
-        page.click("#quick_end_toggle")
-        expect(page.locator("#quick_end_date")).to_be_visible()
-    page.click("#quick_reminder_enabled")
+    expect(page.locator("#quick_end_date")).to_be_visible()
+    page.locator("#quick_reminder_enabled").check(force=True)
     expect(page.locator("#quick_reminder_panel")).to_be_visible()
     page.click("#quick_reminder_custom_toggle")
     expect(page.locator("#quick_reminder_custom_row")).to_be_visible()
@@ -239,11 +245,17 @@ def test_event_modal_footer_stays_and_sections_scroll(live_server, client, kind,
         _open_modal(page, kind)
 
         if not expand:
-            metrics = page.evaluate(_METRICS_JS, "#quick_reminder_enabled")
+            metrics = page.evaluate(_METRICS_JS, "#quick_advanced_toggle")
             _assert_chrome(metrics, f"collapsed {width}x{height}")
             _assert_target_in_body(metrics, f"collapsed {width}x{height}")
             assert metrics["overflow"] <= 8, metrics
             assert metrics["scrollTop"] <= 1, metrics
+            expect(page.locator("#quick_advanced")).to_be_hidden()
+            expect(page.locator("#quick_end_date")).to_be_hidden()
+            expect(page.locator("#quick_title")).to_be_visible()
+            expect(page.locator("#quick_hebrew_day")).to_be_visible()
+            expect(page.locator("#quick_gregorian_date")).to_be_visible()
+            expect(page.locator("#quick_time")).to_be_visible()
         else:
             _expand(page, width)
             # לפני גלילה: הכפתורים כבר על המסך, גם אם הבורר עוד למטה

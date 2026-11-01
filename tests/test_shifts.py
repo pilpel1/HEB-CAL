@@ -845,7 +845,9 @@ def test_calendar_and_settings_markup(client):
     assert 'id="quick_hebrew_month"' in calendar
     assert 'id="quick_hebrew_year"' in calendar
     assert '>תאריך עברי</label>' not in calendar
-    assert 'aria-label="תאריך עברי"' in calendar
+    assert 'aria-label="יום עברי"' in calendar
+    assert 'aria-label="חודש עברי"' in calendar
+    assert 'aria-label="שנה עברית"' in calendar
     assert 'aria-label="הגדרות תזכורות"' in calendar
     assert 'href="/settings#settings-reminders"' in calendar
     assert 'class="reminder-people-link"' not in calendar

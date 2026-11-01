@@ -9,6 +9,7 @@
             <form id="quickEventForm">
                 <input type="hidden" id="quick_event_id" value="">
                 <input type="hidden" id="quick_color" value="">
+                <input type="hidden" id="quick_hebrew_date" value="">
                 <div class="modal-body">
                     <p id="quick_gcal_note" class="gcal-readonly-note" hidden>לעריכה ביומן גוגל</p>
                     <p id="quick_live_notice" class="quick-live-notice" hidden></p>
@@ -20,6 +21,20 @@
                         </div>
                     </div>
                     <div class="quick-when">
+                        <div class="quick-hebrew-picker" id="quick_hebrew_picker">
+                            <div class="quick-field quick-field-hday">
+                                <label for="quick_hebrew_day" class="form-label">יום</label>
+                                <select id="quick_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי"></select>
+                            </div>
+                            <div class="quick-field quick-field-hmonth">
+                                <label for="quick_hebrew_month" class="form-label">חודש</label>
+                                <select id="quick_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי"></select>
+                            </div>
+                            <div class="quick-field quick-field-hyear">
+                                <label for="quick_hebrew_year" class="form-label">שנה</label>
+                                <select id="quick_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית"></select>
+                            </div>
+                        </div>
                         <div class="quick-field quick-field-date">
                             <label for="quick_gregorian_date" class="form-label">תאריך</label>
                             <input type="date" class="form-control" id="quick_gregorian_date" dir="ltr" required>
@@ -28,18 +43,12 @@
                             <label for="quick_time" class="form-label">שעה</label>
                             <input type="time" class="form-control" id="quick_time" dir="ltr" step="60">
                         </div>
-                        <div class="quick-field quick-field-hebrew">
-                            <div class="quick-hebrew-line">
-                                <input type="text" class="form-control" id="quick_hebrew_date" readonly required aria-label="תאריך עברי">
-                                <button type="button" class="quick-end-toggle" id="quick_end_toggle" aria-expanded="false" aria-controls="quick_end_date">+ תאריך סיום</button>
-                            </div>
-                            <div class="quick-hebrew-picker" id="quick_hebrew_picker">
-                                <select id="quick_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי"></select>
-                                <select id="quick_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי"></select>
-                                <select id="quick_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית"></select>
-                            </div>
-                        </div>
                     </div>
+                    <button type="button" class="quick-advanced-toggle" id="quick_advanced_toggle" aria-expanded="false" aria-controls="quick_advanced">
+                        <span>מתקדם</span>
+                        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="quick-advanced" id="quick_advanced" hidden>
                     <div class="quick-end-wrap">
                         <div class="quick-end-field">
                             <label for="quick_end_date" class="form-label">תאריך סיום</label>
@@ -130,6 +139,7 @@
                                 <p id="quick_reminder_chat_warn" class="reminder-form-warn" hidden></p>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
                 <div class="modal-footer">
