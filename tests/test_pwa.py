@@ -80,7 +80,11 @@ def test_service_worker_is_served_from_root(client):
     assert not (REPO / "app" / "static" / "js" / "sw.js").exists()
     static_copy = client.get("/static/sw.js")
     assert static_copy.status_code == 200
-    assert "heb-cal-shell-v2" in body
+    assert "heb-cal-shell-v3" in body
+    assert "SKIP_WAITING" in body
+    assert "no-store" in body
+    assert "clients.claim" in body
+    assert "skipWaiting" in body
 
 
 def test_favicon_files_and_ico_route(client):

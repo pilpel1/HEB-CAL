@@ -428,12 +428,100 @@ def test_settings_and_gear_markup(client):
     failed_branch = script.split("state === 'failed'", 1)[1][:700]
     assert "disabled = false" in failed_branch
     assert "updateOffer" in failed_branch
+    assert 'id="updateReloadBtn"' in settings
+    assert ">רענן<" in settings
+    assert 'id="updateReloadPrompt"' in settings
+    assert "/api/updates/health" in script
+    assert "cache: 'no-store'" in script
+    assert "POLL_MS = 2000" in script
+    assert "POLL_TIMEOUT_MS = 150000" in script
+    assert "location.replace" in script
+    assert "SKIP_WAITING" in script
+    assert "showReloadPrompt" in script
+    assert "window.location.reload();" not in script.split("function hardReload", 1)[0]
+
+
+def _reload_decisions(cases: list[dict]) -> list:
+    src = (REPO / "app/static/js/events/updates.js").read_text(encoding="utf-8")
+    start = src.index("function shouldHardReloadAfterUpdate")
+    end = src.index("(function () {")
+    script = (
+        src[start:end]
+        + "const cases = "
+        + json.dumps(cases)
+        + ";process.stdout.write(JSON.stringify(cases.map((item) => shouldHardReloadAfterUpdate(item))));"
+    )
+    result = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    return json.loads(result.stdout)
+
+
+def test_hard_reload_waits_for_new_version_after_restart():
+    out = _reload_decisions([
+        {
+            "watching": True,
+            "before": "1.0.17",
+            "target": "1.0.18",
+            "version": "1.0.18",
+            "status": "running",
+            "sawDisconnect": False,
+        },
+        {
+            "watching": True,
+            "before": "1.0.17",
+            "target": "1.0.18",
+            "version": "1.0.18",
+            "status": "running",
+            "sawDisconnect": True,
+        },
+        {
+            "watching": True,
+            "before": "1.0.17",
+            "target": "1.0.18",
+            "version": "1.0.18",
+            "status": "idle",
+            "sawDisconnect": False,
+        },
+        {
+            "watching": True,
+            "before": "1.0.17",
+            "target": "1.0.18",
+            "version": "1.0.17",
+            "status": "idle",
+            "sawDisconnect": True,
+        },
+        {
+            "watching": True,
+            "before": "1.0.17",
+            "target": "1.0.18",
+            "version": "1.0.18",
+            "status": "failed",
+            "sawDisconnect": True,
+        },
+        {
+            "watching": False,
+            "before": "1.0.17",
+            "target": "1.0.18",
+            "version": "1.0.18",
+            "status": "idle",
+            "sawDisconnect": True,
+        },
+        {
+            "watching": True,
+            "before": "1.0.17",
+            "target": "1.0.18",
+            "version": "1.0.18",
+            "status": "success",
+            "sawDisconnect": False,
+        },
+    ])
+    assert out == [False, True, True, False, False, False, True]
 
 
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
     assert health.get_json()["version"] == "1.0.18"
+    assert health.headers.get("Cache-Control") == "no-store"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
     assert body["current"] == "1.0.18"
