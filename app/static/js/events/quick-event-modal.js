@@ -229,6 +229,20 @@ function setQuickColor(colorValue) {
     });
 }
 
+function syncQuickDeleteButton(isEdit, readonly) {
+    const deleteBtn = document.getElementById('quick_delete_btn');
+    if (!deleteBtn) {
+        return;
+    }
+    const editing = isEdit == null
+        ? Boolean(document.getElementById('quick_event_id')?.value)
+        : Boolean(isEdit);
+    const isReadonly = readonly == null
+        ? Boolean(document.getElementById('quickEventForm')?.classList.contains('is-gcal-readonly'))
+        : Boolean(readonly);
+    deleteBtn.hidden = !editing || isReadonly;
+}
+
 function setQuickEventReadonly(readonly) {
     const form = document.getElementById('quickEventForm');
     const note = document.getElementById('quick_gcal_note');
@@ -239,16 +253,20 @@ function setQuickEventReadonly(readonly) {
     if (submit) {
         submit.hidden = !!readonly;
     }
-    if (!form) {
-        return;
+    if (form) {
+        form.classList.toggle('is-gcal-readonly', !!readonly);
+        form.querySelectorAll('input, textarea, select, button').forEach((el) => {
+            if (
+                el.hasAttribute('data-bs-dismiss')
+                || el.id === 'quick_submit_btn'
+                || el.id === 'quick_delete_btn'
+            ) {
+                return;
+            }
+            el.disabled = !!readonly;
+        });
     }
-    form.classList.toggle('is-gcal-readonly', !!readonly);
-    form.querySelectorAll('input, textarea, select, button').forEach((el) => {
-        if (el.hasAttribute('data-bs-dismiss') || el.id === 'quick_submit_btn') {
-            return;
-        }
-        el.disabled = !!readonly;
-    });
+    syncQuickDeleteButton(undefined, readonly);
     if (readonly) {
         const title = document.getElementById('quickEventModalLabel');
         if (title) {
@@ -271,6 +289,34 @@ function setQuickEventModalMode(isEdit) {
     if (submitBtn) {
         submitBtn.textContent = isEdit ? 'שמירה' : 'הוסף אירוע';
     }
+    syncQuickDeleteButton(isEdit);
+}
+
+async function deleteFromQuickEventModal() {
+    const eventId = document.getElementById('quick_event_id')?.value;
+    if (!eventId) {
+        return false;
+    }
+    const form = document.getElementById('quickEventForm');
+    if (form?.classList.contains('is-gcal-readonly')) {
+        return false;
+    }
+    const scope = currentEditScope();
+    const occurrenceDate = quickOccurrenceSnapshot?.occurrence_date;
+    let deleted = false;
+    if (scope === 'occurrence' && occurrenceDate) {
+        deleted = await deleteEventOccurrence(eventId, occurrenceDate);
+    } else {
+        const repeating = Boolean(quickSeriesSnapshot) || Boolean(quickOccurrenceSnapshot);
+        deleted = await deleteEvent(eventId, repeating ? { series: true } : undefined);
+    }
+    if (deleted) {
+        const modalElement = document.getElementById('quickEventModal');
+        if (modalElement) {
+            bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        }
+    }
+    return deleted;
 }
 
 function populateQuickHourOptions() {
@@ -617,6 +663,10 @@ function initQuickEventModal() {
         initQuickShiftFields();
     }
 
+    document.getElementById('quick_delete_btn')?.addEventListener('click', () => {
+        deleteFromQuickEventModal();
+    });
+
     // אחרי סיום הפתיחה של Bootstrap — פוקוס יציב על הכותרת
     modalElement.addEventListener('shown.bs.modal', () => {
         requestAnimationFrame(() => {
@@ -628,6 +678,10 @@ function initQuickEventModal() {
     });
 
     modalElement.addEventListener('hidden.bs.modal', () => {
+        // סגירה ואז פתיחה מיידית: אל תאפסו טופס שכבר נפתח מחדש
+        if (modalElement.classList.contains('show')) {
+            return;
+        }
         setQuickEventReadonly(false);
         fillQuickEventForm();
         setQuickEventModalMode(false);

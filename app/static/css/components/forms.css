@@ -229,6 +229,8 @@
     position: sticky;
     bottom: 0;
     z-index: 2;
+    flex-wrap: wrap;
+    gap: 0.4rem;
     background-color: var(--bs-modal-bg, var(--bs-body-bg, #fff));
 }
 
@@ -248,6 +250,8 @@
 
     #quickEventModal .modal-footer .btn {
         min-height: 40px;
+        flex: 1 1 0;
+        min-width: 0;
     }
 
     .reminder-settings-gear {

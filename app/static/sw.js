@@ -1,5 +1,5 @@
 /* מעטפת PWA בסיסית: HTML + CSS/JS מקומי. לא שומר /api ולא משאבי CDN. */
-const CACHE_NAME = 'heb-cal-shell-v2';
+const CACHE_NAME = 'heb-cal-shell-v3';
 
 const SHELL = [
     '/',
@@ -46,8 +46,18 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
+
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') {
+        return;
+    }
+    const mode = event.request.cache;
+    if (mode === 'no-store' || mode === 'reload' || mode === 'no-cache') {
         return;
     }
     let url;

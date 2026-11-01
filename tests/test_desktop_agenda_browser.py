@@ -611,3 +611,132 @@ def test_agenda_collapse_preference_does_not_change_layout_below_992(live_server
             tablet.close()
         finally:
             browser.close()
+
+
+def test_phone_comfortable_shows_all_events_plus_n_only_in_compact(live_server, client):
+    """בטלפון רגיל כל האירועים נשארים; +N רק בצפיפות. בדסקטופ אין +N."""
+    today = dt.date.today()
+    _seed(client, today)
+    expected = [
+        "פגישת רופא",
+        "איסוף מהגן",
+        "ערב משפחה",
+        "קניות",
+        "שיחת עבודה",
+        "אימון",
+    ]
+
+    def open_today(page):
+        page.goto(live_server + "/", wait_until="domcontentloaded")
+        page.wait_for_selector(".infinite-calendar:not(.is-booting)", timeout=20000)
+        page.wait_for_function(
+            """() => document.querySelectorAll('td.current-day .day-content .event-item').length >= 6""",
+            timeout=10000,
+        )
+        page.evaluate(
+            "() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        )
+        return page.evaluate("""() => {
+            const td = document.querySelector('td.current-day');
+            const more = td.querySelector('.cell-more');
+            const chips = [...td.querySelectorAll('.day-content .event-item')];
+            const visible = chips.filter((el) => !el.classList.contains('is-chip-hidden'));
+            const titles = visible.map((el) => (el.getAttribute('title') || el.textContent || '').trim());
+            const cell = td.querySelector('.day-cell');
+            const row = td.closest('tr');
+            const weekRaw = getComputedStyle(document.documentElement)
+                .getPropertyValue('--week-row-height').trim();
+            return {
+                density: document.documentElement.dataset.calDensity,
+                compactCalendar: window.matchMedia('(max-width: 480px)').matches,
+                moreText: more ? more.textContent.trim() : null,
+                chipCount: chips.length,
+                hiddenCount: chips.length - visible.length,
+                titles,
+                cellH: cell.getBoundingClientRect().height,
+                rowH: row.getBoundingClientRect().height,
+                weekH: parseFloat(weekRaw) || 0,
+                clips: typeof clipsOverflowChips === 'function' ? clipsOverflowChips() : null,
+            };
+        }""")
+
+    phone = {
+        "viewport": {"width": 390, "height": 844},
+        "has_touch": True,
+        "is_mobile": True,
+        "device_scale_factor": 2,
+        "locale": "he-IL",
+    }
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            comfortable_ctx = browser.new_context(**phone)
+            comfortable_ctx.add_init_script(
+                "localStorage.setItem('heb-cal-density', 'comfortable');"
+            )
+            comfortable_page = comfortable_ctx.new_page()
+            comfortable = open_today(comfortable_page)
+            comfortable_ctx.close()
+
+            compact_ctx = browser.new_context(**phone)
+            compact_ctx.add_init_script("localStorage.setItem('heb-cal-density', 'compact');")
+            compact_page = compact_ctx.new_page()
+            compact_page.goto(live_server + "/", wait_until="domcontentloaded")
+            compact_page.wait_for_selector(".infinite-calendar:not(.is-booting)", timeout=20000)
+            compact_page.wait_for_selector("td.current-day .cell-more", timeout=10000)
+            compact = compact_page.evaluate("""() => {
+                const td = document.querySelector('td.current-day');
+                const more = td.querySelector('.cell-more');
+                const chips = [...td.querySelectorAll('.day-content .event-item')];
+                const visible = chips.filter((el) => !el.classList.contains('is-chip-hidden'));
+                const cell = td.querySelector('.day-cell');
+                return {
+                    density: document.documentElement.dataset.calDensity,
+                    compactCalendar: window.matchMedia('(max-width: 480px)').matches,
+                    moreText: more ? more.textContent.trim() : null,
+                    chipCount: chips.length,
+                    hiddenCount: chips.length - visible.length,
+                    cellH: cell.getBoundingClientRect().height,
+                    clips: typeof clipsOverflowChips === 'function' ? clipsOverflowChips() : null,
+                };
+            }""")
+            compact_ctx.close()
+
+            desktop_ctx = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                locale="he-IL",
+            )
+            desktop_ctx.add_init_script("localStorage.setItem('heb-cal-density', 'compact');")
+            desktop_page = desktop_ctx.new_page()
+            desktop = open_today(desktop_page)
+            desktop_ctx.close()
+        finally:
+            browser.close()
+
+    assert comfortable["density"] == "comfortable"
+    assert comfortable["compactCalendar"] is True
+    assert comfortable["clips"] is False
+    assert comfortable["moreText"] is None
+    assert comfortable["hiddenCount"] == 0
+    assert comfortable["chipCount"] >= 6
+    for title in expected:
+        assert any(title in text for text in comfortable["titles"]), title
+    assert comfortable["rowH"] >= comfortable["weekH"] - 1
+
+    assert compact["density"] == "compact"
+    assert compact["compactCalendar"] is True
+    assert compact["clips"] is True
+    assert compact["moreText"] and compact["moreText"].startswith("+")
+    assert compact["hiddenCount"] > 0
+    assert compact["chipCount"] >= 6
+    assert comfortable["cellH"] > compact["cellH"]
+
+    assert desktop["density"] == "compact"
+    assert desktop["compactCalendar"] is False
+    assert desktop["clips"] is False
+    assert desktop["moreText"] is None
+    assert desktop["hiddenCount"] == 0
+    assert desktop["chipCount"] >= 6
+    for title in expected:
+        assert any(title in text for text in desktop["titles"]), title

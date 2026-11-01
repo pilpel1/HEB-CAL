@@ -72,6 +72,10 @@ function densityDivisor() {
     }
 }
 
+function isCompactDensity() {
+    return densityDivisor() === 9;
+}
+
 function updateDensityToggle() {
     const compact = densityDivisor() === 9;
     document.querySelectorAll('[data-density-switch]').forEach((input) => {

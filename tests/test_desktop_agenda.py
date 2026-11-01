@@ -6,6 +6,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 AGENDA_JS = REPO / "app/static/js/calendar/day-agenda.js"
 WEEK_JS = REPO / "app/static/js/calendar/week-rows.js"
+RENDER_JS = REPO / "app/static/js/calendar/event-render.js"
 MODAL_JS = REPO / "app/static/js/events/quick-event-modal.js"
 CALENDAR_CSS = REPO / "app/static/css/components/calendar.css"
 FORMS_CSS = REPO / "app/static/css/components/forms.css"
@@ -70,6 +71,35 @@ def test_compact_density_css_applies_above_phone():
     assert "font-size: 0.72rem" in density
     # v1.0.17: במצב compact בטלפון תאים מוגבלים בגובה (בבלוק נפרד)
     assert 'data-cal-density="compact"' in css
+
+
+def test_phone_comfortable_shows_all_events_plus_n_only_in_compact():
+    render = RENDER_JS.read_text(encoding="utf-8")
+    agenda = AGENDA_JS.read_text(encoding="utf-8")
+    css = CALENDAR_CSS.read_text(encoding="utf-8")
+    assert "function clipsOverflowChips" in render
+    assert "function isCompactDensity" in agenda
+    fit = render.split("function fitCellChips", 1)[1].split("function fitWeekRowChips", 1)[0]
+    assert "clipsOverflowChips()" in fit
+    assert "if (!clipsOverflowChips())" in fit
+    gate = fit.split("if (!clipsOverflowChips())", 1)[1].split("const limit", 1)[0]
+    assert "return;" in gate
+    assert "applyChipPrefix" not in gate
+    assert "isCompactCalendar()" in render.split("function clipsOverflowChips", 1)[1].split(
+        "function fitCellChips", 1
+    )[0]
+    assert "isCompactDensity()" in render.split("function clipsOverflowChips", 1)[1].split(
+        "function fitCellChips", 1
+    )[0]
+    phone_blocks = css.split("@media (max-width: 480px)")
+    comfortable = "\n".join(phone_blocks[1:])
+    assert 'data-cal-density="comfortable"' in comfortable
+    assert "height: auto" in comfortable
+    assert "min-height: var(--week-row-height)" in comfortable
+    assert "min-height: 0" not in comfortable.split('data-cal-density="comfortable"', 1)[1].split("@media", 1)[0]
+    desktop = css.split("@media (min-width: 481px)", 1)[-1]
+    assert "clipsOverflowChips" not in desktop
+    assert 'html[data-cal-density="compact"] .day-cell' in desktop
 
 
 def test_settings_hints_are_inline_and_events_list_drops_reminders_link(client):

@@ -1,9 +1,42 @@
 // מסך «עדכון גרסה» והנקודה על גלגל השיניים. הטקסט מהשרת נכנס כ-textContent.
+
+function shouldHardReloadAfterUpdate(opts) {
+    var version = (opts && opts.version) || '';
+    var before = (opts && opts.before) || '';
+    var target = (opts && opts.target) || '';
+    var status = (opts && opts.status) || '';
+    var watching = !!(opts && opts.watching);
+    var sawDisconnect = !!(opts && opts.sawDisconnect);
+    if (!watching || !version) {
+        return false;
+    }
+    if (status === 'failed') {
+        return false;
+    }
+    var isNew = (before && version !== before) || (target && version === target);
+    if (!isNew) {
+        return false;
+    }
+    if (sawDisconnect) {
+        return true;
+    }
+    if (status === 'running') {
+        return false;
+    }
+    return status === 'success' || status === 'idle';
+}
+
 (function () {
     var csrf = '';
     var latest = '';
     var pollTimer = 0;
     var sawRunning = false;
+    var sawDisconnect = false;
+    var beforeVersion = '';
+    var targetVersion = '';
+    var pollStartedAt = 0;
+    var POLL_MS = 2000;
+    var POLL_TIMEOUT_MS = 150000;
 
     function byId(id) {
         return document.getElementById(id);
@@ -36,6 +69,7 @@
             headers: headers,
             body: options && options.body,
             credentials: 'same-origin',
+            cache: 'no-store',
         });
         var data = {};
         try {
@@ -147,12 +181,78 @@
         }
         if (state === 'success' && sawRunning) {
             setError('');
-            sawRunning = false;
-            window.setTimeout(function () {
-                window.location.reload();
-            }, 800);
         }
-        return state === 'running';
+        return state;
+    }
+
+    async function pingHealth() {
+        var url = '/api/updates/health?_=' + Date.now();
+        var response = await fetch(url, {
+            method: 'GET',
+            headers: {Accept: 'application/json', 'Cache-Control': 'no-cache'},
+            credentials: 'same-origin',
+            cache: 'no-store',
+        });
+        if (!response.ok) {
+            throw new Error('health');
+        }
+        var data = {};
+        try {
+            data = await response.json();
+        } catch (error) {
+            data = {};
+        }
+        return data;
+    }
+
+    function hardReload() {
+        function go() {
+            try {
+                var url = new URL(window.location.href);
+                url.searchParams.set('_upd', String(Date.now()));
+                window.location.replace(url.href);
+            } catch (error) {
+                window.location.reload();
+            }
+        }
+        var finish = function () {
+            go();
+        };
+        if (!(navigator.serviceWorker && navigator.serviceWorker.getRegistrations)) {
+            finish();
+            return;
+        }
+        var clearCaches = function () {
+            if (!window.caches || !caches.keys) {
+                return Promise.resolve();
+            }
+            return caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (key) {
+                    return caches.delete(key);
+                }));
+            });
+        };
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (reg) {
+                if (reg.waiting) {
+                    reg.waiting.postMessage({type: 'SKIP_WAITING'});
+                }
+                if (reg.active) {
+                    reg.active.postMessage({type: 'SKIP_WAITING'});
+                }
+            });
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({type: 'SKIP_WAITING'});
+            }
+            return clearCaches();
+        }).then(finish, finish);
+    }
+
+    function showReloadPrompt() {
+        show(byId('updateProgress'), true);
+        setText('updateProgressMessage', 'העדכון כנראה הסתיים, אבל הדף לא התרענן לבד.');
+        setText('updateReloadMessage', 'לחצו «רענן» כדי לטעון את הגרסה החדשה.');
+        show(byId('updateReloadPrompt'), true);
     }
 
     function applySummary(info) {
@@ -170,7 +270,11 @@
         show(byId('updateCheckBtn'), true);
         showDockerCommand(info);
         renderOffer(info.cached, info);
-        if (renderProgress(info.status || {})) {
+        var status = info.status || {};
+        renderProgress(status);
+        if (status.state === 'running') {
+            beforeVersion = beforeVersion || info.current || '';
+            targetVersion = targetVersion || status.target || latest;
             startPoll();
         }
     }
@@ -179,33 +283,61 @@
         if (pollTimer) {
             return;
         }
-        var misses = 0;
+        pollStartedAt = Date.now();
+        sawDisconnect = false;
+        show(byId('updateReloadPrompt'), false);
 
         async function tick() {
+            if (Date.now() - pollStartedAt > POLL_TIMEOUT_MS) {
+                pollTimer = 0;
+                showReloadPrompt();
+                return;
+            }
+            var healthVersion = '';
             try {
-                var result = await api('/api/updates/status');
-                misses = 0;
-                if (!result.ok) {
-                    setError((result.data && result.data.error) || 'לא הצלחנו לקרוא את מצב העדכון.');
-                    pollTimer = 0;
-                    return;
-                }
-                var running = renderProgress(result.data || {});
-                if (!running) {
-                    pollTimer = 0;
-                    return;
-                }
+                var health = await pingHealth();
+                healthVersion = (health && health.version) || '';
             } catch (error) {
-                misses += 1;
+                sawDisconnect = true;
                 show(byId('updateProgress'), true);
                 setText('updateProgressMessage', 'האפליקציה עולה מחדש…');
-                if (misses > 80) {
-                    setError('אין קשר לאפליקציה. אם היא לא עלתה, בדקו את הגיבוי בתיקיית backups.');
-                    pollTimer = 0;
-                    return;
-                }
+                pollTimer = window.setTimeout(tick, POLL_MS);
+                return;
             }
-            pollTimer = window.setTimeout(tick, 1500);
+            var statusState = '';
+            try {
+                var result = await api('/api/updates/status?_=' + Date.now());
+                if (result.ok) {
+                    var status = result.data || {};
+                    statusState = status.state || '';
+                    if (statusState === 'running') {
+                        sawRunning = true;
+                    }
+                    renderProgress(status);
+                    if (statusState === 'failed') {
+                        pollTimer = 0;
+                        return;
+                    }
+                } else {
+                    sawDisconnect = true;
+                }
+            } catch (error) {
+                sawDisconnect = true;
+            }
+            if (shouldHardReloadAfterUpdate({
+                before: beforeVersion,
+                target: targetVersion,
+                version: healthVersion,
+                sawDisconnect: sawDisconnect,
+                status: statusState,
+                watching: true,
+            })) {
+                show(byId('updateProgress'), true);
+                setText('updateProgressMessage', 'טוען מחדש…');
+                hardReload();
+                return;
+            }
+            pollTimer = window.setTimeout(tick, POLL_MS);
         }
 
         pollTimer = window.setTimeout(tick, 600);
@@ -267,10 +399,20 @@
                     apply.disabled = false;
                     return;
                 }
+                beforeVersion = (byId('updateCurrentVersion') && byId('updateCurrentVersion').textContent.trim()) || '';
+                targetVersion = latest;
+                sawRunning = true;
                 show(byId('updateOffer'), false);
                 show(byId('updateProgress'), true);
+                show(byId('updateReloadPrompt'), false);
                 setText('updateProgressMessage', (result.data && result.data.message) || 'העדכון התחיל');
                 startPoll();
+            });
+        }
+        var reloadBtn = byId('updateReloadBtn');
+        if (reloadBtn) {
+            reloadBtn.addEventListener('click', function () {
+                hardReload();
             });
         }
     }
