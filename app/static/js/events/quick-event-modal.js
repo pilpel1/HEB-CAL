@@ -587,16 +587,43 @@ function currentEditScope() {
 }
 
 function setEndDateOpen(isOpen) {
-    const wrap = document.querySelector('#quickEventModal .quick-end-wrap');
+    const open = Boolean(isOpen);
+    const wrap = document.getElementById('quick_end_wrap')
+        || document.querySelector('#quickEventModal .quick-end-wrap');
     if (wrap) {
-        wrap.classList.toggle('is-open', Boolean(isOpen));
+        wrap.hidden = !open;
+        wrap.classList.toggle('is-open', open);
     }
     const toggle = document.getElementById('quick_end_toggle');
-    if (!toggle) {
-        return;
+    if (toggle) {
+        toggle.hidden = open;
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.textContent = '+ תאריך סיום';
     }
-    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    toggle.textContent = isOpen ? 'הסר תאריך סיום' : '+ תאריך סיום';
+}
+
+function clearQuickEndDate() {
+    const endInput = document.getElementById('quick_end_date');
+    if (endInput) {
+        endInput.value = '';
+        endInput.setCustomValidity('');
+    }
+    const endHebrew = document.getElementById('quick_end_hebrew_date');
+    if (endHebrew) {
+        endHebrew.value = '';
+    }
+    setEndDateOpen(false);
+}
+
+async function openQuickEndDate() {
+    setEndDateOpen(true);
+    const startDate = document.getElementById('quick_gregorian_date')?.value || '';
+    const endInput = document.getElementById('quick_end_date');
+    syncEndDateMin(startDate, endInput);
+    if (startDate && !endInput?.value) {
+        await fillHebrewDateFromGregorian(startDate, 'end');
+    }
+    endInput?.focus();
 }
 
 function setQuickTime(timeValue) {
@@ -985,22 +1012,12 @@ function initQuickEventModal() {
         document.getElementById(id)?.addEventListener('change', () => onHebrewPickerChange('end'));
     });
 
-    const endToggle = document.getElementById('quick_end_toggle');
-    if (endToggle) {
-        endToggle.addEventListener('click', () => {
-            const wrap = document.querySelector('#quickEventModal .quick-end-wrap');
-            const endInput = document.getElementById('quick_end_date');
-            if (wrap?.classList.contains('is-open')) {
-                if (endInput) {
-                    endInput.value = '';
-                }
-                setEndDateOpen(false);
-                return;
-            }
-            setEndDateOpen(true);
-            endInput?.focus();
-        });
-    }
+    document.getElementById('quick_end_toggle')?.addEventListener('click', () => {
+        openQuickEndDate();
+    });
+    document.getElementById('quick_end_clear')?.addEventListener('click', () => {
+        clearQuickEndDate();
+    });
 
     const titleInput = document.getElementById('quick_title');
     if (titleInput) {

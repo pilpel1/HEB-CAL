@@ -34,44 +34,56 @@
                         <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                     </button>
                     <div class="quick-advanced" id="quick_advanced" hidden>
-                    <div class="quick-when" id="quick_start_when">
-                        <div class="quick-hebrew-picker" id="quick_hebrew_picker">
-                            <div class="quick-field quick-field-hday">
-                                <label for="quick_hebrew_day" class="form-label">יום</label>
-                                <select id="quick_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי"></select>
+                    <div class="quick-when-block" id="quick_start_block">
+                        <div class="quick-when-caption">מתאריך</div>
+                        <div class="quick-when" id="quick_start_when">
+                            <div class="quick-hebrew-picker" id="quick_hebrew_picker">
+                                <div class="quick-field quick-field-hday">
+                                    <label for="quick_hebrew_day" class="form-label">יום</label>
+                                    <select id="quick_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי"></select>
+                                </div>
+                                <div class="quick-field quick-field-hmonth">
+                                    <label for="quick_hebrew_month" class="form-label">חודש</label>
+                                    <select id="quick_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי"></select>
+                                </div>
+                                <div class="quick-field quick-field-hyear">
+                                    <label for="quick_hebrew_year" class="form-label">שנה</label>
+                                    <select id="quick_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית"></select>
+                                </div>
                             </div>
-                            <div class="quick-field quick-field-hmonth">
-                                <label for="quick_hebrew_month" class="form-label">חודש</label>
-                                <select id="quick_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי"></select>
+                            <div class="quick-field quick-field-date">
+                                <label for="quick_gregorian_date" class="form-label">תאריך</label>
+                                <input type="date" class="form-control" id="quick_gregorian_date" dir="ltr" required>
                             </div>
-                            <div class="quick-field quick-field-hyear">
-                                <label for="quick_hebrew_year" class="form-label">שנה</label>
-                                <select id="quick_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית"></select>
-                            </div>
-                        </div>
-                        <div class="quick-field quick-field-date">
-                            <label for="quick_gregorian_date" class="form-label">תאריך</label>
-                            <input type="date" class="form-control" id="quick_gregorian_date" dir="ltr" required>
                         </div>
                     </div>
-                    <div class="quick-when quick-end-when" id="quick_end_when">
-                        <div class="quick-hebrew-picker" id="quick_end_hebrew_picker">
-                            <div class="quick-field quick-field-hday">
-                                <label for="quick_end_hebrew_day" class="form-label">יום</label>
-                                <select id="quick_end_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי לסיום"></select>
-                            </div>
-                            <div class="quick-field quick-field-hmonth">
-                                <label for="quick_end_hebrew_month" class="form-label">חודש</label>
-                                <select id="quick_end_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי לסיום"></select>
-                            </div>
-                            <div class="quick-field quick-field-hyear">
-                                <label for="quick_end_hebrew_year" class="form-label">שנה</label>
-                                <select id="quick_end_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית לסיום"></select>
-                            </div>
+                    <button type="button" class="quick-end-toggle" id="quick_end_toggle" aria-expanded="false" aria-controls="quick_end_wrap">
+                        + תאריך סיום
+                    </button>
+                    <div class="quick-end-wrap" id="quick_end_wrap" hidden>
+                        <div class="quick-when-caption">
+                            <span>עד תאריך</span>
+                            <button type="button" class="quick-end-clear" id="quick_end_clear">הסר</button>
                         </div>
-                        <div class="quick-field quick-field-date">
-                            <label for="quick_end_date" class="form-label">תאריך סיום</label>
-                            <input type="date" class="form-control" id="quick_end_date" dir="ltr">
+                        <div class="quick-when quick-end-when" id="quick_end_when">
+                            <div class="quick-hebrew-picker" id="quick_end_hebrew_picker">
+                                <div class="quick-field quick-field-hday">
+                                    <label for="quick_end_hebrew_day" class="form-label">יום</label>
+                                    <select id="quick_end_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי לסיום"></select>
+                                </div>
+                                <div class="quick-field quick-field-hmonth">
+                                    <label for="quick_end_hebrew_month" class="form-label">חודש</label>
+                                    <select id="quick_end_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי לסיום"></select>
+                                </div>
+                                <div class="quick-field quick-field-hyear">
+                                    <label for="quick_end_hebrew_year" class="form-label">שנה</label>
+                                    <select id="quick_end_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית לסיום"></select>
+                                </div>
+                            </div>
+                            <div class="quick-field quick-field-date">
+                                <label for="quick_end_date" class="form-label">תאריך</label>
+                                <input type="date" class="form-control" id="quick_end_date" dir="ltr">
+                            </div>
                         </div>
                     </div>
                     <div class="quick-recurrence" id="quick_recurrence">

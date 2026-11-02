@@ -24,8 +24,12 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert 'type="hidden"' in MODAL_HTML.split("quick_hebrew_date", 1)[0][-80:]
     assert 'readonly' not in MODAL_HTML.split("quick_hebrew_date", 1)[1].split(">", 1)[0]
     assert "כא חשון" not in MODAL_HTML
-    assert "quick_end_toggle" not in MODAL_HTML
-    assert "+ תאריך סיום" not in MODAL_HTML
+    assert 'id="quick_end_toggle"' in MODAL_HTML
+    assert "+ תאריך סיום" in MODAL_HTML
+    assert 'id="quick_end_wrap"' in MODAL_HTML
+    assert 'id="quick_end_clear"' in MODAL_HTML
+    assert "hidden" in MODAL_HTML.split('id="quick_end_wrap"', 1)[1].split(">", 1)[0]
+    assert "הסר" in MODAL_HTML.split("quick_end_clear", 1)[1].split("</button>", 1)[0]
     assert 'id="quick_advanced_toggle"' in MODAL_HTML
     assert ">מתקדם<" in MODAL_HTML
     assert 'aria-controls="quick_advanced"' in MODAL_HTML
@@ -40,6 +44,7 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert 'id="quick_gregorian_date"' not in simple
     assert 'id="quick_hebrew_day"' not in simple
     assert 'id="quick_end_date"' not in simple
+    assert 'id="quick_end_toggle"' not in simple
     assert "quick_advanced" in body
     assert 'id="quick_gregorian_date"' in advanced
     assert 'id="quick_hebrew_day"' in advanced
@@ -47,12 +52,21 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert 'id="quick_end_hebrew_month"' in advanced
     assert 'id="quick_end_hebrew_year"' in advanced
     assert "quick_end_date" in advanced
+    assert "quick-when-caption" in advanced
+    assert ">מתאריך<" in advanced
+    assert ">עד תאריך<" in advanced
+    assert 'id="quick_end_toggle"' in advanced
+    assert 'id="quick_end_wrap"' in advanced
+    assert 'id="quick_end_clear"' in advanced
     assert "quick_recurrence" in advanced
     assert "quick_description" in advanced
     assert "quick_reminder_enabled" in advanced
     assert "quickShiftBlock" in advanced
     assert "quick_delete_btn" in footer
     assert "quick_live_notice" in simple
+    assert "function setEndDateOpen" in MODAL_JS
+    assert "function clearQuickEndDate" in MODAL_JS
+    assert "function openQuickEndDate" in MODAL_JS
 
 
 def test_full_form_setting_is_local_to_the_device():
@@ -80,6 +94,9 @@ def test_simple_when_row_is_one_grid_on_narrow_phones():
     assert "display: contents" in FORMS
     assert "minmax(2.9rem" in FORMS
     assert ".quick-advanced-toggle" in FORMS
+    assert ".quick-when-caption" in FORMS
+    assert ".quick-end-toggle" in FORMS
+    assert ".quick-end-wrap[hidden]" in FORMS
     assert "quick-end-when" in FORMS or "quick-end-when" in MODAL_HTML
     mobile = FORMS.partition("@media (max-width: 480px)")[2].partition("@media (min-width: 481px)")[0]
     assert ".quick-simple-row .form-label" in mobile
@@ -255,20 +272,38 @@ def test_new_event_opens_simple_and_expander_reveals_advanced(live_server):
         expect(page.locator("#quick_advanced")).to_be_visible()
         expect(page.locator("#quick_hebrew_day")).to_be_visible()
         expect(page.locator("#quick_gregorian_date")).to_be_visible()
-        expect(page.locator("#quick_end_date")).to_be_visible()
-        expect(page.locator("#quick_end_hebrew_day")).to_be_visible()
+        expect(page.locator("#quick_start_block .quick-when-caption")).to_have_text("מתאריך")
+        expect(page.locator("#quick_end_toggle")).to_be_visible()
+        expect(page.locator("#quick_end_toggle")).to_have_text("+ תאריך סיום")
+        expect(page.locator("#quick_end_wrap")).to_be_hidden()
+        expect(page.locator("#quick_end_date")).to_be_hidden()
+        expect(page.locator("#quick_end_hebrew_day")).to_be_hidden()
         expect(page.locator("#quick_description")).to_be_visible()
         expect(page.locator("#quick_recurrence_freq")).to_be_visible()
         expect(page.locator("#quick_reminder_enabled")).to_be_visible()
         expect(page.locator("#quick_advanced_toggle")).to_have_attribute("aria-expanded", "true")
         start_row = _date_row_metrics(page, "quick_")
-        end_row = _date_row_metrics(page, "end")
         assert start_row["topSpread"] <= 8, start_row
+
+        page.click("#quick_end_toggle")
+        expect(page.locator("#quick_end_wrap")).to_be_visible()
+        expect(page.locator("#quick_end_toggle")).to_be_hidden()
+        expect(page.locator("#quick_end_date")).to_be_visible()
+        expect(page.locator("#quick_end_hebrew_day")).to_be_visible()
+        expect(page.locator("#quick_end_wrap .quick-when-caption")).to_contain_text("עד תאריך")
+        expect(page.locator("#quick_end_clear")).to_be_visible()
+        end_row = _date_row_metrics(page, "end")
         assert end_row["topSpread"] <= 8, end_row
         day_label = page.locator("#quick_hebrew_day").evaluate(
             "el => el.selectedOptions[0] && el.selectedOptions[0].textContent"
         )
         assert day_label and not day_label.strip().isdigit(), day_label
+
+        page.click("#quick_end_clear")
+        expect(page.locator("#quick_end_wrap")).to_be_hidden()
+        expect(page.locator("#quick_end_toggle")).to_be_visible()
+        expect(page.locator("#quick_end_date")).to_have_value("")
+
         page.click("#quick_advanced_toggle")
         expect(page.locator("#quick_advanced")).to_be_hidden()
         browser.close()
@@ -297,13 +332,18 @@ def test_edit_with_advanced_fields_opens_expanded(live_server, client):
         expect(page.locator("#quick_advanced")).to_be_visible()
         expect(page.locator("#quick_description")).to_have_value("פירוט")
         expect(page.locator("#quick_delete_btn")).to_be_visible()
+        expect(page.locator("#quick_end_toggle")).to_be_visible()
+        expect(page.locator("#quick_end_wrap")).to_be_hidden()
         page.click('#quickEventModal button:has-text("ביטול")')
         expect(page.locator("#quickEventModal")).to_be_hidden()
         _wait_modal_reset(page)
 
         page.evaluate("async (id) => { await openEditEventModal(id); }", dated["id"])
         expect(page.locator("#quick_advanced")).to_be_visible()
+        expect(page.locator("#quick_end_wrap")).to_be_visible()
         expect(page.locator("#quick_end_date")).to_have_value("2026-11-03")
+        expect(page.locator("#quick_end_toggle")).to_be_hidden()
+        expect(page.locator("#quick_end_clear")).to_be_visible()
         page.click('#quickEventModal button:has-text("ביטול")')
         _wait_modal_reset(page)
 
@@ -323,6 +363,31 @@ def test_edit_with_advanced_fields_opens_expanded(live_server, client):
         page.evaluate("async (day) => { await openQuickEventModal(day); }", ANCHOR)
         expect(page.locator("#quick_advanced")).to_be_hidden()
         browser.close()
+
+
+def test_clear_end_date_removes_it_on_save(live_server, client):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import expect, sync_playwright
+
+    dated = _seed_event(client, title="רב יומי למחיקה", end_date="2026-11-03")
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 390, "height": 844}, locale="he-IL")
+        _open_calendar(page, live_server)
+        page.evaluate("async (id) => { await openEditEventModal(id); }", dated["id"])
+        expect(page.locator("#quick_end_wrap")).to_be_visible()
+        expect(page.locator("#quick_end_date")).to_have_value("2026-11-03")
+        page.click("#quick_end_clear")
+        expect(page.locator("#quick_end_wrap")).to_be_hidden()
+        expect(page.locator("#quick_end_date")).to_have_value("")
+        page.click("#quick_submit_btn")
+        expect(page.locator("#quickEventModal")).to_be_hidden()
+        browser.close()
+
+    rows = client.get("/api/events").get_json()
+    match = next(row for row in rows if row["id"] == dated["id"])
+    assert match["end_date"] in (None, "")
 
 
 def test_full_form_setting_stays_on_this_device_only(live_server):
@@ -438,6 +503,8 @@ def test_end_date_row_stays_in_sync_with_hebrew(live_server):
         _open_calendar(page, live_server, 1280, 800)
         page.evaluate("async (day) => { await openQuickEventModal(day); }", ANCHOR)
         page.click("#quick_advanced_toggle")
+        expect(page.locator("#quick_end_wrap")).to_be_hidden()
+        page.click("#quick_end_toggle")
         expect(page.locator("#quick_end_when")).to_be_visible()
         expect(page.locator("#quick_end_hebrew_day")).to_be_visible()
         expect(page.locator("#quick_end_date")).to_be_visible()
