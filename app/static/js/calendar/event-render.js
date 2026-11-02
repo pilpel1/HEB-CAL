@@ -347,7 +347,7 @@ function fitCellChips(cell) {
     }
 
     const first = hideable[0];
-    if (first.querySelector('.event-title')) {
+    if (first.querySelector('.event-title') || first.matches('.holiday, .parasha, .fast')) {
         first.classList.add('is-one-line');
     }
     applyChipPrefix(content, hideable, 1);

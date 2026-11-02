@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 import threading
 from pathlib import Path
 
@@ -31,14 +32,27 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert 'id="quick_advanced"' in MODAL_HTML
     assert "hidden" in MODAL_HTML.split("id=\"quick_advanced\"", 1)[1].split(">", 1)[0]
     body, _, footer = MODAL_HTML.partition("modal-footer")
+    simple, _, advanced = body.partition("id=\"quick_advanced\"")
+    assert "quick-simple-row" in simple
+    assert 'id="quick_title"' in simple
+    assert 'id="quick_time"' in simple
+    assert "quick-color-picker" in simple
+    assert 'id="quick_gregorian_date"' not in simple
+    assert 'id="quick_hebrew_day"' not in simple
+    assert 'id="quick_end_date"' not in simple
     assert "quick_advanced" in body
-    assert "quick_end_date" in body
-    assert "quick_recurrence" in body
-    assert "quick_description" in body
-    assert "quick_reminder_enabled" in body
-    assert "quickShiftBlock" in body
+    assert 'id="quick_gregorian_date"' in advanced
+    assert 'id="quick_hebrew_day"' in advanced
+    assert 'id="quick_end_hebrew_day"' in advanced
+    assert 'id="quick_end_hebrew_month"' in advanced
+    assert 'id="quick_end_hebrew_year"' in advanced
+    assert "quick_end_date" in advanced
+    assert "quick_recurrence" in advanced
+    assert "quick_description" in advanced
+    assert "quick_reminder_enabled" in advanced
+    assert "quickShiftBlock" in advanced
     assert "quick_delete_btn" in footer
-    assert "quick_live_notice" in body.split("quick_advanced", 1)[0]
+    assert "quick_live_notice" in simple
 
 
 def test_full_form_setting_is_local_to_the_device():
@@ -61,10 +75,14 @@ def test_full_form_setting_is_local_to_the_device():
 
 
 def test_simple_when_row_is_one_grid_on_narrow_phones():
+    assert ".quick-simple-row" in FORMS
+    assert "minmax(5.5rem" in FORMS
     assert "display: contents" in FORMS
     assert "minmax(2.9rem" in FORMS
     assert ".quick-advanced-toggle" in FORMS
+    assert "quick-end-when" in FORMS or "quick-end-when" in MODAL_HTML
     mobile = FORMS.partition("@media (max-width: 480px)")[2].partition("@media (min-width: 481px)")[0]
+    assert ".quick-simple-row .form-label" in mobile
     assert ".quick-when .form-label" in mobile
     assert "display: none" in mobile
     assert "align-items: flex-start" in mobile
@@ -129,24 +147,28 @@ def _wait_modal_reset(page):
     )
 
 
-def _row_metrics(page):
+def _simple_row_metrics(page):
     return page.evaluate(
         """() => {
-            const ids = [
-                'quick_hebrew_day', 'quick_hebrew_month', 'quick_hebrew_year',
-                'quick_gregorian_date', 'quick_time',
-            ];
-            const boxes = ids.map((id) => {
+            const box = (id) => {
                 const el = document.getElementById(id);
                 const r = el.getBoundingClientRect();
                 return { id, top: r.top, bottom: r.bottom, left: r.left, right: r.right, height: r.height };
-            });
+            };
+            const title = box('quick_title');
+            const time = box('quick_time');
+            const color = document.querySelector('#quickEventModal .quick-color-picker').getBoundingClientRect();
             const content = document.querySelector('#quickEventModal .modal-content').getBoundingClientRect();
             const footer = document.querySelector('#quickEventModal .modal-footer').getBoundingClientRect();
             const submit = document.getElementById('quick_submit_btn').getBoundingClientRect();
+            const boxes = [title, time];
             return {
-                boxes,
-                topSpread: Math.max(...boxes.map((b) => b.top)) - Math.min(...boxes.map((b) => b.top)),
+                title,
+                time,
+                color: { top: color.top, bottom: color.bottom, left: color.left, right: color.right },
+                topSpread: Math.abs(title.top - time.top),
+                timeOnLeft: time.left < title.left - 4,
+                colorBelow: color.top >= Math.max(title.bottom, time.bottom) - 2,
                 overflowRight: Math.max(0, Math.max(...boxes.map((b) => b.right)) - content.right),
                 overflowLeft: Math.max(0, content.left - Math.min(...boxes.map((b) => b.left))),
                 footerBottom: footer.bottom,
@@ -155,6 +177,33 @@ def _row_metrics(page):
                 vw: window.innerWidth,
             };
         }"""
+    )
+
+
+def _date_row_metrics(page, prefix):
+    ids = (
+        [f"{prefix}hebrew_day", f"{prefix}hebrew_month", f"{prefix}hebrew_year", f"{prefix}gregorian_date"]
+        if prefix == "quick_"
+        else [
+            "quick_end_hebrew_day",
+            "quick_end_hebrew_month",
+            "quick_end_hebrew_year",
+            "quick_end_date",
+        ]
+    )
+    return page.evaluate(
+        """(ids) => {
+            const boxes = ids.map((id) => {
+                const el = document.getElementById(id);
+                const r = el.getBoundingClientRect();
+                return { id, top: r.top, bottom: r.bottom, left: r.left, right: r.right, height: r.height };
+            });
+            return {
+                boxes,
+                topSpread: Math.max(...boxes.map((b) => b.top)) - Math.min(...boxes.map((b) => b.top)),
+            };
+        }""",
+        ids,
     )
 
 
@@ -170,11 +219,13 @@ def test_new_event_opens_simple_and_expander_reveals_advanced(live_server):
         expect(page.locator("#quickEventModal")).to_be_visible()
         expect(page.locator("#quick_title")).to_be_visible()
         expect(page.locator(".quick-color-picker")).to_be_visible()
-        expect(page.locator("#quick_hebrew_day")).to_be_visible()
-        expect(page.locator("#quick_gregorian_date")).to_be_visible()
         expect(page.locator("#quick_time")).to_be_visible()
+        expect(page.locator("#quick_hebrew_day")).to_be_hidden()
+        expect(page.locator("#quick_gregorian_date")).to_be_hidden()
+        expect(page.locator("#quick_end_hebrew_day")).to_be_hidden()
         expect(page.locator("#quick_hebrew_date")).to_be_hidden()
         expect(page.locator("#quick_hebrew_date")).not_to_have_value("")
+        expect(page.locator("#quick_gregorian_date")).to_have_value(ANCHOR)
         expect(page.locator("#quick_advanced")).to_be_hidden()
         expect(page.locator("#quick_end_date")).to_be_hidden()
         expect(page.locator("#quick_description")).to_be_hidden()
@@ -184,29 +235,40 @@ def test_new_event_opens_simple_and_expander_reveals_advanced(live_server):
         expect(page.locator("#quick_advanced_toggle")).to_have_attribute("aria-expanded", "false")
         expect(page.locator("#quick_delete_btn")).to_be_hidden()
         expect(page.locator("#quick_live_notice")).to_be_hidden()
+        expect(page.locator("#quickEventModalLabel")).to_contain_text("אירוע חדש")
 
-        row = _row_metrics(page)
+        row = _simple_row_metrics(page)
         assert row["topSpread"] <= 8, row
+        assert row["timeOnLeft"] is True, row
+        assert row["colorBelow"] is True, row
         assert row["overflowRight"] <= 2, row
         assert row["overflowLeft"] <= 2, row
         assert row["footerBottom"] <= row["vh"] + 1, row
         assert row["submitBottom"] <= row["vh"] + 1, row
-        day_box = next(box for box in row["boxes"] if box["id"] == "quick_hebrew_day")
-        assert day_box["right"] - (page.evaluate(
-            "() => document.getElementById('quick_hebrew_day').getBoundingClientRect().left"
-        )) >= 36
-        day_label = page.locator("#quick_hebrew_day").evaluate(
-            "el => el.selectedOptions[0] && el.selectedOptions[0].textContent"
-        )
-        assert day_label and not day_label.strip().isdigit(), day_label
+
+        page.fill("#quick_title", "2110 בדיקה")
+        page.wait_for_function("() => document.getElementById('quick_time').value === '21:10'")
+        expect(page.locator("#quick_title")).to_have_value("בדיקה")
+        expect(page.locator("#quick_gregorian_date")).to_have_value(ANCHOR)
 
         page.click("#quick_advanced_toggle")
         expect(page.locator("#quick_advanced")).to_be_visible()
+        expect(page.locator("#quick_hebrew_day")).to_be_visible()
+        expect(page.locator("#quick_gregorian_date")).to_be_visible()
         expect(page.locator("#quick_end_date")).to_be_visible()
+        expect(page.locator("#quick_end_hebrew_day")).to_be_visible()
         expect(page.locator("#quick_description")).to_be_visible()
         expect(page.locator("#quick_recurrence_freq")).to_be_visible()
         expect(page.locator("#quick_reminder_enabled")).to_be_visible()
         expect(page.locator("#quick_advanced_toggle")).to_have_attribute("aria-expanded", "true")
+        start_row = _date_row_metrics(page, "quick_")
+        end_row = _date_row_metrics(page, "end")
+        assert start_row["topSpread"] <= 8, start_row
+        assert end_row["topSpread"] <= 8, end_row
+        day_label = page.locator("#quick_hebrew_day").evaluate(
+            "el => el.selectedOptions[0] && el.selectedOptions[0].textContent"
+        )
+        assert day_label and not day_label.strip().isdigit(), day_label
         page.click("#quick_advanced_toggle")
         expect(page.locator("#quick_advanced")).to_be_hidden()
         browser.close()
@@ -341,4 +403,79 @@ def test_simple_save_does_not_need_advanced_fields(live_server, client):
         assert match["gregorian_date"] == ANCHOR
         assert match["end_date"] in (None, "")
         assert not match.get("recurrence_freq")
+        browser.close()
+
+
+def test_four_digit_time_in_title_is_parsed():
+    start = MODAL_JS.index("function extractTimeFromTitle")
+    end = MODAL_JS.index("function applyTimeFromTitlePrefix")
+    script = (
+        MODAL_JS[start:end]
+        + """
+const cases = ['2110 בדיקה', 'בדיקה 2110', '21:10 בדיקה', '0600 פגישה'];
+const out = cases.map((text) => extractTimeFromTitle(text));
+process.stdout.write(JSON.stringify(out));
+"""
+    )
+    result = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    parsed = json.loads(result.stdout)
+    assert parsed[0]["time"] == "21:10"
+    assert parsed[0]["cleanedTitle"] == "בדיקה"
+    assert parsed[1]["time"] == "21:10"
+    assert parsed[1]["cleanedTitle"] == "בדיקה"
+    assert parsed[2]["time"] == "21:10"
+    assert parsed[3]["time"] == "06:00"
+    assert parsed[3]["cleanedTitle"] == "פגישה"
+
+
+def test_end_date_row_stays_in_sync_with_hebrew(live_server):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 800}, locale="he-IL")
+        _open_calendar(page, live_server, 1280, 800)
+        page.evaluate("async (day) => { await openQuickEventModal(day); }", ANCHOR)
+        page.click("#quick_advanced_toggle")
+        expect(page.locator("#quick_end_when")).to_be_visible()
+        expect(page.locator("#quick_end_hebrew_day")).to_be_visible()
+        expect(page.locator("#quick_end_date")).to_be_visible()
+        page.wait_for_function(
+            """() => {
+                const day = document.getElementById('quick_hebrew_day');
+                return day && day.value && day.options.length > 20;
+            }"""
+        )
+
+        page.fill("#quick_end_date", "2026-11-03")
+        page.locator("#quick_end_date").dispatch_event("change")
+        page.wait_for_function(
+            """() => {
+                const greg = document.getElementById('quick_end_date');
+                const startDay = document.getElementById('quick_hebrew_day');
+                const endDay = document.getElementById('quick_end_hebrew_day');
+                return greg && greg.value === '2026-11-03'
+                    && startDay && endDay && endDay.value
+                    && endDay.options.length > 0
+                    && endDay.value !== startDay.value;
+            }"""
+        )
+        start_day = page.locator("#quick_hebrew_day").input_value()
+        end_day = page.locator("#quick_end_hebrew_day").input_value()
+        assert end_day
+        assert start_day != end_day or page.locator("#quick_end_hebrew_month").input_value() != page.locator(
+            "#quick_hebrew_month"
+        ).input_value()
+
+        end_month = page.locator("#quick_end_hebrew_month").input_value()
+        end_year = page.locator("#quick_end_hebrew_year").input_value()
+        page.select_option("#quick_end_hebrew_day", start_day)
+        page.wait_for_function(
+            """(expected) => document.getElementById('quick_end_date').value === expected""",
+            arg=ANCHOR,
+        )
+        expect(page.locator("#quick_end_hebrew_month")).to_have_value(end_month)
+        expect(page.locator("#quick_end_hebrew_year")).to_have_value(end_year)
+        expect(page.locator("#quick_gregorian_date")).to_have_value(ANCHOR)
         browser.close()

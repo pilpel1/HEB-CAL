@@ -10,17 +10,31 @@
                 <input type="hidden" id="quick_event_id" value="">
                 <input type="hidden" id="quick_color" value="">
                 <input type="hidden" id="quick_hebrew_date" value="">
+                <input type="hidden" id="quick_end_hebrew_date" value="">
                 <div class="modal-body">
                     <p id="quick_gcal_note" class="gcal-readonly-note" hidden>לעריכה ביומן גוגל</p>
                     <p id="quick_live_notice" class="quick-live-notice" hidden></p>
-                    <div class="mb-2">
-                        <label for="quick_title" class="form-label">כותרת</label>
-                        <input type="text" class="form-control" id="quick_title" required autofocus>
+                    <div class="quick-simple">
+                        <div class="quick-simple-row">
+                            <div class="quick-field quick-field-title">
+                                <label for="quick_title" class="form-label">כותרת</label>
+                                <input type="text" class="form-control" id="quick_title" required autofocus>
+                            </div>
+                            <div class="quick-field quick-field-time">
+                                <label for="quick_time" class="form-label">שעה</label>
+                                <input type="time" class="form-control" id="quick_time" dir="ltr" step="60">
+                            </div>
+                        </div>
                         <div class="quick-color-picker mt-2" role="radiogroup" aria-label="צבע האירוע">
                             <button type="button" class="quick-color-swatch is-none is-selected" data-color="" title="ללא צבע" aria-label="ללא צבע"></button>
                         </div>
                     </div>
-                    <div class="quick-when">
+                    <button type="button" class="quick-advanced-toggle" id="quick_advanced_toggle" aria-expanded="false" aria-controls="quick_advanced">
+                        <span>מתקדם</span>
+                        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="quick-advanced" id="quick_advanced" hidden>
+                    <div class="quick-when" id="quick_start_when">
                         <div class="quick-hebrew-picker" id="quick_hebrew_picker">
                             <div class="quick-field quick-field-hday">
                                 <label for="quick_hebrew_day" class="form-label">יום</label>
@@ -39,18 +53,23 @@
                             <label for="quick_gregorian_date" class="form-label">תאריך</label>
                             <input type="date" class="form-control" id="quick_gregorian_date" dir="ltr" required>
                         </div>
-                        <div class="quick-field quick-field-time">
-                            <label for="quick_time" class="form-label">שעה</label>
-                            <input type="time" class="form-control" id="quick_time" dir="ltr" step="60">
-                        </div>
                     </div>
-                    <button type="button" class="quick-advanced-toggle" id="quick_advanced_toggle" aria-expanded="false" aria-controls="quick_advanced">
-                        <span>מתקדם</span>
-                        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                    </button>
-                    <div class="quick-advanced" id="quick_advanced" hidden>
-                    <div class="quick-end-wrap">
-                        <div class="quick-end-field">
+                    <div class="quick-when quick-end-when" id="quick_end_when">
+                        <div class="quick-hebrew-picker" id="quick_end_hebrew_picker">
+                            <div class="quick-field quick-field-hday">
+                                <label for="quick_end_hebrew_day" class="form-label">יום</label>
+                                <select id="quick_end_hebrew_day" class="form-select form-select-sm" aria-label="יום עברי לסיום"></select>
+                            </div>
+                            <div class="quick-field quick-field-hmonth">
+                                <label for="quick_end_hebrew_month" class="form-label">חודש</label>
+                                <select id="quick_end_hebrew_month" class="form-select form-select-sm" aria-label="חודש עברי לסיום"></select>
+                            </div>
+                            <div class="quick-field quick-field-hyear">
+                                <label for="quick_end_hebrew_year" class="form-label">שנה</label>
+                                <select id="quick_end_hebrew_year" class="form-select form-select-sm" aria-label="שנה עברית לסיום"></select>
+                            </div>
+                        </div>
+                        <div class="quick-field quick-field-date">
                             <label for="quick_end_date" class="form-label">תאריך סיום</label>
                             <input type="date" class="form-control" id="quick_end_date" dir="ltr">
                         </div>

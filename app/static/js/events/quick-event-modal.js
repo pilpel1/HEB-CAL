@@ -4,11 +4,27 @@ let quickSeriesSnapshot = null;
 let quickOccurrenceSnapshot = null;
 let quickEventFormDirty = false;
 let quickEventFormMute = false;
-let hebrewDateToken = 0;
-let hebrewPickerMute = false;
 let hebrewYearsPromise = null;
-// השנה שאליה שייכת רשימת החודשים שעל המסך (אדר פשוט ואדר א׳ שניהם 12)
-let hebrewPickerContextYear = null;
+const HEBREW_PICKER_IDS = {
+    start: {
+        day: 'quick_hebrew_day',
+        month: 'quick_hebrew_month',
+        year: 'quick_hebrew_year',
+        hebrew: 'quick_hebrew_date',
+        gregorian: 'quick_gregorian_date',
+    },
+    end: {
+        day: 'quick_end_hebrew_day',
+        month: 'quick_end_hebrew_month',
+        year: 'quick_end_hebrew_year',
+        hebrew: 'quick_end_hebrew_date',
+        gregorian: 'quick_end_date',
+    },
+};
+const hebrewPickerState = {
+    start: { token: 0, mute: false, contextYear: null },
+    end: { token: 0, mute: false, contextYear: null },
+};
 // הבורר האחרון שהמשתמש נגע בו: 'hebrew' | 'gregorian' | null
 let dateEntrySource = null;
 // true אחרי בחירה מפורשת של לוח החזרה, או כשעורכים אירוע שכבר חוזר
@@ -131,8 +147,18 @@ function loadHebrewYearLabels() {
     return hebrewYearsPromise;
 }
 
-async function ensureHebrewYearSelect(year, label) {
-    const select = document.getElementById('quick_hebrew_year');
+function pickerEls(which) {
+    const ids = HEBREW_PICKER_IDS[which] || HEBREW_PICKER_IDS.start;
+    return {
+        day: document.getElementById(ids.day),
+        month: document.getElementById(ids.month),
+        year: document.getElementById(ids.year),
+        hebrew: document.getElementById(ids.hebrew),
+        gregorian: document.getElementById(ids.gregorian),
+    };
+}
+
+async function ensureHebrewYearSelect(select, year, label) {
     if (!select) {
         return;
     }
@@ -160,8 +186,7 @@ async function ensureHebrewYearSelect(year, label) {
     }
 }
 
-function fillHebrewMonthSelect(months, selected) {
-    const select = document.getElementById('quick_hebrew_month');
+function fillHebrewMonthSelect(select, months, selected) {
     if (!select || !Array.isArray(months) || !months.length) {
         return;
     }
@@ -178,8 +203,7 @@ function fillHebrewMonthSelect(months, selected) {
     }
 }
 
-function fillHebrewDaySelect(count, selected) {
-    const select = document.getElementById('quick_hebrew_day');
+function fillHebrewDaySelect(select, count, selected) {
     if (!select) {
         return;
     }
@@ -198,44 +222,44 @@ function fillHebrewDaySelect(count, selected) {
     select.value = String(day);
 }
 
-async function applyHebrewDatePayload(data, token) {
-    if (!data || token !== hebrewDateToken) {
+async function applyHebrewDatePayload(which, data, token) {
+    const state = hebrewPickerState[which];
+    if (!data || !state || token !== state.token) {
         return;
     }
-    const hebrewInput = document.getElementById('quick_hebrew_date');
-    if (hebrewInput && data.hebrew_date) {
-        hebrewInput.value = data.hebrew_date;
+    const els = pickerEls(which);
+    if (els.hebrew && data.hebrew_date) {
+        els.hebrew.value = data.hebrew_date;
     }
-    await ensureHebrewYearSelect(data.year, data.year_label);
-    if (token !== hebrewDateToken) {
+    await ensureHebrewYearSelect(els.year, data.year, data.year_label);
+    if (token !== state.token) {
         return;
     }
-    hebrewPickerMute = true;
+    state.mute = true;
     try {
-        fillHebrewMonthSelect(data.months, data.month);
-        fillHebrewDaySelect(data.days_in_month, data.day);
+        fillHebrewMonthSelect(els.month, data.months, data.month);
+        fillHebrewDaySelect(els.day, data.days_in_month, data.day);
         if (data.year) {
-            const yearSelect = document.getElementById('quick_hebrew_year');
-            if (yearSelect && [...yearSelect.options].some((option) => option.value === String(data.year))) {
-                yearSelect.value = String(data.year);
+            if (els.year && [...els.year.options].some((option) => option.value === String(data.year))) {
+                els.year.value = String(data.year);
             }
         }
         if (Array.isArray(data.months) && data.months.length) {
-            hebrewPickerContextYear = data.year || null;
+            state.contextYear = data.year || null;
         }
     } finally {
-        hebrewPickerMute = false;
+        state.mute = false;
     }
 }
 
-function gregorianFromHebrewUrl(year, month, day) {
+function gregorianFromHebrewUrl(year, month, day, contextYear) {
     const params = new URLSearchParams({
         year: String(year),
         month: String(month),
         day: String(day),
     });
-    if (hebrewPickerContextYear && String(hebrewPickerContextYear) !== String(year)) {
-        params.set('from_year', String(hebrewPickerContextYear));
+    if (contextYear && String(contextYear) !== String(year)) {
+        params.set('from_year', String(contextYear));
     }
     return `/api/gregorian-from-hebrew?${params.toString()}`;
 }
@@ -269,23 +293,20 @@ function refreshQuickModalTitle() {
     setQuickEventModalMode(isEdit);
 }
 
-async function fillHebrewDateFromGregorian(gregorianValue, hebrewInputId) {
+async function fillHebrewDateFromGregorian(gregorianValue, which = 'start') {
     if (!gregorianValue) {
         return;
     }
-    const token = ++hebrewDateToken;
+    const state = hebrewPickerState[which] || hebrewPickerState.start;
+    const token = ++state.token;
     try {
         const response = await fetch(`/api/hebrew-date/${gregorianValue}`);
         const data = await response.json();
-        if (!response.ok || token !== hebrewDateToken) {
+        if (!response.ok || token !== state.token) {
             return;
         }
-        const hebrewInput = document.getElementById(hebrewInputId);
-        if (hebrewInput && data.hebrew_date && hebrewInputId !== 'quick_hebrew_date') {
-            hebrewInput.value = data.hebrew_date;
-        }
-        await applyHebrewDatePayload(data, token);
-        if (token === hebrewDateToken) {
+        await applyHebrewDatePayload(which, data, token);
+        if (which === 'start' && token === state.token) {
             refreshQuickModalTitle();
         }
     } catch (error) {
@@ -293,32 +314,46 @@ async function fillHebrewDateFromGregorian(gregorianValue, hebrewInputId) {
     }
 }
 
-async function onHebrewPickerChange() {
-    if (hebrewPickerMute) {
+async function onHebrewPickerChange(which = 'start') {
+    const state = hebrewPickerState[which];
+    if (!state || state.mute) {
         return;
     }
-    noteDateEntry('hebrew');
-    const year = document.getElementById('quick_hebrew_year')?.value;
-    const month = document.getElementById('quick_hebrew_month')?.value;
-    const day = document.getElementById('quick_hebrew_day')?.value;
+    if (which === 'start') {
+        noteDateEntry('hebrew');
+    }
+    const els = pickerEls(which);
+    const year = els.year?.value;
+    const month = els.month?.value;
+    const day = els.day?.value;
     if (!year || !month || !day) {
         return;
     }
-    const token = ++hebrewDateToken;
+    const token = ++state.token;
     try {
-        const response = await fetch(gregorianFromHebrewUrl(year, month, day));
+        const response = await fetch(gregorianFromHebrewUrl(year, month, day, state.contextYear));
         const data = await response.json();
-        if (!response.ok || token !== hebrewDateToken) {
+        if (!response.ok || token !== state.token) {
             return;
         }
-        const gregorian = document.getElementById('quick_gregorian_date');
-        if (gregorian && data.gregorian_date) {
-            gregorian.value = data.gregorian_date;
-            syncEndDateMin(data.gregorian_date, document.getElementById('quick_end_date'));
+        if (els.gregorian && data.gregorian_date) {
+            els.gregorian.value = data.gregorian_date;
+            const startDate = which === 'start'
+                ? data.gregorian_date
+                : (document.getElementById('quick_gregorian_date')?.value || '');
+            const endInput = document.getElementById('quick_end_date');
+            syncEndDateMin(startDate, endInput);
+            if (which === 'end' && !endInput?.value) {
+                return;
+            }
         }
-        await applyHebrewDatePayload(data, token);
-        if (token === hebrewDateToken) {
+        await applyHebrewDatePayload(which, data, token);
+        if (which === 'start' && token === state.token) {
             refreshQuickModalTitle();
+            const endValue = document.getElementById('quick_end_date')?.value;
+            if (endValue) {
+                await fillHebrewDateFromGregorian(endValue, 'end');
+            }
         }
     } catch (error) {
         console.error('Error converting Hebrew date:', error);
@@ -708,9 +743,17 @@ function fillQuickEventForm(eventData = {}, options = {}) {
         quickEventFormDirty = false;
         quickEventFormMute = false;
     };
+    const jobs = [];
     if (eventData.gregorian_date) {
-        return fillHebrewDateFromGregorian(eventData.gregorian_date, 'quick_hebrew_date')
-            .then(finishFill, finishFill);
+        jobs.push(fillHebrewDateFromGregorian(eventData.gregorian_date, 'start'));
+    }
+    if (eventData.end_date) {
+        jobs.push(fillHebrewDateFromGregorian(eventData.end_date, 'end'));
+    } else if (eventData.gregorian_date) {
+        jobs.push(fillHebrewDateFromGregorian(eventData.gregorian_date, 'end'));
+    }
+    if (jobs.length) {
+        return Promise.all(jobs).then(finishFill, finishFill);
     }
     finishFill();
     return Promise.resolve();
@@ -936,7 +979,10 @@ function initQuickEventModal() {
     }
 
     ['quick_hebrew_day', 'quick_hebrew_month', 'quick_hebrew_year'].forEach((id) => {
-        document.getElementById(id)?.addEventListener('change', onHebrewPickerChange);
+        document.getElementById(id)?.addEventListener('change', () => onHebrewPickerChange('start'));
+    });
+    ['quick_end_hebrew_day', 'quick_end_hebrew_month', 'quick_end_hebrew_year'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', () => onHebrewPickerChange('end'));
     });
 
     const endToggle = document.getElementById('quick_end_toggle');
@@ -970,7 +1016,13 @@ function initQuickEventModal() {
             noteDateEntry('gregorian');
             const startDate = quickGregorianDate.value;
             syncEndDateMin(startDate, document.getElementById('quick_end_date'));
-            await fillHebrewDateFromGregorian(startDate, 'quick_hebrew_date');
+            await fillHebrewDateFromGregorian(startDate, 'start');
+            const endValue = document.getElementById('quick_end_date')?.value;
+            if (endValue) {
+                await fillHebrewDateFromGregorian(endValue, 'end');
+            } else if (startDate) {
+                await fillHebrewDateFromGregorian(startDate, 'end');
+            }
             const isEdit = Boolean(document.getElementById('quick_event_id').value);
             setQuickEventModalMode(isEdit);
         });
@@ -1001,9 +1053,14 @@ function initQuickEventModal() {
     const quickEndDate = document.getElementById('quick_end_date');
     if (quickEndDate) {
         // אם בכל זאת הוקלד תאריך לא תקין ידנית — מנקים מיד
-        quickEndDate.addEventListener('change', () => {
+        quickEndDate.addEventListener('change', async () => {
             const startDate = document.getElementById('quick_gregorian_date').value;
             syncEndDateMin(startDate, quickEndDate);
+            if (quickEndDate.value) {
+                await fillHebrewDateFromGregorian(quickEndDate.value, 'end');
+            } else if (startDate) {
+                await fillHebrewDateFromGregorian(startDate, 'end');
+            }
         });
     }
 

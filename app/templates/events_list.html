@@ -567,7 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addEventFromListBtn) {
         addEventFromListBtn.addEventListener('click', () => {
             if (typeof openQuickEventModal === 'function') {
-                openQuickEventModal(formatDate(new Date()));
+                openQuickEventModal(typeof getTodayDateStr === 'function' ? getTodayDateStr() : formatDate(new Date()));
             }
         });
     }

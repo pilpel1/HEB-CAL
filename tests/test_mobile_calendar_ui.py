@@ -66,6 +66,16 @@ def test_resolve_event_color_matches_chip_and_person_shift():
     assert out[4]["fill"] == "rgba(0, 255, 255, 1)"
 
 
+def test_holiday_chips_wrap_to_two_lines_like_user_events():
+    css = CALENDAR_CSS.read_text(encoding="utf-8")
+    render = EVENT_RENDER.read_text(encoding="utf-8")
+    holiday_block = css.split(".jewish-events-container .holiday")[1][:700]
+    assert "-webkit-line-clamp: 2" in holiday_block
+    assert "white-space: normal" in holiday_block
+    assert ".holiday.is-one-line" in css
+    assert "first.matches('.holiday, .parasha, .fast')" in render
+
+
 def test_agenda_row_reuses_event_chip_color_helpers():
     agenda = DAY_AGENDA.read_text(encoding="utf-8")
     render = EVENT_RENDER.read_text(encoding="utf-8")

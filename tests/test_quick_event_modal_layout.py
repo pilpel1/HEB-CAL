@@ -253,8 +253,8 @@ def test_event_modal_footer_stays_and_sections_scroll(live_server, client, kind,
             expect(page.locator("#quick_advanced")).to_be_hidden()
             expect(page.locator("#quick_end_date")).to_be_hidden()
             expect(page.locator("#quick_title")).to_be_visible()
-            expect(page.locator("#quick_hebrew_day")).to_be_visible()
-            expect(page.locator("#quick_gregorian_date")).to_be_visible()
+            expect(page.locator("#quick_hebrew_day")).to_be_hidden()
+            expect(page.locator("#quick_gregorian_date")).to_be_hidden()
             expect(page.locator("#quick_time")).to_be_visible()
         else:
             _expand(page, width)
