@@ -64,13 +64,15 @@ def test_modal_scroll_css_applies_at_every_width():
     assert "position: sticky" in head
     assert "overscroll-behavior: contain" in head
 
-    # יעדי מגע ושורה קומפקטית בטלפון. תאריך סיום חי ב«מתקדם», לא בטוגל נפרד
+    # יעדי מגע ושורה קומפקטית בטלפון. תאריך סיום מאחורי «+ תאריך סיום» במתקדם
     assert "font-size: 16px" in mobile
     assert "min-height: 40px" in mobile
     assert ".quick-when .form-label" in mobile
     assert "display: none" in mobile
     assert "overflow-y: auto" not in mobile
     assert "quick-advanced-toggle" in head
+    assert ".quick-end-toggle" in head
+    assert ".quick-when-caption" in head
     assert "visualViewport" in (REPO / "app/static/js/events/quick-event-modal.js").read_text(encoding="utf-8")
 
     assert "height: calc(100dvh - 1.5rem)" in after_mobile
@@ -219,6 +221,9 @@ def _expand(page, _width):
     if toggle.get_attribute("aria-expanded") != "true":
         toggle.click()
     expect(page.locator("#quick_advanced")).to_be_visible()
+    end_toggle = page.locator("#quick_end_toggle")
+    if end_toggle.is_visible():
+        end_toggle.click()
     page.select_option("#quick_recurrence_freq", "yearly")
     page.select_option("#quick_recurrence_end_mode", "until")
     expect(page.locator("#quick_recurrence_until")).to_be_visible()
@@ -253,8 +258,8 @@ def test_event_modal_footer_stays_and_sections_scroll(live_server, client, kind,
             expect(page.locator("#quick_advanced")).to_be_hidden()
             expect(page.locator("#quick_end_date")).to_be_hidden()
             expect(page.locator("#quick_title")).to_be_visible()
-            expect(page.locator("#quick_hebrew_day")).to_be_visible()
-            expect(page.locator("#quick_gregorian_date")).to_be_visible()
+            expect(page.locator("#quick_hebrew_day")).to_be_hidden()
+            expect(page.locator("#quick_gregorian_date")).to_be_hidden()
             expect(page.locator("#quick_time")).to_be_visible()
         else:
             _expand(page, width)

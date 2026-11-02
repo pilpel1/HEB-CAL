@@ -45,6 +45,8 @@ def test_picker_adar_and_recurrence_calendar_follow_the_user(live_server):
             """async (day) => { await openQuickEventModal(day); }""",
             PLAIN_ADAR,
         )
+        page.click("#quick_advanced_toggle")
+        expect(page.locator("#quick_advanced")).to_be_visible()
         page.wait_for_function(
             """() => {
                 const month = document.getElementById('quick_hebrew_month');
@@ -89,7 +91,6 @@ def test_picker_adar_and_recurrence_calendar_follow_the_user(live_server):
         page.wait_for_function(
             "() => document.getElementById('quick_hebrew_month').value === '13'"
         )
-        page.click("#quick_advanced_toggle")
         expect(page.locator("#quick_advanced")).to_be_visible()
         page.select_option("#quick_recurrence_freq", "yearly")
         expect(page.locator("#quick_recurrence_calendar")).to_have_value("hebrew")

@@ -1,24 +1,22 @@
-// רענון «היום» בזמן אמת: לחיצה, חזרה לטאב, וב-00:00 מקומית
+// רענון «היום» בזמן אמת: חזרה לטאב, resume/pageshow, כל 60 שניות, וב-00:00 שעון ישראל
+
+const TODAY_POLL_MS = 60000;
 
 let todayRefreshTimer = null;
+let todayPollTimer = null;
 let todayLastDate = null;
+let todayRolloverBusy = false;
 
-function refreshTodayHighlight() {
-    const now = getTodayDateStr();
-    if (todayLastDate === now) {
+function applyTodayClasses(now) {
+    if (!now) {
         return;
     }
-    todayLastDate = now;
-
-    // עדכון הדגשת היום בלוח
     document.querySelectorAll('#calendar-weeks td.current-day').forEach((td) => {
         td.classList.remove('current-day');
     });
     document.querySelectorAll(`#calendar-weeks td[data-date="${now}"]`).forEach((td) => {
         td.classList.add('current-day');
     });
-
-    // עדכון past-day
     document.querySelectorAll('#calendar-weeks td[data-date]').forEach((td) => {
         const date = td.dataset.date;
         if (date < now) {
@@ -27,6 +25,81 @@ function refreshTodayHighlight() {
             td.classList.remove('past-day');
         }
     });
+}
+
+function calendarContainsDate(dateStr) {
+    if (!dateStr) {
+        return false;
+    }
+    return Boolean(document.querySelector(`#calendar-weeks td[data-date="${dateStr}"]`));
+}
+
+function todayModalBlocksRefresh() {
+    return typeof isQuickEventModalOpen === 'function' && isQuickEventModalOpen();
+}
+
+function wasViewingTodayPeriod(oldDate) {
+    if (calendarContainsDate(oldDate)) {
+        return true;
+    }
+    if (typeof infiniteCalendar !== 'undefined' && infiniteCalendar.agendaDate === oldDate) {
+        return true;
+    }
+    return false;
+}
+
+async function softRefreshForNewToday(oldDate, newDate) {
+    applyTodayClasses(newDate);
+    if (todayModalBlocksRefresh()) {
+        return;
+    }
+    if (todayRolloverBusy) {
+        return;
+    }
+    todayRolloverBusy = true;
+    try {
+        const onCalendar = typeof isInfiniteCalendarPage === 'function' && isInfiniteCalendarPage();
+        const viewingOld = wasViewingTodayPeriod(oldDate);
+        if (onCalendar && viewingOld) {
+            if (typeof infiniteCalendar !== 'undefined') {
+                infiniteCalendar.agendaDate = newDate;
+            }
+            if (typeof scrollToDate === 'function') {
+                await scrollToDate(newDate, 'center');
+            }
+            if (typeof selectAgendaDay === 'function') {
+                selectAgendaDay(newDate);
+            } else if (typeof renderDayAgenda === 'function') {
+                renderDayAgenda(newDate);
+            }
+        } else if (typeof renderDayAgenda === 'function'
+            && typeof infiniteCalendar !== 'undefined'
+            && infiniteCalendar.agendaDate) {
+            renderDayAgenda(infiniteCalendar.agendaDate);
+        }
+        if (typeof updateVisibleMonthLabel === 'function') {
+            updateVisibleMonthLabel();
+        }
+        if (typeof refreshEventsViews === 'function') {
+            await refreshEventsViews();
+        }
+    } finally {
+        todayRolloverBusy = false;
+    }
+}
+
+function refreshTodayHighlight() {
+    const now = getTodayDateStr();
+    if (todayLastDate === now) {
+        return Promise.resolve();
+    }
+    const oldDate = todayLastDate;
+    todayLastDate = now;
+    if (!oldDate) {
+        applyTodayClasses(now);
+        return Promise.resolve();
+    }
+    return softRefreshForNewToday(oldDate, now);
 }
 
 function scheduleMidnightRefresh() {
@@ -71,23 +144,31 @@ function scheduleMidnightRefresh() {
     }, delay);
 }
 
+function onTodayWake() {
+    refreshTodayHighlight();
+    scheduleMidnightRefresh();
+}
+
 function initTodayRefresh() {
     todayLastDate = getTodayDateStr();
+    applyTodayClasses(todayLastDate);
 
-    // רענון על חזרה לטאב
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
-            refreshTodayHighlight();
-            scheduleMidnightRefresh();
+            onTodayWake();
         }
     });
 
-    // רענון על focus
-    window.addEventListener('focus', () => {
-        refreshTodayHighlight();
-        scheduleMidnightRefresh();
-    });
+    window.addEventListener('focus', onTodayWake);
+    document.addEventListener('resume', onTodayWake);
+    window.addEventListener('pageshow', onTodayWake);
 
-    // הפעלת טיימר לחצות
+    if (todayPollTimer) {
+        clearInterval(todayPollTimer);
+    }
+    todayPollTimer = setInterval(() => {
+        refreshTodayHighlight();
+    }, TODAY_POLL_MS);
+
     scheduleMidnightRefresh();
 }

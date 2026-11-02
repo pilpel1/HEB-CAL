@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addEventFromCalendarBtn = document.getElementById('addEventFromCalendarBtn');
     if (addEventFromCalendarBtn) {
         addEventFromCalendarBtn.addEventListener('click', () => {
-            openQuickEventModal(formatDate(new Date()));
+            openQuickEventModal(typeof getTodayDateStr === 'function' ? getTodayDateStr() : formatDate(new Date()));
         });
     }
 });
