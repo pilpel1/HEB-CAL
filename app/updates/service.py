@@ -12,6 +12,7 @@ from app.database import BASE_DIR
 from app.updates.envconfig import describe_mode, load_config
 from app.updates.errors import UpdateError
 from app.updates.gitops import assert_not_shallow, assert_worktree_clean, is_git_checkout, run_argv
+from app.updates.systemd import systemd_user_units_installed
 from app.updates.github_api import fetch_latest, release_view
 from app.updates.store import (
     acquire_lock,
@@ -189,7 +190,7 @@ def summary() -> dict:
         "current": current,
         "mode": cfg.mode,
         "csrf_token": issue_csrf(),
-        "restart_configured": bool(cfg.restart_command),
+        "restart_configured": bool(cfg.restart_command) or systemd_user_units_installed(cfg.repo_root),
         "hook_configured": bool(cfg.hook_path) and not cfg.hook_error,
         "can_apply": info["can_apply"],
         "block": info["block"],

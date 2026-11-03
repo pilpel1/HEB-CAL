@@ -21,6 +21,7 @@ import time
 
 from app.reminders.digest import process_daily_digests
 from app.reminders.due import telegram_due
+from app.reminders.instance_lock import LOCK_BUSY_EXIT, acquire_worker_lock
 from app.reminders.repository import mark_reminder_sent
 from app.reminders.telegram import TelegramError, consume_updates, publish_bot_commands, send_message
 
@@ -76,6 +77,17 @@ def process_due_reminders(*, now=None, send=None, token: str | None = None) -> i
 
 # Telegram מחזיר getUpdates ברגע שיש עדכון, או אחרי timeout השניות האלה.
 UPDATE_LONG_POLL_SECONDS = 25
+CONFLICT_BACKOFF_START = 5
+CONFLICT_BACKOFF_MAX = 60
+
+
+def next_update_delay(exc: BaseException, conflict_delay: int) -> tuple[int, int]:
+    """שניות לשינה אחרי כשל getUpdates, וה-backoff הבא ל-409."""
+    if isinstance(exc, TelegramError) and exc.is_conflict:
+        sleep = max(CONFLICT_BACKOFF_START, min(int(conflict_delay), CONFLICT_BACKOFF_MAX))
+        nxt = min(sleep * 2, CONFLICT_BACKOFF_MAX)
+        return sleep, nxt
+    return 1, CONFLICT_BACKOFF_START
 
 
 def process_scheduled(*, now=None, send=None, token: str | None = None) -> int:
@@ -113,6 +125,7 @@ def _reminder_loop(stop: threading.Event, interval: int, process) -> None:
 def _update_loop(stop: threading.Event, *, consume, token_fn) -> None:
     """long poll רצוף. בלי שינה של סבב התזכורות בין לחיצה ללחיצה."""
     offset = None
+    conflict_delay = CONFLICT_BACKOFF_START
     while not stop.is_set():
         token = token_fn()
         if not token:
@@ -121,13 +134,22 @@ def _update_loop(stop: threading.Event, *, consume, token_fn) -> None:
             continue
         try:
             offset = consume(token, offset, long_poll=UPDATE_LONG_POLL_SECONDS)
+            conflict_delay = CONFLICT_BACKOFF_START
         except TelegramError as exc:
-            print(f"telegram updates failed: {exc}", file=sys.stderr)
-            if stop.wait(1):
+            delay, conflict_delay = next_update_delay(exc, conflict_delay)
+            if exc.is_conflict:
+                print(
+                    f"telegram getUpdates conflict (another worker?); backing off {delay}s",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"telegram updates failed: {exc}", file=sys.stderr)
+            if stop.wait(delay):
                 return
         except Exception as exc:
+            delay, conflict_delay = next_update_delay(exc, conflict_delay)
             print(f"telegram updates failed: {exc}", file=sys.stderr)
-            if stop.wait(1):
+            if stop.wait(delay):
                 return
 
 
@@ -174,36 +196,44 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    # טוען .env ומאתחל סכמה. הייבוא כאן כדי ש--help לא יפתח DB.
-    from app import app
+    lock = acquire_worker_lock()
+    if lock is None:
+        print("reminder_worker already running; exiting", file=sys.stderr)
+        return LOCK_BUSY_EXIT
 
-    with app.app_context():
-        token = bot_token()
-        if token:
-            publish_bot_commands(token)
-        if args.once:
-            run_once(long_poll=0)
-            return 0
-        from app.gcal.worker import run_loop as gcal_loop
-        from app.gcal.worker import sync_interval_seconds
+    try:
+        # טוען .env ומאתחל סכמה. הייבוא כאן כדי ש--help לא יפתח DB.
+        from app import app
 
-        stop = threading.Event()
-        gcal = threading.Thread(
-            target=gcal_loop,
-            kwargs={"stop": stop, "interval": sync_interval_seconds()},
-            name="gcal-sync",
-            daemon=True,
-        )
-        gcal.start()
-        try:
-            run_loop(args.interval, stop_event=stop)
-        except KeyboardInterrupt:
-            print("reminder worker stopped")
-            return 0
-        finally:
-            stop.set()
-            gcal.join(timeout=1)
-    return 0
+        with app.app_context():
+            token = bot_token()
+            if token:
+                publish_bot_commands(token)
+            if args.once:
+                run_once(long_poll=0)
+                return 0
+            from app.gcal.worker import run_loop as gcal_loop
+            from app.gcal.worker import sync_interval_seconds
+
+            stop = threading.Event()
+            gcal = threading.Thread(
+                target=gcal_loop,
+                kwargs={"stop": stop, "interval": sync_interval_seconds()},
+                name="gcal-sync",
+                daemon=True,
+            )
+            gcal.start()
+            try:
+                run_loop(args.interval, stop_event=stop)
+            except KeyboardInterrupt:
+                print("reminder worker stopped")
+                return 0
+            finally:
+                stop.set()
+                gcal.join(timeout=1)
+        return 0
+    finally:
+        lock.close()
 
 
 if __name__ == "__main__":

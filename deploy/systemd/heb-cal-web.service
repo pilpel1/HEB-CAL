@@ -1,0 +1,24 @@
+# תבנית. scripts/install_services.sh מחליף @INSTALL_DIR@ @PYTHON@ @BIND_HOST@ @PORT@ @USER@
+# וכותב ל-~/.config/systemd/user/heb-cal-web.service (systemd --user).
+# לא להעתיק כמו שהוא: השמות עם @ אינם נתיב אמיתי.
+# רץ כמשתמש @USER@. אין User= ביחידת --user.
+[Unit]
+Description=HEB-CAL web (Flask)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+Environment=FLASK_DEBUG=0
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@PYTHON@ -m flask --app app run --host @BIND_HOST@ --port @PORT@ --with-threads
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=heb-cal-web
+
+[Install]
+WantedBy=default.target

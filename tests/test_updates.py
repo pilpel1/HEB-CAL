@@ -65,13 +65,14 @@ def _update_env(monkeypatch, tmp_path):
     monkeypatch.delenv("HEB_CAL_GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("HEB_CAL_UPDATE_HOOK", raising=False)
     monkeypatch.delenv("HEB_CAL_HEALTH_URL", raising=False)
+    monkeypatch.setenv("HEB_CAL_UNIT_DIR", str(tmp_path / "no-systemd-units"))
     yield tmp_path
 
 
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert parse_version(version) == (1, 0, 22)
+    assert parse_version(version) == (1, 0, 23)
     assert f"## {version}" in changelog
     assert "## 1.0.8" in changelog
     assert "## 1.0.3" in changelog
@@ -412,7 +413,7 @@ def test_settings_and_gear_markup(client):
     assert "עדכן עכשיו" in settings
     assert "סיסמת מנהל" not in settings
     assert "updateLoginForm" not in settings
-    assert ">1.0.22<" in settings
+    assert ">1.0.23<" in settings
     assert "עדיין לא נבדק" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
@@ -520,11 +521,11 @@ def test_hard_reload_waits_for_new_version_after_restart():
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
-    assert health.get_json()["version"] == "1.0.22"
+    assert health.get_json()["version"] == "1.0.23"
     assert health.headers.get("Cache-Control") == "no-store"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
-    assert body["current"] == "1.0.22"
+    assert body["current"] == "1.0.23"
     assert body["cached"]["checked"] is False
     assert body["cached"]["available"] is False
     assert "עדיין לא נבדק" in body["cached"]["message"]
@@ -831,6 +832,8 @@ def test_restart_script_is_generic_and_stop_is_safe(tmp_path):
     assert "HEB_CAL_PORT" in text
     assert "HEB_CAL_UPDATE_ACTION" in text
     assert "reminder_worker.py" in text
+    assert "systemctl --user" in text
+    assert "pid_is_ours" in text
     assert "SECRET" not in text
     assert "TELEGRAM" not in text
     assert "ghp_" not in text
