@@ -24,6 +24,20 @@ def test_default_lock_path_is_under_data():
     assert path == REPO / "data" / "reminder_worker.lock"
 
 
+def test_two_repo_roots_have_separate_lock_files(tmp_path):
+    first = tmp_path / "family1"
+    second = tmp_path / "family2"
+    assert default_lock_path(first) == first / "data" / "reminder_worker.lock"
+    assert default_lock_path(second) == second / "data" / "reminder_worker.lock"
+    assert default_lock_path(first) != default_lock_path(second)
+    a = acquire_worker_lock(default_lock_path(first))
+    b = acquire_worker_lock(default_lock_path(second))
+    assert a is not None
+    assert b is not None
+    a.close()
+    b.close()
+
+
 def test_lock_can_be_reacquired_after_close(tmp_path):
     lock_path = tmp_path / "reminder_worker.lock"
     first = acquire_worker_lock(lock_path)
@@ -125,3 +139,26 @@ def test_update_loop_backs_off_on_409():
     assert calls["n"] >= 3
     assert delays[:3] == [5, 10, 20]
     assert elapsed < 1.0
+
+
+def test_update_loop_idles_without_telegram_token():
+    stop = threading.Event()
+    calls = []
+
+    def consume(token, offset, long_poll=0):
+        calls.append(token)
+        raise AssertionError("getUpdates must not run without a token")
+
+    original = threading.Event.wait
+
+    def wait_and_stop(self, timeout=None):
+        stop.set()
+        return True
+
+    threading.Event.wait = wait_and_stop
+    try:
+        _update_loop(stop, consume=consume, token_fn=lambda: "")
+    finally:
+        threading.Event.wait = original
+        stop.set()
+    assert calls == []

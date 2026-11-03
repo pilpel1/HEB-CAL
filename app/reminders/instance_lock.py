@@ -36,6 +36,7 @@ class WorkerLock:
 
 
 def default_lock_path(root: Path | None = None) -> Path:
+    """נעילה תחת data/ של המופע הזה — כל clone שומר קובץ נפרד."""
     if root is None:
         root = Path(__file__).resolve().parent.parent.parent
     return Path(root) / "data" / DEFAULT_LOCK_NAME

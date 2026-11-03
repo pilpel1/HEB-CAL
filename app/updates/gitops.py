@@ -18,10 +18,10 @@ from app.updates.envconfig import UpdateConfig
 from app.updates.errors import UpdateError, redact
 from app.updates.store import read_json, write_status
 from app.updates.systemd import (
-    UNITS,
     bundled_restart_script,
     systemd_user_env,
     systemd_user_units_installed,
+    unit_filenames,
 )
 from app.updates.version import valid_slug, validate_sha, validate_tag
 
@@ -479,7 +479,7 @@ class LiveOps:
                     "systemctl",
                     "--user",
                     "stop" if action == "stop" else "restart",
-                    *UNITS,
+                    *unit_filenames(self.cfg.repo_root),
                 ]
                 proc = run_argv(
                     argv,

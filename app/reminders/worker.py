@@ -209,6 +209,11 @@ def main(argv: list[str] | None = None) -> int:
             token = bot_token()
             if token:
                 publish_bot_commands(token)
+            else:
+                print(
+                    "TELEGRAM_BOT_TOKEN is empty; worker stays up without Telegram",
+                    file=sys.stderr,
+                )
             if args.once:
                 run_once(long_poll=0)
                 return 0

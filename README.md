@@ -228,7 +228,7 @@ chmod +x scripts/install_services.sh scripts/restart.sh
 ./scripts/install_services.sh
 ```
 
-הסקריפט כותב ל-`~/.config/systemd/user/heb-cal-web.service` ו-`heb-cal-worker.service`, מפעיל linger, עוצר תהליכי flask/reminder_worker ישנים של הריפו הזה, ומעלה את היחידות. אידמפוטנטי — אפשר להריץ שוב אחרי שינוי פורט או נתיב.
+הסקריפט כותב ל-`~/.config/systemd/user/heb-cal-web.service` ו-`heb-cal-worker.service` (ברירת מחדל), מפעיל linger, עוצר תהליכי flask/reminder_worker ישנים של הריפו הזה, ומעלה את היחידות. השם והפורט נשמרים ב-`data/instance.env` (לא בגיט). אידמפוטנטי — אפשר להריץ שוב אחרי שינוי פורט או נתיב. בוט טלגרם אופציונלי: בלי `TELEGRAM_BOT_TOKEN` ה-worker נשאר למעלה (סנכרון גוגל) ולא נכנס ללולאת restart.
 
 ```bash
 systemctl --user status heb-cal-web.service heb-cal-worker.service
@@ -236,7 +236,7 @@ journalctl --user -u heb-cal-web -u heb-cal-worker -f
 systemctl --user restart heb-cal-web.service heb-cal-worker.service
 ```
 
-לוגים ב-journald, לא ב-`logs/`. `scripts/restart.sh` נשאר `HEB_CAL_RESTART_COMMAND` — כשיש יחידות הוא רק מפעיל `systemctl --user`.
+לוגים ב-journald, לא ב-`logs/`. `scripts/restart.sh` נשאר `HEB_CAL_RESTART_COMMAND` — כשיש יחידות הוא מפעיל רק את היחידות של **המופע הזה**.
 
 חזרה להרצה ידנית:
 
@@ -248,6 +248,45 @@ systemctl --user daemon-reload
 ```
 
 אחר כך אפשר `HEB_CAL_RESTART_COMMAND=scripts/restart.sh` ו-nohup כמו למטה. לא להריץ את היחידות האלה ליד `docker compose` על אותו פורט.
+
+### מופע נוסף למשפחה אחרת
+
+אותו שרת בית יכול להריץ כמה יומנים עצמאיים: כל משפחה בתיקיית clone משלה, עם `.venv`, SQLite, פורט, ויחידות systemd משלה. אופציונלי טוקן בוט טלגרם נפרד. לא מעתיקים `data/` ולא את `.env` ממופע קיים.
+
+```bash
+git clone https://github.com/pilpel1/HEB-CAL.git ~/heb-cal-family2
+cd ~/heb-cal-family2
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env
+# מחליפים SECRET_KEY. TELEGRAM_BOT_TOKEN רק אם יש בוט למשפחה הזו.
+chmod +x scripts/install_services.sh scripts/restart.sh
+./scripts/install_services.sh --tailscale-serve
+```
+
+בלי `--name`: אם `heb-cal` כבר מותקן לתיקייה אחרת, הסקריפט בוחר `heb-cal2` (ואז `heb-cal3`…) ופורט TCP פנוי מ-5001. `--name` / `--port` אם רוצים לקבוע במפורש. הוא לא דורס יחידות ששייכות לתיקייה אחרת.
+
+`--tailscale-serve` מוסיף מיפוי HTTPS חדש ל-`localhost:<פורט>` על פורט פנוי מ-10000 (לא 443 ולא 8443, ובלי לגעת במיפויים קיימים). בסוף מודפסת כתובת כמו `https://homeserver.tailnet.ts.net:10001`. אם Serve נכשל, היחידות כבר מותקנות ומודפסת הפקודה הידנית.
+
+גישה למשפחה השנייה — לא לאותו פורט של הראשונה:
+
+1. בקונסולת Tailscale: Machines → המחשב של השרת → **Share** למשתמש של המשפחה השנייה (Device sharing).
+2. ב-ACL של ה-tailnet מגבילים את המשתמש הזה לפורט ה-HTTPS של המופע שלו בלבד. דוגמה עם grants:
+
+```json
+{
+  "grants": [
+    {
+      "src": ["family2@example.com"],
+      "dst": ["autogroup:self"],
+      "ip": ["10001"]
+    }
+  ]
+}
+```
+
+מחליפים את האימייל ואת `10001` בפורט ש-`install_services.sh` הדפיס. בלי השורה הזו המשתמש השיתופי עלול לראות גם שירותים אחרים על אותו מחשב. המופע הראשון נשאר על היחידות `heb-cal-web` / `heb-cal-worker` ופורט 5000.
 
 ### שרת בבית, בלי systemd (nohup)
 

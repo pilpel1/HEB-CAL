@@ -1,9 +1,9 @@
-# תבנית. scripts/install_services.sh מחליף @INSTALL_DIR@ @PYTHON@ @BIND_HOST@ @PORT@ @USER@
-# וכותב ל-~/.config/systemd/user/heb-cal-web.service (systemd --user).
+# תבנית. scripts/install_services.sh מחליף @INSTALL_DIR@ @PYTHON@ @BIND_HOST@ @PORT@ @USER@ @INSTANCE@
+# וכותב ל-~/.config/systemd/user/@INSTANCE@-web.service (systemd --user).
 # לא להעתיק כמו שהוא: השמות עם @ אינם נתיב אמיתי.
 # רץ כמשתמש @USER@. אין User= ביחידת --user.
 [Unit]
-Description=HEB-CAL web (Flask)
+Description=HEB-CAL web (@INSTANCE@)
 After=network-online.target
 Wants=network-online.target
 
@@ -18,7 +18,7 @@ RestartSec=3
 TimeoutStopSec=20
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=heb-cal-web
+SyslogIdentifier=@INSTANCE@-web
 
 [Install]
 WantedBy=default.target
