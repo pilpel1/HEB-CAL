@@ -1,7 +1,7 @@
 /*
  * נקודת הכניסה של ה-UI. הקוד מפוצל לסקריפטים קלאסיים (לא ES modules) שנטענים
  * ב-base.html אחרי הקובץ הזה, וחולקים scope גלובלי אחד:
- * - onclick בתבניות (goToToday, editEvent, deleteEvent) ו-index.html (jumpToMonth)
+ * - onclick בתבניות (goToToday, jumpToDate → jumpToMonth, editEvent, deleteEvent)
  *   קוראים לפונקציות גלובליות.
  * - הסקריפט ב-events_list.html מגדיר deleteEvent/editEvent/getTodayDateStr לפני
  *   הקבצים האלה, ולכן הגרסאות כאן דורסות אותו; loadAllEvents שלו נבדק ב-typeof.
@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (typeof initTodayRefresh === 'function') {
         initTodayRefresh();
+    }
+    if (typeof initJumpDatePicker === 'function') {
+        initJumpDatePicker();
     }
 
     if (isInfiniteCalendarPage()) {

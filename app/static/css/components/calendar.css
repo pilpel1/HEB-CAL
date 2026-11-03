@@ -31,6 +31,29 @@
     gap: 0.5rem;
 }
 
+.jump-date-menu {
+    min-width: 13.5rem;
+}
+
+.jump-cal-toggle {
+    display: flex;
+    width: 100%;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.jump-cal-toggle .jump-cal-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.8125rem;
+}
+
+.jump-date-menu.is-gregorian .jump-hebrew-fields,
+.jump-date-menu.is-hebrew .jump-gregorian-fields {
+    display: none;
+}
+
 .shift-grid-icon {
     display: block;
 }
@@ -448,10 +471,9 @@
     border-radius: 3px;
 }
 
-/* שעת האירוע */
+/* שעת האירוע. בדסקטופ: קטנה ואפורה. בטלפון מוסתרת (השעה נשארת ב-title). */
 .event-time {
-    font-weight: 500;
-    margin-left: 0.25rem;
+    font-weight: 400;
 }
 
 /* טבלת לוח שנה */
@@ -1546,8 +1568,33 @@
 }
 
 /* צפוף בדסקטופ/טאבלט: תא נמוך יותר, צ'יפ קטן, ולכן יותר אירועים נכנסים באותו גובה.
-   בטלפון (עד 480) הצפיפות נשארת דרך --week-row-height, בלי הדריסות האלה. */
+   בטלפון (עד 480) הצפיפות נשארת דרך --week-row-height, בלי הדריסות האלה.
+   צ'יפ עם שעה בדסקטופ: בלי «08:00 - », שעה אפורה קטנה, גלישה לשתי שורות כמו חג. */
 @media (min-width: 481px) {
+    .day-content .event-item.event-timed {
+        white-space: normal;
+        overflow: hidden;
+        text-overflow: unset;
+        height: auto;
+    }
+
+    .day-content .event-item.event-timed .event-title {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    .day-content .event-item.event-timed .event-time {
+        font-size: 0.8em;
+        font-weight: 400;
+        color: #6b7280;
+        margin: 0;
+    }
+
     html[data-cal-density="compact"] .day-cell {
         min-height: 84px;
     }

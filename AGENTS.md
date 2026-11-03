@@ -88,6 +88,7 @@ Manual checks:
 | `app/static/js/calendar/week-rows.js` | Build week rows and day cells |
 | `app/static/js/calendar/scroll-anchor.js` | Scroll geometry and `preserveScrollAnchor()` |
 | `app/static/js/calendar/infinite-calendar.js` | Infinite-scroll core: maintain/trim, `renderAround`, `scrollToDate`, today button |
+| `app/static/js/calendar/jump-date.js` | Jump-to-date popover: Gregorian/Hebrew toggle, Tishrei-first months with a single Adar, `jumpToDate()` |
 | `app/static/js/events/end-date-validation.js` | End date must not precede the start date (shared with the events-list page) |
 | `app/static/js/events/event-actions.js` | Create / update / delete, success toast, refresh both views |
 | `app/static/js/events/auto-backup.js` | Settings «גיבוי אוטומטי»: once a local day while the tab is open. Writes the existing `/api/events/export` JSON into a chosen folder (`גיבוי יומן` via the File System Access API + IndexedDB handle) and prunes by retention. Safari / Firefox / insecure HTTP fall back to a `heb-cal-backup-…` download on the first click or key that day. Rules live in `auto-backup-logic.js` |

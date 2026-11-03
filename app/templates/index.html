@@ -11,32 +11,61 @@
             <div class="calendar-nav" id="calendar-nav">
                 <button type="button" class="btn btn-outline-primary btn-today" id="goToTodayBtn" onclick="goToToday()" title="היום" aria-label="היום">היום</button>
                 <div class="dropdown">
-                    <button class="btn btn-outline-primary" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" aria-expanded="false" title="דלג לתאריך" aria-label="דלג לתאריך">
+                    <button class="btn btn-outline-primary" type="button" id="jumpToDateBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="דלג לתאריך" aria-label="דלג לתאריך">
                         <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
                     </button>
-                    <div class="dropdown-menu p-3" aria-labelledby="jumpToDateBtn">
-                        <div class="mb-2">
-                            <select class="form-select" id="monthSelect">
-                                <option value="0">ינואר</option>
-                                <option value="1">פברואר</option>
-                                <option value="2">מרץ</option>
-                                <option value="3">אפריל</option>
-                                <option value="4">מאי</option>
-                                <option value="5">יוני</option>
-                                <option value="6">יולי</option>
-                                <option value="7">אוגוסט</option>
-                                <option value="8">ספטמבר</option>
-                                <option value="9">אוקטובר</option>
-                                <option value="10">נובמבר</option>
-                                <option value="11">דצמבר</option>
-                            </select>
+                    <div class="dropdown-menu p-3 jump-date-menu is-gregorian" id="jumpDateMenu" aria-labelledby="jumpToDateBtn">
+                        <div class="jump-cal-toggle" role="group" aria-label="סוג לוח">
+                            <button type="button" class="btn btn-sm btn-primary jump-cal-btn is-active" id="jumpCalGregorian" data-jump-cal="gregorian" aria-pressed="true">לועזי</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary jump-cal-btn" id="jumpCalHebrew" data-jump-cal="hebrew" aria-pressed="false">עברי</button>
                         </div>
-                        <div class="mb-2">
-                            <select class="form-select" id="yearSelect">
-                                <!-- יתמלא דינמית ע"י JavaScript -->
-                            </select>
+                        <div id="jumpGregorianFields" class="jump-gregorian-fields">
+                            <div class="mb-2">
+                                <select class="form-select" id="monthSelect" aria-label="חודש לועזי">
+                                    <option value="0">ינואר</option>
+                                    <option value="1">פברואר</option>
+                                    <option value="2">מרץ</option>
+                                    <option value="3">אפריל</option>
+                                    <option value="4">מאי</option>
+                                    <option value="5">יוני</option>
+                                    <option value="6">יולי</option>
+                                    <option value="7">אוגוסט</option>
+                                    <option value="8">ספטמבר</option>
+                                    <option value="9">אוקטובר</option>
+                                    <option value="10">נובמבר</option>
+                                    <option value="11">דצמבר</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <select class="form-select" id="yearSelect" aria-label="שנה לועזית">
+                                    <!-- יתמלא דינמית ע"י JavaScript -->
+                                </select>
+                            </div>
                         </div>
-                        <button class="btn btn-primary w-100" onclick="jumpToDate()">אישור</button>
+                        <div id="jumpHebrewFields" class="jump-hebrew-fields" hidden>
+                            <div class="mb-2">
+                                <select class="form-select" id="hebrewMonthSelect" aria-label="חודש עברי">
+                                    <option value="7">תשרי</option>
+                                    <option value="8">חשון</option>
+                                    <option value="9">כסלו</option>
+                                    <option value="10">טבת</option>
+                                    <option value="11">שבט</option>
+                                    <option value="12">אדר</option>
+                                    <option value="1">ניסן</option>
+                                    <option value="2">אייר</option>
+                                    <option value="3">סיון</option>
+                                    <option value="4">תמוז</option>
+                                    <option value="5">אב</option>
+                                    <option value="6">אלול</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <select class="form-select" id="hebrewYearSelect" aria-label="שנה עברית">
+                                    <!-- יתמלא דינמית ע"י JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary w-100" id="jumpConfirmBtn" onclick="jumpToDate()">אישור</button>
                     </div>
                 </div>
                 <button type="button" class="btn btn-primary" id="addEventFromCalendarBtn" title="הוסף אירוע" aria-label="הוסף אירוע">
@@ -157,37 +186,4 @@
 
 {% include 'partials/quick_event_modal.html' %}
 {% include 'partials/shift_entry_modal.html' %}
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const yearSelect = document.getElementById('yearSelect');
-    const currentYear = new Date().getFullYear();
-
-    for (let year = 1900; year <= currentYear + 20; year++) {
-        const option = document.createElement('option');
-        option.value = year;
-        option.textContent = year;
-        if (year === currentYear) {
-            option.selected = true;
-        }
-        yearSelect.appendChild(option);
-    }
-
-    document.getElementById('monthSelect').value = new Date().getMonth();
-});
-
-function jumpToDate() {
-    const selectedMonth = parseInt(document.getElementById('monthSelect').value, 10);
-    const selectedYear = parseInt(document.getElementById('yearSelect').value, 10);
-
-    if (typeof jumpToMonth === 'function') {
-        jumpToMonth(selectedYear, selectedMonth + 1);
-    }
-
-    const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('jumpToDateBtn'));
-    if (dropdown) {
-        dropdown.hide();
-    }
-}
-</script>
 {% endblock %}
