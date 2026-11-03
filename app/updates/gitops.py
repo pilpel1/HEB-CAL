@@ -17,6 +17,12 @@ from pathlib import Path
 from app.updates.envconfig import UpdateConfig
 from app.updates.errors import UpdateError, redact
 from app.updates.store import read_json, write_status
+from app.updates.systemd import (
+    UNITS,
+    bundled_restart_script,
+    systemd_user_env,
+    systemd_user_units_installed,
+)
 from app.updates.version import valid_slug, validate_sha, validate_tag
 
 logger = logging.getLogger(__name__)
@@ -48,6 +54,8 @@ def restart_argv(command: str, repo_root: Path) -> list[str]:
 
 def restart_block(command: str | None, repo_root: Path) -> str | None:
     """הודעה בעברית אם אי אפשר להפעיל מחדש. None אם אפשר."""
+    if systemd_user_units_installed(repo_root):
+        return None
     if not command:
         return "לא הוגדרה פקודת הפעלה מחדש (HEB_CAL_RESTART_COMMAND)."
     try:
@@ -459,14 +467,35 @@ class LiveOps:
     def _restart(self, action: str) -> None:
         if action not in {"restart", "stop"}:
             raise UpdateError("פעולת הפעלה לא תקינה.", step="restart")
-        if not self.cfg.restart_command:
-            raise UpdateError("לא הוגדרה פקודת הפעלה מחדש.", step="restart")
         env = os.environ.copy()
         env["HEB_CAL_UPDATE_ACTION"] = action
+        command = self.cfg.restart_command
+        if systemd_user_units_installed(self.cfg.repo_root):
+            bundled = bundled_restart_script(self.cfg.repo_root)
+            if bundled.is_file() and os.access(bundled, os.X_OK):
+                command = str(bundled)
+            elif not command:
+                argv = [
+                    "systemctl",
+                    "--user",
+                    "stop" if action == "stop" else "restart",
+                    *UNITS,
+                ]
+                proc = run_argv(
+                    argv,
+                    cwd=self.cfg.repo_root,
+                    env=systemd_user_env(env),
+                    timeout=60,
+                )
+                if proc.returncode != 0:
+                    raise UpdateError("ההפעלה מחדש נכשלה.", step="restart")
+                return
+        if not command:
+            raise UpdateError("לא הוגדרה פקודת הפעלה מחדש.", step="restart")
         proc = run_argv(
-            restart_argv(self.cfg.restart_command, self.cfg.repo_root),
+            restart_argv(command, self.cfg.repo_root),
             cwd=self.cfg.repo_root,
-            env=env,
+            env=systemd_user_env(env),
             timeout=60,
         )
         if proc.returncode != 0:
@@ -479,7 +508,7 @@ class LiveOps:
         self._restart("stop")
 
     def restart_configured(self) -> bool:
-        return bool(self.cfg.restart_command)
+        return bool(self.cfg.restart_command) or systemd_user_units_installed(self.cfg.repo_root)
 
     def wait_healthy(self, version: str) -> None:
         opener = urllib.request.build_opener(_NoRedirect)

@@ -187,11 +187,21 @@ function compareEventsByTime(a, b) {
     return (Number(a.id) || 0) - (Number(b.id) || 0);
 }
 
-function eventTimeLabel(event) {
-    if (event.time) {
-        return `${event.time} - ${event.title ?? ''}`;
+function formatChipTime(time) {
+    const raw = String(time ?? '').trim();
+    const match = raw.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) {
+        return raw;
     }
-    return String(event.title ?? '');
+    return `${Number(match[1])}:${match[2]}`;
+}
+
+function eventTimeLabel(event) {
+    const title = String(event.title ?? '');
+    if (!event.time) {
+        return title;
+    }
+    return `${formatChipTime(event.time)} ${title}`.trim();
 }
 
 function buildEventItemHtml(event, extraClasses = []) {
@@ -200,19 +210,22 @@ function buildEventItemHtml(event, extraClasses = []) {
     if (!fill) {
         classes.push('event-uncolored');
     }
+    if (event.time) {
+        classes.push('event-timed');
+    }
 
     const style = fill ? `background-color: ${fill}` : '';
     const label = escapeHtml(eventTimeLabel(event));
     const timeHtml = event.time
-        ? `<span class="event-time">${escapeHtml(event.time)}</span><span class="event-sep"> - </span>`
+        ? `<span class="event-time">${escapeHtml(formatChipTime(event.time))}</span><span class="event-sep"> </span>`
         : '';
-    const title = `${googleBadgeHtml(event)}${repeatIconHtml(event)}${escapeHtml(event.title ?? '')}`;
+    const title = `${timeHtml}${googleBadgeHtml(event)}${repeatIconHtml(event)}${escapeHtml(event.title ?? '')}`;
     const occurrence = escapeHtml(event.occurrence_date || event.gregorian_date || '');
     const recurring = event.recurrence_freq ? '1' : '0';
     const gcal = isGoogleEvent(event) ? '1' : '0';
     const fullTitle = isGoogleEvent(event) ? `${label} — לעריכה ביומן גוגל` : label;
 
-    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}" data-gcal="${gcal}" title="${escapeHtml(fullTitle)}" style="${style}">${timeHtml}<span class="event-title">${title}</span></div>`;
+    return `<div class="${classes.join(' ')}" data-event-id="${event.id}" data-occurrence-date="${occurrence}" data-recurring="${recurring}" data-gcal="${gcal}" title="${escapeHtml(fullTitle)}" style="${style}"><span class="event-title">${title}</span></div>`;
 }
 
 function jewishEventHtml(event) {

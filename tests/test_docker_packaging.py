@@ -86,7 +86,7 @@ def test_readme_update_command_matches_docker_mode():
     assert "gcal_sync_worker.py" in readme
     changelog = _text("CHANGELOG.md")
     version = _text("VERSION").strip()
-    assert version == "1.0.22"
+    assert version == "1.0.23"
     assert f"## {version}" in changelog
     assert "Docker" in changelog
 
@@ -162,6 +162,29 @@ def test_household_install_scripts_and_ghcr_workflow():
     restart = _text("scripts/restart.sh")
     assert "--with-threads" in restart
     assert "flask --app app run" in restart
+    assert "systemctl --user" in restart
+    assert "install_services.sh" in sh
+    venv_install = _text("scripts/install_services.sh")
+    web_unit = _text("deploy/systemd/heb-cal-web.service")
+    worker_unit = _text("deploy/systemd/heb-cal-worker.service")
+    assert "systemctl --user" in venv_install
+    assert "enable-linger" in venv_install
+    assert "Restart=always" in web_unit
+    assert "Restart=always" in worker_unit
+    assert "After=network-online.target" in web_unit
+    assert "After=network-online.target" in worker_unit
+    assert "WantedBy=default.target" in web_unit
+    assert "RestartPreventExitStatus=75" in worker_unit
+    assert "@INSTALL_DIR@" in web_unit
+    assert "@PYTHON@" in web_unit
+    assert "TELEGRAM_BOT_TOKEN" not in web_unit
+    assert "TELEGRAM_BOT_TOKEN" not in worker_unit
+    assert "SECRET_KEY" not in web_unit
+    assert "SECRET_KEY" not in worker_unit
+    assert "ghp_" not in web_unit
+    assert "ghp_" not in worker_unit
+    assert "journalctl --user" in readme
+    assert "install_services.sh" in readme
     assert "packages: write" in wf
     assert "secrets.GITHUB_TOKEN" in wf
     assert "provenance: false" in wf

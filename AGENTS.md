@@ -33,6 +33,8 @@ Open the URL Flask prints (default `http://127.0.0.1:5000`).
 
 Household Docker (same image on a home server, Windows, or a small cloud host): `docker compose up -d --build`. Compose starts `web` (`0.0.0.0:5000` inside the container; host bind defaults to `127.0.0.1`) and `reminder` (Telegram plus Google Calendar sync). The `gcal` profile runs `scripts/gcal_sync_worker.py` only — do not run it beside `reminder`. Compose sets `HEB_CAL_UPDATE_MODE=docker`; the in-app update command stays `docker compose pull && docker compose up -d`. `HEB_CAL_RESTART_COMMAND` is the non-Docker path. Tailscale stays on the host. See README «הרצה ב-Docker».
 
+Non-Docker home server: `scripts/install_services.sh` installs systemd **user** units (`deploy/systemd/heb-cal-web.service`, `heb-cal-worker.service`) plus linger. In-app updates restart via `systemctl --user` (no sudo). `scripts/reminder_worker.py` takes an fcntl lock at `data/reminder_worker.lock`.
+
 ## Test
 
 ```bash
@@ -62,7 +64,10 @@ Manual checks:
 | `app/api/shifts.py` | Household shifts toggle + idempotent week grid save |
 | `app/reminders/` | Offset math, due query, Telegram worker. Recurring events fire per occurrence (`reminder_sends`); `occurrence_start` is the next start |
 | `app/bot/` | Telegram menu bot (no LLM): lists, search, guided add/edit/delete, settings. State in `bot_sessions`. Reuses `clean_event_write` and `reminder_people.telegram_chat_id` |
-| `scripts/reminder_worker.py` | Due reminders plus the bot menu (callbacks and `/start` `/add` `/today` `/week` `/find` `/settings`). Token: `TELEGRAM_BOT_TOKEN` only. The same process also runs Google Calendar iCal sync about every 15 minutes |
+| `scripts/reminder_worker.py` | Due reminders plus the bot menu (callbacks and `/start` `/add` `/today` `/week` `/find` `/settings`). Token: `TELEGRAM_BOT_TOKEN` only. The same process also runs Google Calendar iCal sync about every 15 minutes. Single-instance fcntl lock: `data/reminder_worker.lock` (`app/reminders/instance_lock.py`) |
+| `scripts/install_services.sh` | Idempotent systemd --user installer for venv hosts. Renders `deploy/systemd/*.service`, linger, kills stray flask/worker processes for this repo, starts both units |
+| `deploy/systemd/` | Templates for `heb-cal-web.service` and `heb-cal-worker.service` (placeholders `@INSTALL_DIR@` `@PYTHON@` `@BIND_HOST@` `@PORT@` `@USER@`) |
+| `scripts/restart.sh` | In-app restart: `systemctl --user` when the user units exist, else kill-by-repo-path then nohup |
 | `scripts/gcal_sync_worker.py` | One-way Google Calendar sync only (secret iCal URL, no OAuth). `--once` for a single pass. Use this when the household does not run the reminder worker |
 | `app/gcal/` | Fetch, parse (`icalendar` + `recurring-ical-events`), upsert/delete. Secret URL stays in `gcal_sources` and is never returned by the API |
 | `app/services/recurrence.py` | Expand yearly/monthly occurrences (Hebrew or Gregorian) plus exception overrides. Range results also carry `is_shift` so shifts merge into the same list |
@@ -83,6 +88,7 @@ Manual checks:
 | `app/static/js/calendar/week-rows.js` | Build week rows and day cells |
 | `app/static/js/calendar/scroll-anchor.js` | Scroll geometry and `preserveScrollAnchor()` |
 | `app/static/js/calendar/infinite-calendar.js` | Infinite-scroll core: maintain/trim, `renderAround`, `scrollToDate`, today button |
+| `app/static/js/calendar/jump-date.js` | Jump-to-date popover: Gregorian/Hebrew toggle, Tishrei-first months with a single Adar, `jumpToDate()` |
 | `app/static/js/events/end-date-validation.js` | End date must not precede the start date (shared with the events-list page) |
 | `app/static/js/events/event-actions.js` | Create / update / delete, success toast, refresh both views |
 | `app/static/js/events/auto-backup.js` | Settings «גיבוי אוטומטי»: once a local day while the tab is open. Writes the existing `/api/events/export` JSON into a chosen folder (`גיבוי יומן` via the File System Access API + IndexedDB handle) and prunes by retention. Safari / Firefox / insecure HTTP fall back to a `heb-cal-backup-…` download on the first click or key that day. Rules live in `auto-backup-logic.js` |

@@ -1,13 +1,18 @@
 #!/bin/sh
-# הפעלה מחדש בלי systemd ובלי sudo. בריפו, בלי סודות.
-# HEB_CAL_RESTART_COMMAND=scripts/restart.sh
-# כתובת ופורט: HEB_CAL_BIND_HOST (ברירת מחדל 127.0.0.1) ו-HEB_CAL_PORT (ברירת מחדל 5000).
+# הפעלה מחדש בלי סודות. HEB_CAL_RESTART_COMMAND=scripts/restart.sh
+# אם יחידות systemd --user מותקנות: systemctl --user (בלי sudo).
+# אחרת nohup, אחרי הריגת התהליכים הישנים של הריפו הזה (pidfile + pgrep לפי נתיב).
+# כתובת ופורט: HEB_CAL_BIND_HOST / HEB_CAL_PORT (ברירת מחדל 127.0.0.1:5000).
 # הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית.
 # HEB_CAL_UPDATE_ACTION=stop  — רק עוצר (העדכון משתמש בזה לפני שחזור גיבוי).
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 mkdir -p data logs
+
+WEB_UNIT=heb-cal-web.service
+WORKER_UNIT=heb-cal-worker.service
+UNIT_DIR="${HEB_CAL_UNIT_DIR:-$HOME/.config/systemd/user}"
 
 env_get() {
     name=$1
@@ -48,14 +53,65 @@ if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
     PORT=5000
 fi
 
-stop_pid() {
+ensure_runtime_dir() {
+    if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+        uid=$(id -u)
+        if [ -d "/run/user/$uid" ]; then
+            XDG_RUNTIME_DIR="/run/user/$uid"
+            export XDG_RUNTIME_DIR
+        fi
+    fi
+}
+
+systemd_user_units() {
+    ensure_runtime_dir
+    [ -f "$UNIT_DIR/$WEB_UNIT" ] && [ -f "$UNIT_DIR/$WORKER_UNIT" ]
+}
+
+kill_pid() {
+    pid=$1
+    if [ -z "$pid" ] || [ "$pid" = "$$" ]; then
+        return 0
+    fi
+    kill "$pid" 2>/dev/null || return 0
+    n=0
+    while [ "$n" -lt 20 ]; do
+        kill -0 "$pid" 2>/dev/null || return 0
+        sleep 0.1
+        n=$((n + 1))
+    done
+    kill -9 "$pid" 2>/dev/null || true
+}
+
+pid_is_ours() {
+    pid=$1
+    [ -n "$pid" ] || return 1
+    [ "$pid" = "$$" ] && return 1
+    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || true)
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+    case "$cwd" in
+        "$ROOT"|"$ROOT"/*) ;;
+        *)
+            case "$cmd" in
+                *"$ROOT"*) ;;
+                *) return 1 ;;
+            esac
+            ;;
+    esac
+    case "$cmd" in
+        *flask*"--app"*app*run*|*scripts/reminder_worker.py*|*reminder_worker.py*|*app/main.py*) return 0 ;;
+    esac
+    return 1
+}
+
+stop_pidfile() {
     pidfile=$1
     if [ ! -f "$pidfile" ]; then
         return 0
     fi
     pid="$(cat "$pidfile" 2>/dev/null || true)"
     if [ -n "${pid}" ]; then
-        kill "$pid" 2>/dev/null || true
+        kill_pid "$pid"
     fi
     rm -f "$pidfile"
 }
@@ -66,32 +122,54 @@ stop_pattern() {
         return 0
     fi
     pgrep -f "$pattern" 2>/dev/null | while IFS= read -r pid; do
-        if [ -n "$pid" ] && [ "$pid" != "$$" ]; then
-            kill "$pid" 2>/dev/null || true
+        if pid_is_ours "$pid"; then
+            kill_pid "$pid"
         fi
     done
 }
 
 stop_port() {
     port=$1
-    if command -v fuser >/dev/null 2>&1; then
-        fuser -k "${port}/tcp" >/dev/null 2>&1 || true
-        return
-    fi
+    pids=""
     if command -v lsof >/dev/null 2>&1; then
         pids=$(lsof -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
-        if [ -n "$pids" ]; then
-            # shellcheck disable=SC2086
-            kill $pids 2>/dev/null || true
-        fi
+    elif command -v fuser >/dev/null 2>&1; then
+        pids=$(fuser "${port}/tcp" 2>/dev/null || true)
     fi
+    if [ -z "$pids" ]; then
+        return 0
+    fi
+    # shellcheck disable=SC2086
+    for pid in $pids; do
+        if pid_is_ours "$pid"; then
+            kill_pid "$pid"
+        fi
+    done
 }
 
-stop_pid data/flask.pid
-stop_pid data/worker.pid
-stop_pattern "$ROOT/scripts/reminder_worker.py"
-stop_pattern "flask --app app run"
-stop_port "$PORT"
+stop_repo_processes() {
+    stop_pidfile data/flask.pid
+    stop_pidfile data/worker.pid
+    stop_pattern "$ROOT/scripts/reminder_worker.py"
+    stop_pattern "scripts/reminder_worker.py"
+    stop_pattern "flask --app app run"
+    stop_port "$PORT"
+}
+
+if systemd_user_units; then
+    systemctl --user stop "$WEB_UNIT" "$WORKER_UNIT" >/dev/null 2>&1 || true
+    stop_repo_processes
+    if [ "$ACTION" = "stop" ]; then
+        exit 0
+    fi
+    if ! systemctl --user start "$WEB_UNIT" "$WORKER_UNIT"; then
+        echo "systemctl --user start heb-cal-web heb-cal-worker failed" >&2
+        exit 1
+    fi
+    exit 0
+fi
+
+stop_repo_processes
 
 if [ "$ACTION" = "stop" ]; then
     exit 0

@@ -41,7 +41,9 @@ def run_job(target: str, tag: str, mode: str, status: Path) -> None:
     release = fetch_latest(cfg.repo, cfg.token)
     if release is None or release.version != version or release.tag != checked_tag:
         raise UpdateError("הגרסה שביקשתם לא תואמת למה שמפורסם ב-GitHub.", step="fetch")
-    if mode == "git" and not cfg.restart_command:
+    from app.updates.systemd import systemd_user_units_installed
+
+    if mode == "git" and not cfg.restart_command and not systemd_user_units_installed(cfg.repo_root):
         raise UpdateError("לא הוגדרה פקודת הפעלה מחדש.", step="restart")
     ops = LiveOps(cfg, status, version)
     ops.write(

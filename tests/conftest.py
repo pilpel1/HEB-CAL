@@ -9,6 +9,7 @@ from pathlib import Path
 _fd, _TEST_DB = tempfile.mkstemp(prefix="heb-cal-pytest-", suffix=".sqlite")
 os.close(_fd)
 os.environ["DATABASE_PATH"] = _TEST_DB
+os.environ["HEB_CAL_UNIT_DIR"] = tempfile.mkdtemp(prefix="heb-cal-pytest-units-")
 
 _REPO_DATA_DB = (Path(__file__).resolve().parent.parent / "data" / "calendar.db").resolve()
 assert Path(os.environ["DATABASE_PATH"]).resolve() != _REPO_DATA_DB

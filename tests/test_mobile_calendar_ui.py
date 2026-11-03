@@ -66,6 +66,13 @@ def test_resolve_event_color_matches_chip_and_person_shift():
     assert out[4]["fill"] == "rgba(0, 255, 255, 1)"
 
 
+def _chip_html_js() -> str:
+    src = EVENT_RENDER.read_text(encoding="utf-8")
+    start = src.index("const EVENT_COLOR_RGB")
+    end = src.index("function jewishEventHtml")
+    return src[start:end]
+
+
 def test_holiday_chips_wrap_to_two_lines_like_user_events():
     css = CALENDAR_CSS.read_text(encoding="utf-8")
     render = EVENT_RENDER.read_text(encoding="utf-8")
@@ -74,6 +81,63 @@ def test_holiday_chips_wrap_to_two_lines_like_user_events():
     assert "white-space: normal" in holiday_block
     assert ".holiday.is-one-line" in css
     assert "first.matches('.holiday, .parasha, .fast')" in render
+
+
+def test_desktop_timed_chips_drop_leading_zero_and_wrap():
+    render = EVENT_RENDER.read_text(encoding="utf-8")
+    css = CALENDAR_CSS.read_text(encoding="utf-8")
+    dark = (REPO / "app/static/css/components/dark-theme.css").read_text(encoding="utf-8")
+    script = (
+        _chip_html_js()
+        + """
+const cases = [
+  { time: '08:00', title: 'לסדר ארון וחדר ילדים' },
+  { time: '17:30', title: 'ערב עם נעמי' },
+  { time: '00:05', title: 'לילה' },
+  { time: '9:15', title: 'בוקר' },
+  { title: 'כל היום' },
+];
+const out = cases.map((ev) => ({
+  html: buildEventItemHtml(ev),
+  label: eventTimeLabel(ev),
+  clock: formatChipTime(ev.time || ''),
+}));
+process.stdout.write(JSON.stringify(out));
+"""
+    )
+    result = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    out = json.loads(result.stdout)
+    morning, evening, night, single, all_day = out
+    assert morning["clock"] == "8:00"
+    assert evening["clock"] == "17:30"
+    assert night["clock"] == "0:05"
+    assert single["clock"] == "9:15"
+    assert "08:00" not in morning["html"]
+    assert 'class="event-time">8:00</span>' in morning["html"]
+    assert "event-timed" in morning["html"]
+    assert " - " not in morning["html"]
+    assert 'class="event-sep"> </span>' in morning["html"]
+    assert morning["label"] == "8:00 לסדר ארון וחדר ילדים"
+    assert evening["label"] == "17:30 ערב עם נעמי"
+    assert "event-timed" not in all_day["html"]
+    assert "event-time" not in all_day["html"]
+    assert all_day["label"] == "כל היום"
+    assert "function formatChipTime" in render
+
+    phone = css.split("@media (max-width: 480px)", 1)[1].split("@media", 1)[0]
+    assert ".event-time" in phone
+    assert ".event-sep" in phone
+    assert "display: none" in phone.split(".event-time", 1)[1][:180]
+
+    desktop = css.split("@media (min-width: 481px)")[-1].split("@media", 1)[0]
+    timed = desktop.split(".day-content .event-item.event-timed", 1)[1]
+    assert "-webkit-line-clamp: 2" in timed
+    assert "white-space: normal" in timed
+    assert "#6b7280" in timed
+    assert 'html[data-cal-density="compact"] .event-item' in desktop
+    assert ".event-item.event-timed:not(.event-uncolored) .event-time" in dark
+    assert "#4b5563" in dark
+    assert ".event-item.event-uncolored .event-time" in dark
 
 
 def test_agenda_row_reuses_event_chip_color_helpers():

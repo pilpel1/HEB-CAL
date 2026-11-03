@@ -244,6 +244,14 @@
     box-shadow: inset 0 0 0 100vmax rgba(255, 255, 255, 0.35);
 }
 
+[data-bs-theme="dark"] .day-content .event-item.event-timed:not(.event-uncolored) .event-time {
+    color: #4b5563;
+}
+
+[data-bs-theme="dark"] .day-content .event-item.event-uncolored .event-time {
+    color: #9ca3af;
+}
+
 /* תפריט הקשר */
 [data-bs-theme="dark"] .calendar-context-menu {
     background: var(--bs-tertiary-bg);

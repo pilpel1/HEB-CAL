@@ -12,7 +12,16 @@ import urllib.request
 
 
 class TelegramError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+    @property
+    def is_conflict(self) -> bool:
+        if self.status_code == 409:
+            return True
+        text = str(self).lower()
+        return "http 409" in text or "error_code\":409" in text or "error_code': 409" in text
 
 
 def telegram_api(token: str, method: str, payload: dict | None = None, *, timeout: float = 30):
@@ -28,11 +37,19 @@ def telegram_api(token: str, method: str, payload: dict | None = None, *, timeou
             body = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise TelegramError(f"{method} failed: HTTP {exc.code} {detail[:300]}") from exc
+        raise TelegramError(
+            f"{method} failed: HTTP {exc.code} {detail[:300]}",
+            status_code=exc.code,
+        ) from exc
     except urllib.error.URLError as exc:
         raise TelegramError(f"{method} failed: {exc.reason}") from exc
     if not body.get("ok"):
-        raise TelegramError(f"{method} failed: {body.get('description', body)}")
+        raw_code = body.get("error_code")
+        code = raw_code if isinstance(raw_code, int) else None
+        raise TelegramError(
+            f"{method} failed: {body.get('description', body)}",
+            status_code=code,
+        )
     return body.get("result")
 
 

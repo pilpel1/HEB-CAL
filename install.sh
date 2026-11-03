@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # התקנת HEB-CAL לבית על Linux: בודק Docker, מושך ghcr.io/pilpel1/heb-cal, מעלה compose.
 # אחרי אתחול: heb-cal.service (אם יש sudo ו-docker.service), אחרת restart: unless-stopped.
+# הרצה בלי Docker (venv + systemd --user): ./scripts/install_services.sh
 set -euo pipefail
 
 IMAGE="${HEB_CAL_IMAGE:-ghcr.io/pilpel1/heb-cal:latest}"
@@ -24,7 +25,8 @@ new_secret() {
 }
 
 require_docker() {
-  command -v docker >/dev/null 2>&1 || die "Docker לא מותקן. התקינו Docker Engine עם Compose ואז הריצו שוב: https://docs.docker.com/engine/install/"
+  command -v docker >/dev/null 2>&1 || die "Docker לא מותקן. התקינו Docker Engine עם Compose ואז הריצו שוב: https://docs.docker.com/engine/install/
+להרצה בלי Docker, מתוך עותק git עם venv: ./scripts/install_services.sh"
   docker compose version >/dev/null 2>&1 || die "חסר Docker Compose. צריך את הפקודה docker compose (תוסף v2), לא רק את docker."
   if ! docker info >/dev/null 2>&1; then
     die "Docker לא רץ, או שאין למשתמש הזה הרשאה. נסו: sudo systemctl start docker

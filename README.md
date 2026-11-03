@@ -163,6 +163,8 @@ python scripts/reminder_worker.py
 
 סבב אחד בלי לולאה: `python scripts/reminder_worker.py --once`.
 
+רק מופע אחד: נעילת `fcntl` ב-`data/reminder_worker.lock`. מופע שני כותב לוג ויוצא (קוד 75). כשל Telegram 409 מ-`getUpdates` (שני worker-ים על אותו בוט) נרגע ב-backoff, לא בלולאה צפופה.
+
 כל 30–60 שניות (ברירת מחדל 45) ה-worker שולח תזכורות שהמועד שלהן עבר ועדיין לא נשלחו, דרך Bot API. אותה לולאה עונה ל־`/start` עם מזהה הצ׳אט — מעתיקים את המספר לעמוד האנשים.
 
 אותו תהליך מושך גם יומן גוגל (אם חיברתם כתובת iCal בהגדרות), בערך כל 15 דקות (`GCAL_SYNC_SECONDS`, ברירת מחדל 900).
@@ -214,7 +216,40 @@ python scripts/gcal_sync_worker.py
 
 בשרת הבית שמים `FLASK_DEBUG=0`. רילודר של פיתוח קם באמצע החלפת קבצים ומבלבל את הבדיקה.
 
-### שרת בבית, בלי systemd ובלי sudo
+### שרת בבית עם systemd (venv, בלי Docker)
+
+יחידות **systemd --user** (לא system). רצות כמשתמש של הריפו, עולות אחרי אתחול דרך `loginctl enable-linger`, והעדכון מהממשק עושה `systemctl --user` בלי סיסמת sudo. אין כלל sudoers.
+
+פעם אחת, מתוך הריפו (עם `.venv` ו-`.env`):
+
+```bash
+chmod +x scripts/install_services.sh scripts/restart.sh
+# לרשת/Tailscale: HEB_CAL_BIND_HOST=0.0.0.0 ב-.env
+./scripts/install_services.sh
+```
+
+הסקריפט כותב ל-`~/.config/systemd/user/heb-cal-web.service` ו-`heb-cal-worker.service`, מפעיל linger, עוצר תהליכי flask/reminder_worker ישנים של הריפו הזה, ומעלה את היחידות. אידמפוטנטי — אפשר להריץ שוב אחרי שינוי פורט או נתיב.
+
+```bash
+systemctl --user status heb-cal-web.service heb-cal-worker.service
+journalctl --user -u heb-cal-web -u heb-cal-worker -f
+systemctl --user restart heb-cal-web.service heb-cal-worker.service
+```
+
+לוגים ב-journald, לא ב-`logs/`. `scripts/restart.sh` נשאר `HEB_CAL_RESTART_COMMAND` — כשיש יחידות הוא רק מפעיל `systemctl --user`.
+
+חזרה להרצה ידנית:
+
+```bash
+systemctl --user disable --now heb-cal-web.service heb-cal-worker.service
+rm -f ~/.config/systemd/user/heb-cal-web.service ~/.config/systemd/user/heb-cal-worker.service
+systemctl --user daemon-reload
+# אופציונלי: sudo loginctl disable-linger "$USER"
+```
+
+אחר כך אפשר `HEB_CAL_RESTART_COMMAND=scripts/restart.sh` ו-nohup כמו למטה. לא להריץ את היחידות האלה ליד `docker compose` על אותו פורט.
+
+### שרת בבית, בלי systemd (nohup)
 
 `scripts/restart.sh` בריפו. כתובת ופורט מ-`HEB_CAL_BIND_HOST` / `HEB_CAL_PORT` (ברירת מחדל `127.0.0.1:5000`). בלי סודות. אם כבר יש עותק מקומי של הקובץ, מעבירים אותו הצידה (`mv scripts/restart.sh scripts/restart.sh.local`) ומגדירים את הכתובת ב-`.env`.
 
@@ -226,7 +261,7 @@ HEB_CAL_PORT=5000
 
 `chmod +x scripts/restart.sh` אם חסר סיביות הרצה. נתיב שמתחיל ב-`/` (למשל `/home/you/HEB-CAL/scripts/restart.sh`) נשאר כמו שהוא. נתיב יחסי כמו `scripts/restart.sh` מחובר לשורש הפרויקט בזמן הריצה, לא לפי התיקייה שממנה הפעלתם את פלאסק.
 
-הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית. כשהעדכון משחזר גיבוי הוא מריץ את אותה פקודה עם `HEB_CAL_UPDATE_ACTION=stop` — אז רק עוצר. אחר כך היא רצה שוב בלי המשתנה הזה ומעלה את האפליקציה ואת worker התזכורות.
+הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית. כשיש יחידות systemd הוא משתמש בהן; אחרת הוא הורג קודם תהליכים ישנים של הריפו הזה (pidfile, ואז `pgrep` לפי נתיב) ורק אז מפעיל מחדש. כשהעדכון משחזר גיבוי הוא מריץ את אותה פקודה עם `HEB_CAL_UPDATE_ACTION=stop` — אז רק עוצר. אחר כך היא רצה שוב בלי המשתנה הזה ומעלה את האפליקציה ואת worker התזכורות.
 
 ### מאגר פרטי
 

@@ -25,4 +25,5 @@ if str(ROOT) not in sys.path:
 from app.reminders.worker import main
 
 if __name__ == "__main__":
+    # main() נועל data/reminder_worker.lock; מופע שני יוצא עם קוד 75.
     sys.exit(main())
