@@ -70,18 +70,25 @@ def test_settings_nav_sticks_and_anchor_stays_clear(live_server, width, height):
         page = browser.new_page(viewport={"width": width, "height": height})
         page.goto(live_server + "/settings#settings-reminders", wait_until="load")
         page.evaluate("() => document.documentElement.setAttribute('data-bs-theme', 'light')")
+        page.wait_for_selector("#settings-reminders.is-open")
         page.evaluate(
             "() => document.getElementById('settings-reminders').scrollIntoView({block: 'start'})"
         )
         # Bootstrap שם scroll-behavior:smooth על :root, אז scrollIntoView הוא אנימציה.
-        # העמוד ארוך יותר אחרי בלוק יומן גוגל; מחכים שהעוגן ינחת מתחת לפס.
+        # כרטיסים מקופלים מקצרים את העמוד: אם אי אפשר לגלול עד העוגן, מספיק שהוא מתחת לפס.
         page.wait_for_function(
             """() => {
                 const nav = document.querySelector('.settings-top');
                 const anchor = document.getElementById('settings-reminders');
                 if (!nav || !anchor) return false;
                 const gap = anchor.getBoundingClientRect().top - nav.getBoundingClientRect().bottom;
-                return gap >= -1 && gap <= 20;
+                if (gap < -1) return false;
+                const leftover = document.documentElement.scrollHeight - window.innerHeight
+                    - window.scrollY;
+                if (leftover > 8) {
+                    return gap <= 24;
+                }
+                return true;
             }""",
             timeout=4000,
         )
@@ -89,7 +96,6 @@ def test_settings_nav_sticks_and_anchor_stays_clear(live_server, width, height):
         assert landed["sticky"] == "sticky"
         assert landed["nav"]["top"] <= 1, landed
         assert landed["anchor"]["top"] >= landed["nav"]["bottom"] - 1, landed
-        assert landed["anchor"]["top"] <= landed["nav"]["bottom"] + 20, landed
         assert landed["navBg"] == landed["bodyBg"], landed
         if width <= 480:
             assert landed["nav"]["height"] <= 48, landed

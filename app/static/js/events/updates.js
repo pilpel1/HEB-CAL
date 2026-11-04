@@ -17,6 +17,14 @@ function shouldHardReloadAfterUpdate(opts) {
     if (!isNew) {
         return false;
     }
+    // health כבר מחזיר את הגרסה החדשה — גם אם הסטטוס נשאר running
+    // כי הריסטרט הרג את תהליך העדכון לפני סימון הצלחה.
+    if (target && version === target) {
+        return true;
+    }
+    if (before && version !== before) {
+        return true;
+    }
     if (sawDisconnect) {
         return true;
     }

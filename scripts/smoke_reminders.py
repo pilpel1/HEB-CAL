@@ -128,8 +128,8 @@ def main() -> int:
         cleared = api(base, "GET", f"/api/events/{match['id']}")
         assert cleared["reminders"] == []
 
-        page.goto(base + "/settings")
-        expect(page.get_by_role("heading", name="תזכורות")).to_be_visible()
+        page.goto(base + "/settings#settings-reminders")
+        expect(page.get_by_role("heading", name="משתמשים")).to_be_visible()
         expect(page.locator("#reminderPeopleList")).to_contain_text("דני סמוק")
         expect(page.locator("body")).to_contain_text("/start")
         page.fill("#reminderPersonName", "נועה סמוק")

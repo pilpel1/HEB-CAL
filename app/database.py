@@ -21,9 +21,12 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # גרסה 5: מקורות iCal של יומן גוגל, ומזהה מקור+UID על events. בלי מחיקת שורות.
 # גרסה 6: סיכום בוקר בטלגרם — daily_digest_enabled / daily_digest_last_sent על reminder_people.
 # גרסה 7: אינדקס ייחודי על שם מנורמל ב-reminder_people, אחרי מיזוג כפילויות תואמות.
+# גרסה 8: טבלת users (גיבוי users_backup_v8, מיזוג כפילויות לפי שם/טלגרם, google_email).
+# סיכום בוקר בלי telegram_chat_id נכבה ב-ensure_users_schema ושוב ב-init_db
+# (גם על בסיס שכבר על 8).
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
@@ -187,9 +190,16 @@ def apply_pending_migrations(db) -> None:
 
     db.execute(f"PRAGMA busy_timeout = {SCHEMA_BUSY_TIMEOUT_MS}")
     if _read_user_version(db) >= SCHEMA_VERSION:
+        from app.reminders.repository import disable_digest_without_telegram
+
+        if disable_digest_without_telegram(db):
+            db.commit()
         return
     with exclusive_schema_transaction(db):
         if _read_user_version(db) >= SCHEMA_VERSION:
+            from app.reminders.repository import disable_digest_without_telegram
+
+            disable_digest_without_telegram(db)
             return
         _ensure_base_schema(db)
         ensure_reminder_schema(db)
@@ -202,6 +212,9 @@ def apply_pending_migrations(db) -> None:
         from app.reminders.repository import ensure_unique_people_names
 
         ensure_unique_people_names(db)
+        from app.users.schema import ensure_users_schema
+
+        ensure_users_schema(db)
         _write_user_version(db, SCHEMA_VERSION)
 
 
@@ -214,9 +227,14 @@ def init_db():
 
     ensure_bot_schema(db)
     ensure_live_sync_schema(db)
-    from app.reminders.repository import ensure_unique_people_names
+    from app.reminders.repository import (
+        disable_digest_without_telegram,
+        ensure_unique_people_names,
+    )
 
     ensure_unique_people_names(db)
+    if disable_digest_without_telegram(db):
+        db.commit()
 
 
 _RECURRENCE_COLUMNS = (
@@ -334,10 +352,12 @@ def export_data():
     from app.reminders.repository import list_people
     from app.services.shifts import shifts_enabled
 
+    people = list_people()
     return {
         "events": get_all_events(),
         "colors": get_all_colors(),
-        "reminder_people": list_people(),
+        "users": people,
+        "reminder_people": people,
         "shifts_enabled": shifts_enabled(),
     }
 
@@ -528,8 +548,10 @@ def import_data(payload, mode="replace"):
             db.execute(f"DELETE FROM event_exceptions WHERE event_id IN ({local_ids})")
             db.execute("DELETE FROM events WHERE gcal_source_id IS NULL")
             db.execute("DELETE FROM event_colors")
-            if "reminder_people" in payload:
-                db.execute("DELETE FROM reminder_people")
+            if "reminder_people" in payload or "users" in payload:
+                from app.users.table import resolve_people_table
+
+                db.execute(f"DELETE FROM {resolve_people_table(db)}")
         elif mode != "merge":
             raise ValueError("Unsupported import mode")
 
@@ -580,13 +602,13 @@ def import_data(payload, mode="replace"):
             }
             imported_colors += 1
 
-        if "reminder_people" in payload:
+        people_payload = payload.get("users", payload.get("reminder_people"))
+        if "users" in payload or "reminder_people" in payload:
             from app.reminders.repository import upsert_person_for_import
 
-            people = payload.get("reminder_people")
-            if not isinstance(people, list):
-                raise ValueError("'reminder_people' must be an array")
-            for person in people:
+            if not isinstance(people_payload, list):
+                raise ValueError("'users' / 'reminder_people' must be an array")
+            for person in people_payload:
                 upsert_person_for_import(person, replace_ids=(mode == "replace"))
 
         existing_events = [

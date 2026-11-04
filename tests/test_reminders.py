@@ -325,7 +325,7 @@ def test_settings_page_and_start_command(client):
     page = client.get("/settings")
     assert page.status_code == 200
     html = page.get_data(as_text=True)
-    assert '<h2 class="h5">תזכורות</h2>' in html
+    assert 'settings-section-label">משתמשים</span>' in html
     assert "/start" in html
     assert "התראות בדפדפן" in html
     assert "Web Push" not in html

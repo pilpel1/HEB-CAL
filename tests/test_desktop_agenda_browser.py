@@ -310,7 +310,8 @@ def test_settings_hints_share_the_toggle_row(live_server):
     with sync_playwright() as p:
         browser, page = _launch(p, viewport={"width": 390, "height": 844}, locale="he-IL")
         try:
-            page.goto(live_server + "/settings", wait_until="domcontentloaded")
+            page.goto(live_server + "/settings#settings-display", wait_until="domcontentloaded")
+            page.wait_for_selector("#settings-display.is-open")
             info = page.evaluate("""() => {
                 function row(id) {
                     const label = document.querySelector(`label[for="${id}"]`);

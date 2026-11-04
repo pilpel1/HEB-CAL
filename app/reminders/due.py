@@ -37,7 +37,7 @@ def _chat_ids(recipient_ids, people_by_id) -> list[str]:
     found = []
     for person_id in recipient_ids:
         person = people_by_id.get(int(person_id))
-        if not person:
+        if not person or not person.get("receives_reminders"):
             continue
         chat_id = (person.get("telegram_chat_id") or "").strip()
         if chat_id and chat_id not in found:

@@ -3,8 +3,8 @@
 האפליקציה היא עותק אחד לבית (לא ריבוי דיירים). המתג ``household_settings``
 מדליק או מכבה את הפיצ'ר בכל בסיס הנתונים.
 
-אנשים הם ``reminder_people``. צבע ומשמרות מותרות (בוקר/ערב/לילה, בלי שעות,
-אפשר לפי יום בשבוע) יושבים על אותה שורה.
+אנשים הם טבלת ``users`` (לפני גרסה 8: ``reminder_people``). צבע ומשמרות
+מותרות (בוקר/ערב/לילה, בלי שעות, אפשר לפי יום בשבוע) יושבים על אותה שורה.
 
 שמירה מהרשת יוצרת אירועי יום שלם עם ``is_shift``. ברשת הכותרת היא סוג
 המשמרת (``בוקר``), והצבע הוא צבע האדם. הרשת מוצאת אותם לפי האדם, התאריך
@@ -362,14 +362,17 @@ def ensure_shift_schema(db) -> None:
                 WHERE is_shift = 1
                 """,
             )
-        if "reminder_people" in tables:
-            _add_column_if_missing(db, "reminder_people", "color", "TEXT")
-            _add_column_if_missing(db, "reminder_people", "shift_allowed", "TEXT")
+        from app.users.table import resolve_people_table
+
+        people = resolve_people_table(db)
+        if people in tables:
+            _add_column_if_missing(db, people, "color", "TEXT")
+            _add_column_if_missing(db, people, "shift_allowed", "TEXT")
             _add_column_if_missing(
-                db, "reminder_people", "receives_reminders", "INTEGER NOT NULL DEFAULT 0"
+                db, people, "receives_reminders", "INTEGER NOT NULL DEFAULT 0"
             )
             _add_column_if_missing(
-                db, "reminder_people", "works_shifts", "INTEGER NOT NULL DEFAULT 0"
+                db, people, "works_shifts", "INTEGER NOT NULL DEFAULT 0"
             )
 
         _schema_execute(
@@ -625,29 +628,32 @@ def normalize_shift_events(db) -> None:
           AND title IS NOT shift_label
         """
     )
+    from app.users.table import resolve_people_table
+
+    people = resolve_people_table(db)
     if (
         "color" in columns
         and "shift_person_id" in columns
-        and "reminder_people" in tables
+        and people in tables
     ):
-        people_columns = {row[1] for row in db.execute("PRAGMA table_info(reminder_people)")}
+        people_columns = {row[1] for row in db.execute(f"PRAGMA table_info({people})")}
         if "color" not in people_columns:
             return
         db.execute(
-            """
+            f"""
             UPDATE events
             SET color = (
-                SELECT reminder_people.color
-                FROM reminder_people
-                WHERE reminder_people.id = events.shift_person_id
+                SELECT {people}.color
+                FROM {people}
+                WHERE {people}.id = events.shift_person_id
             )
             WHERE is_shift = 1
               AND shift_person_id IS NOT NULL
               AND EXISTS (
-                  SELECT 1 FROM reminder_people
-                  WHERE reminder_people.id = events.shift_person_id
-                    AND reminder_people.color IS NOT NULL
-                    AND reminder_people.color != ''
+                  SELECT 1 FROM {people}
+                  WHERE {people}.id = events.shift_person_id
+                    AND {people}.color IS NOT NULL
+                    AND {people}.color != ''
               )
             """
         )

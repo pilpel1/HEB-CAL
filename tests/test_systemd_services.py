@@ -23,7 +23,7 @@ def _stub_bin(bin_dir: Path, log: Path) -> None:
         f"printf '%s\\n' \"$0 $*\" >> '{log}'\n"
         "exit 0\n"
     )
-    for name in ("systemctl", "loginctl", "pgrep", "fuser", "lsof"):
+    for name in ("systemctl", "systemd-run", "loginctl", "pgrep", "fuser", "lsof"):
         path = bin_dir / name
         path.write_text(script, encoding="utf-8")
         path.chmod(0o755)
@@ -148,8 +148,11 @@ def test_restart_script_uses_systemctl_when_user_units_exist(tmp_path):
     )
     assert proc.returncode == 0, proc.stderr
     logged = log.read_text(encoding="utf-8")
-    assert "stop heb-cal-web.service heb-cal-worker.service" in logged
-    assert "start heb-cal-web.service heb-cal-worker.service" in logged
+    assert "systemd-run" in logged
+    assert "--unit=heb-cal-update-restart" in logged
+    assert "restart heb-cal-web.service heb-cal-worker.service" in logged
+    assert "stop heb-cal-web.service heb-cal-worker.service" not in logged
+    assert " start heb-cal-web.service heb-cal-worker.service" not in logged
     assert not (root / "data" / "flask.pid").exists()
     env["HEB_CAL_UPDATE_ACTION"] = "stop"
     log.write_text("", encoding="utf-8")
@@ -164,7 +167,7 @@ def test_restart_script_uses_systemctl_when_user_units_exist(tmp_path):
     )
     assert proc.returncode == 0, proc.stderr
     logged = log.read_text(encoding="utf-8")
-    assert "stop heb-cal-web.service heb-cal-worker.service" in logged
+    assert "--no-block stop heb-cal-web.service heb-cal-worker.service" in logged
     assert "start " not in logged
 
 
@@ -398,9 +401,47 @@ def test_restart_script_uses_instance_units_only(tmp_path):
     )
     assert proc.returncode == 0, proc.stderr
     logged = log.read_text(encoding="utf-8")
-    assert "stop heb-cal2-web.service heb-cal2-worker.service" in logged
-    assert "start heb-cal2-web.service heb-cal2-worker.service" in logged
+    assert "--unit=heb-cal2-update-restart" in logged
+    assert "restart heb-cal2-web.service heb-cal2-worker.service" in logged
+    assert "stop heb-cal2-web.service heb-cal2-worker.service" not in logged
     assert "heb-cal-web.service heb-cal-worker.service" not in logged
+
+
+def test_restart_script_falls_back_to_noblock_without_systemd_run(tmp_path):
+    src = REPO / "scripts" / "restart.sh"
+    root = tmp_path / "home"
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    dest = scripts / "restart.sh"
+    dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    dest.chmod(0o755)
+    unit_dir = tmp_path / "units"
+    unit_dir.mkdir()
+    (unit_dir / "heb-cal-web.service").write_text(f"WorkingDirectory={root}\n", encoding="utf-8")
+    (unit_dir / "heb-cal-worker.service").write_text(f"WorkingDirectory={root}\n", encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    log = tmp_path / "systemctl.log"
+    _stub_bin(bin_dir, log)
+    (bin_dir / "systemd-run").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    (bin_dir / "systemd-run").chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["HOME"] = str(root)
+    env["HEB_CAL_UNIT_DIR"] = str(unit_dir)
+    env["HEB_CAL_UPDATE_ACTION"] = "restart"
+    proc = subprocess.run(
+        ["sh", str(dest)],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    logged = log.read_text(encoding="utf-8")
+    assert "--no-block restart heb-cal-web.service heb-cal-worker.service" in logged
+    assert "stop heb-cal-web.service heb-cal-worker.service" not in logged
 
 
 def test_unit_filenames_follow_instance_env(tmp_path, monkeypatch):

@@ -98,9 +98,12 @@ def _color_in_use(db, color_code: str) -> bool:
         checks.append(
             ("SELECT COUNT(*) FROM event_exceptions WHERE color = ?", (color_code,))
         )
-    if "reminder_people" in tables:
+    from app.users.table import resolve_people_table
+
+    people = resolve_people_table(db)
+    if people in tables:
         checks.append(
-            ("SELECT COUNT(*) FROM reminder_people WHERE color = ?", (color_code,))
+            (f"SELECT COUNT(*) FROM {people} WHERE color = ?", (color_code,))
         )
     for sql, params in checks:
         if db.execute(sql, params).fetchone()[0]:
@@ -122,9 +125,12 @@ def _retarget_color_code(db, old_code: str, new_code: str) -> None:
             "UPDATE event_exceptions SET color = ? WHERE color = ?",
             (new_code, old_code),
         )
-    if "reminder_people" in tables:
+    from app.users.table import resolve_people_table
+
+    people = resolve_people_table(db)
+    if people in tables:
         db.execute(
-            "UPDATE reminder_people SET color = ? WHERE color = ?",
+            f"UPDATE {people} SET color = ? WHERE color = ?",
             (new_code, old_code),
         )
 

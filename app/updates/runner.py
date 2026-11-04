@@ -75,7 +75,13 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         release_lock(status.parent)
     payload = read_json(status) or {}
-    return 0 if payload.get("state") == "success" else 1
+    state = payload.get("state")
+    if state == "success":
+        return 0
+    # ריסטרט מנותק: התהליך החדש יסמן הצלחה. לא כישלון.
+    if state == "running" and payload.get("step") == "restart":
+        return 0
+    return 1
 
 
 if __name__ == "__main__":

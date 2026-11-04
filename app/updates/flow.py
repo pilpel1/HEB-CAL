@@ -112,7 +112,11 @@ def execute_update(ops, plan: Plan) -> None:
         if plan.mode == "git" or ops.restart_configured():
             ops.write(step="restart", message="מפעיל מחדש")
             done.add("restart")
-            ops.restart()
+            detached = bool(ops.restart())
+            if detached:
+                # הריסטרט רץ מחוץ ל-cgroup של היחידה ויהרוג את התהליך הזה.
+                # התהליך החדש מסמן הצלחה כש-VERSION == target.
+                return
         ops.write(step="health", message="בודק שהאפליקציה עלתה")
         ops.wait_healthy(plan.version)
         ops.write(

@@ -157,7 +157,7 @@ def test_person_color_and_rules_round_trip_without_clobber(client):
         from app.database import get_db
 
         stored = get_db().execute(
-            "SELECT shift_allowed, works_shifts, receives_reminders FROM reminder_people WHERE id = ?",
+            "SELECT shift_allowed, works_shifts, receives_reminders FROM users WHERE id = ?",
             (person["id"],),
         ).fetchone()
     assert stored["shift_allowed"]
@@ -853,8 +853,9 @@ def test_calendar_and_settings_markup(client):
     assert 'class="reminder-people-link"' not in calendar
     settings = client.get("/settings").get_data(as_text=True)
     assert 'id="shiftsEnabled"' in settings
-    assert 'id="settings-shifts-title">משמרות</h2>' in settings
-    assert settings.count(">משמרות</h2>") == 1
+    assert 'id="settings-shifts-title"' in settings
+    assert 'settings-section-label">משמרות</span>' in settings
+    assert settings.count('id="settings-shifts-title"') == 1
     assert "הפעלת משמרות בבית הזה" not in settings
     assert "אנשים למשמרות" not in settings
     assert 'id="personShiftMatrix"' in settings
@@ -889,7 +890,7 @@ def test_calendar_and_settings_markup(client):
     assert 'id="exportEventsBtn"' not in events_list
     assert 'id="pageSizeSelect"' in events_list
     assert 'id="sortOrderSelect"' in events_list
-    assert '<h2 class="h5">תזכורות</h2>' in settings
+    assert 'settings-section-label">משתמשים</span>' in settings
     assert 'id="settings-reminders"' in settings
     assert "אנשים לתזכורות" not in settings
     assert 'id="chatIdHelpBtn"' in settings
@@ -1011,7 +1012,7 @@ def test_put_shift_allowed_persists_and_round_trips(client):
         from app.database import get_db
 
         row = get_db().execute(
-            "SELECT shift_allowed, works_shifts FROM reminder_people WHERE id = ?",
+            "SELECT shift_allowed, works_shifts FROM users WHERE id = ?",
             (person["id"],),
         ).fetchone()
     assert row["works_shifts"] == 1

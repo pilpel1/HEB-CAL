@@ -197,14 +197,31 @@ stop_repo_processes() {
     stop_port "$PORT"
 }
 
+# ריסטארט מנותק מ-cgroup של heb-cal-web: stop ואז start הורג את
+# תהליך העדכון (רץ בתוך היחידה) לפני ה-start, והשירות נשאר Stopped.
+# systemd-run / --no-block restart הם job אחד של systemd; הוא משלים
+# גם אם מי שביקש כבר מת.
+systemd_queue_restart() {
+    ensure_runtime_dir
+    transient="${INSTANCE_NAME}-update-restart"
+    systemctl --user reset-failed "${transient}.service" >/dev/null 2>&1 || true
+    if command -v systemd-run >/dev/null 2>&1; then
+        if systemd-run --user --collect --unit="$transient" \
+            --description="HEB-CAL update restart" \
+            systemctl --user restart "$WEB_UNIT" "$WORKER_UNIT"; then
+            return 0
+        fi
+    fi
+    systemctl --user --no-block restart "$WEB_UNIT" "$WORKER_UNIT"
+}
+
 if systemd_user_units; then
-    systemctl --user stop "$WEB_UNIT" "$WORKER_UNIT" >/dev/null 2>&1 || true
-    stop_repo_processes
     if [ "$ACTION" = "stop" ]; then
+        systemctl --user --no-block stop "$WEB_UNIT" "$WORKER_UNIT" >/dev/null 2>&1 || true
         exit 0
     fi
-    if ! systemctl --user start "$WEB_UNIT" "$WORKER_UNIT"; then
-        echo "systemctl --user start $WEB_UNIT $WORKER_UNIT failed" >&2
+    if ! systemd_queue_restart; then
+        echo "systemctl --user restart $WEB_UNIT $WORKER_UNIT failed" >&2
         exit 1
     fi
     exit 0

@@ -132,6 +132,67 @@ def public_cache(payload: dict | None, current: str) -> dict:
     }
 
 
+def recover_interrupted_update(update_dir: Path, current: str) -> dict | None:
+    """אחרי ריסטרט שהרג את ה-runner: מסמנים הצלחה / כישלון ומשחררים את הנעילה.
+
+    אם נתקענו ב-step=restart והגרסה המותקנת כבר היעד — זה הצליח.
+    אם ה-pid מת בלי שהגרסה התחלפה — נכשל.
+    """
+    path = status_path(update_dir)
+    payload = read_json(path)
+    if not payload or payload.get("state") != "running":
+        return payload
+    target = payload.get("target")
+    step = (payload.get("step") or "").strip()
+    same_version = (
+        isinstance(target, str)
+        and parse_version(target) is not None
+        and parse_version(target) == parse_version(current)
+    )
+    if step == "restart" and same_version:
+        write_status(path, {
+            **payload,
+            "state": "success",
+            "step": "done",
+            "message": "העדכון הושלם. הדף ייטען מחדש.",
+            "error": None,
+            "current": current,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        })
+        release_lock(update_dir)
+        return read_json(path)
+    if not status_is_active(payload):
+        message = (
+            "תהליך העדכון נעצר באמצע. הגיבוי, אם נשמר, נמצא בתיקיית backups."
+        )
+        write_status(path, {
+            **payload,
+            "state": "failed",
+            "step": step or "error",
+            "message": message,
+            "error": message,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        })
+        release_lock(update_dir)
+        return read_json(path)
+    return payload
+
+
+def recover_on_boot() -> None:
+    """קריאה מ-startup של Flask. בטסטים לא רץ."""
+    import sys
+
+    if _testing() or "pytest" in sys.modules:
+        return
+    try:
+        cfg = load_config()
+        current = installed_version()
+        recover_interrupted_update(cfg.update_dir, current)
+        reconcile_persisted_state(cfg.update_dir, current)
+    except Exception:
+        return
+
+
 def reconcile_persisted_state(update_dir: Path, current: str) -> None:
     """אחרי הפעלה מחדש: לא להציג «יש גרסה חדשה» לגרסה שכבר מותקנת, ולא להשאיר success ישן."""
     path = status_path(update_dir)
@@ -163,19 +224,10 @@ def reconcile_persisted_state(update_dir: Path, current: str) -> None:
 def read_public_status() -> dict:
     cfg = load_config()
     current = installed_version()
+    recover_interrupted_update(cfg.update_dir, current)
     reconcile_persisted_state(cfg.update_dir, current)
     path = status_path(cfg.update_dir)
     payload = read_json(path)
-    if payload and payload.get("state") == "running" and not status_is_active(payload):
-        payload = write_status(path, {
-            **payload,
-            "state": "failed",
-            "step": "error",
-            "message": "תהליך העדכון נעצר באמצע. הגיבוי, אם נשמר, נמצא בתיקיית backups.",
-            "error": "תהליך העדכון נעצר באמצע. הגיבוי, אם נשמר, נמצא בתיקיית backups.",
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-        })
-        release_lock(cfg.update_dir)
     return public_status(payload, current)
 
 

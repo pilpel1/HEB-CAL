@@ -403,7 +403,8 @@ def test_full_form_setting_stays_on_this_device_only(live_server):
         desk_page.set_default_timeout(8000)
         phone_page.set_default_timeout(8000)
 
-        desk_page.goto(live_server + "/settings", wait_until="domcontentloaded")
+        desk_page.goto(live_server + "/settings#settings-display", wait_until="domcontentloaded")
+        desk_page.wait_for_selector("#settings-display.is-open")
         expect(desk_page.locator("label[for=fullEventFormSwitch]")).to_contain_text("במכשיר זה")
         switch = desk_page.locator("#fullEventFormSwitch")
         expect(switch).not_to_be_checked()

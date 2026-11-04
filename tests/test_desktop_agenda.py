@@ -130,7 +130,7 @@ def test_settings_hints_are_inline_and_events_list_drops_reminders_link(client):
     assert 'href="/settings" class="btn btn-outline-secondary btn-sm"' not in events_list
     assert 'aria-label="הגדרות תזכורות"' in events_list
     assert 'href="/settings#settings-reminders"' in events_list
-    assert '<h2 class="h5">תזכורות</h2>' in settings
+    assert 'settings-section-label">משתמשים</span>' in settings
 
     head = client.get("/").get_data(as_text=True).split("</head>", 1)[0]
     assert "heb-cal-density" in head

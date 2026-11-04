@@ -19,6 +19,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof initReminderNotifications === 'function') {
         initReminderNotifications();
     }
+    if (typeof initSettingsSections === 'function') {
+        initSettingsSections();
+    }
     if (typeof initShiftSettings === 'function') {
         initShiftSettings();
     }

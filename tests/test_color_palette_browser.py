@@ -47,6 +47,8 @@ def test_custom_color_shows_in_person_picker_and_survives_delete(live_server):
 
         page.route("**/api/colors", hold_first_palette)
         page.goto(live_server + "/settings", wait_until="domcontentloaded")
+        page.locator("#settingsColors .settings-section-toggle").click()
+        page.locator("#shiftSettings .settings-section-toggle").click()
         for _ in range(40):
             if held:
                 break

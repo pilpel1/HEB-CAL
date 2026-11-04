@@ -1044,6 +1044,20 @@ def _digest_toggle_label(person: dict, *, many: bool) -> str:
     return f"סיכום בוקר יומי: {state}"
 
 
+def unlink_confirm_screen(person: dict) -> tuple[str, dict]:
+    from app.users.telegram import unlink_telegram_confirm_people
+
+    text = unlink_telegram_confirm_people([person])
+    return esc(text), kb([[("כן", f"set:uly:{person['id']}"), ("לא", "set")]])
+
+
+def unlink_others_confirm_screen(others: list[dict], person_id: int) -> tuple[str, dict]:
+    from app.users.telegram import unlink_telegram_confirm_people
+
+    text = unlink_telegram_confirm_people(others)
+    return esc(text), kb([[("כן", f"set:movey:{person_id}"), ("לא", "set")]])
+
+
 def shift_toggle_screen(enabled: bool, household_name: str) -> tuple[str, dict]:
     verb = "להציג" if enabled else "להסתיר"
     text = "\n".join(
