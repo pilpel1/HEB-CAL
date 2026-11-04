@@ -16,6 +16,21 @@ _LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 _DEFAULT_HEALTH = "http://127.0.0.1:5000/api/updates/health"
 
 
+def _default_health_url() -> str:
+    port = _blank("HEB_CAL_PORT")
+    if port.isdigit() and 1 <= int(port) <= 65535:
+        return f"http://127.0.0.1:{int(port)}/api/updates/health"
+    try:
+        from app.updates.systemd import _select
+
+        saved = _select().load_instance_config(BASE_DIR)
+        if saved.port:
+            return f"http://127.0.0.1:{int(saved.port)}/api/updates/health"
+    except Exception:
+        pass
+    return _DEFAULT_HEALTH
+
+
 def _flag(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None or raw.strip() == "":
@@ -76,13 +91,14 @@ def _detect_repo() -> tuple[str, str | None]:
 
 
 def _health_url() -> tuple[str, str | None]:
-    raw = _blank("HEB_CAL_HEALTH_URL") or _DEFAULT_HEALTH
+    fallback = _default_health_url()
+    raw = _blank("HEB_CAL_HEALTH_URL") or fallback
     parts = urlsplit(raw)
     host = (parts.hostname or "").lower()
     if parts.scheme not in {"http", "https"} or host not in _LOOPBACK:
-        return _DEFAULT_HEALTH, "HEB_CAL_HEALTH_URL חייב להצביע ל-localhost על המחשב הזה."
+        return fallback, "HEB_CAL_HEALTH_URL חייב להצביע ל-localhost על המחשב הזה."
     if parts.username or parts.password:
-        return _DEFAULT_HEALTH, "HEB_CAL_HEALTH_URL לא יכול לכלול סיסמה."
+        return fallback, "HEB_CAL_HEALTH_URL לא יכול לכלול סיסמה."
     return raw, None
 
 

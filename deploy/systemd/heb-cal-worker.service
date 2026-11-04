@@ -1,10 +1,11 @@
-# תבנית. scripts/install_services.sh מחליף @INSTALL_DIR@ @PYTHON@ @USER@
-# וכותב ל-~/.config/systemd/user/heb-cal-worker.service (systemd --user).
+# תבנית. scripts/install_services.sh מחליף @INSTALL_DIR@ @PYTHON@ @USER@ @INSTANCE@
+# וכותב ל-~/.config/systemd/user/@INSTANCE@-worker.service (systemd --user).
 # לא להעתיק כמו שהוא: השמות עם @ אינם נתיב אמיתי.
 # רץ כמשתמש @USER@. אין User= ביחידת --user.
 # RestartPreventExitStatus=75: מופע שני (נעילת fcntl) יוצא ולא נכנס ללולאת restart.
+# בלי טוקן טלגרם ה-worker נשאר למעלה (סנכרון גוגל) ולא נכנס ללולאת restart.
 [Unit]
-Description=HEB-CAL reminder worker (Telegram + Google Calendar sync)
+Description=HEB-CAL reminder worker (@INSTANCE@)
 After=network-online.target
 Wants=network-online.target
 
@@ -20,7 +21,7 @@ RestartPreventExitStatus=75
 TimeoutStopSec=20
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=heb-cal-worker
+SyslogIdentifier=@INSTANCE@-worker
 
 [Install]
 WantedBy=default.target

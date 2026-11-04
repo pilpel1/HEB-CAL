@@ -33,7 +33,7 @@ Open the URL Flask prints (default `http://127.0.0.1:5000`).
 
 Household Docker (same image on a home server, Windows, or a small cloud host): `docker compose up -d --build`. Compose starts `web` (`0.0.0.0:5000` inside the container; host bind defaults to `127.0.0.1`) and `reminder` (Telegram plus Google Calendar sync). The `gcal` profile runs `scripts/gcal_sync_worker.py` only — do not run it beside `reminder`. Compose sets `HEB_CAL_UPDATE_MODE=docker`; the in-app update command stays `docker compose pull && docker compose up -d`. `HEB_CAL_RESTART_COMMAND` is the non-Docker path. Tailscale stays on the host. See README «הרצה ב-Docker».
 
-Non-Docker home server: `scripts/install_services.sh` installs systemd **user** units (`deploy/systemd/heb-cal-web.service`, `heb-cal-worker.service`) plus linger. In-app updates restart via `systemctl --user` (no sudo). `scripts/reminder_worker.py` takes an fcntl lock at `data/reminder_worker.lock`.
+Non-Docker home server: `scripts/install_services.sh` installs systemd **user** units (`{name}-web` / `{name}-worker`, default `heb-cal`) plus linger. Instance name and port live in gitignored `data/instance.env`. A second clone auto-picks `heb-cal2` and a free port from 5001. In-app updates restart only this instance via `systemctl --user` (no sudo). `scripts/reminder_worker.py` takes an fcntl lock at this clone's `data/reminder_worker.lock`. Telegram token is optional: the worker idles without crash loops.
 
 ## Test
 
@@ -64,10 +64,11 @@ Manual checks:
 | `app/api/shifts.py` | Household shifts toggle + idempotent week grid save |
 | `app/reminders/` | Offset math, due query, Telegram worker. Recurring events fire per occurrence (`reminder_sends`); `occurrence_start` is the next start |
 | `app/bot/` | Telegram menu bot (no LLM): lists, search, guided add/edit/delete, settings. State in `bot_sessions`. Reuses `clean_event_write` and `reminder_people.telegram_chat_id` |
-| `scripts/reminder_worker.py` | Due reminders plus the bot menu (callbacks and `/start` `/add` `/today` `/week` `/find` `/settings`). Token: `TELEGRAM_BOT_TOKEN` only. The same process also runs Google Calendar iCal sync about every 15 minutes. Single-instance fcntl lock: `data/reminder_worker.lock` (`app/reminders/instance_lock.py`) |
-| `scripts/install_services.sh` | Idempotent systemd --user installer for venv hosts. Renders `deploy/systemd/*.service`, linger, kills stray flask/worker processes for this repo, starts both units |
-| `deploy/systemd/` | Templates for `heb-cal-web.service` and `heb-cal-worker.service` (placeholders `@INSTALL_DIR@` `@PYTHON@` `@BIND_HOST@` `@PORT@` `@USER@`) |
-| `scripts/restart.sh` | In-app restart: `systemctl --user` when the user units exist, else kill-by-repo-path then nohup |
+| `scripts/reminder_worker.py` | Due reminders plus the bot menu (callbacks and `/start` `/add` `/today` `/week` `/find` `/settings`). Token: `TELEGRAM_BOT_TOKEN` only (optional; empty token idles). The same process also runs Google Calendar iCal sync about every 15 minutes. Per-clone fcntl lock: `data/reminder_worker.lock` (`app/reminders/instance_lock.py`) |
+| `scripts/instance_select.py` | Name/port selection for a local instance (`heb-cal`, `heb-cal2`…). Writes `data/instance.env`. Stdlib only |
+| `scripts/install_services.sh` | Idempotent systemd --user installer. `--name` / `--port` / `--tailscale-serve`. Never overwrites another clone's units |
+| `deploy/systemd/` | Templates for `{instance}-web.service` and `{instance}-worker.service` (placeholders `@INSTALL_DIR@` `@PYTHON@` `@BIND_HOST@` `@PORT@` `@USER@` `@INSTANCE@`) |
+| `scripts/restart.sh` | In-app restart of **this** instance's units (name from `data/instance.env`), else kill-by-repo-path then nohup |
 | `scripts/gcal_sync_worker.py` | One-way Google Calendar sync only (secret iCal URL, no OAuth). `--once` for a single pass. Use this when the household does not run the reminder worker |
 | `app/gcal/` | Fetch, parse (`icalendar` + `recurring-ical-events`), upsert/delete. Secret URL stays in `gcal_sources` and is never returned by the API |
 | `app/services/recurrence.py` | Expand yearly/monthly occurrences (Hebrew or Gregorian) plus exception overrides. Range results also carry `is_shift` so shifts merge into the same list |

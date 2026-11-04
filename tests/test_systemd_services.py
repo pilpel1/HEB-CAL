@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -10,7 +11,7 @@ from pathlib import Path
 from app.database import BASE_DIR
 from app.updates.envconfig import UpdateConfig
 from app.updates.gitops import LiveOps, restart_block
-from app.updates.systemd import systemd_user_units_installed
+from app.updates.systemd import instance_name, systemd_user_units_installed, unit_filenames
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -167,16 +168,21 @@ def test_restart_script_uses_systemctl_when_user_units_exist(tmp_path):
     assert "start " not in logged
 
 
-def test_install_services_script_is_idempotent(tmp_path):
-    root = tmp_path / "HEB-CAL"
-    (root / "deploy" / "systemd").mkdir(parents=True)
-    (root / "scripts").mkdir()
+def _copy_install_tree(root: Path) -> None:
+    (root / "deploy" / "systemd").mkdir(parents=True, exist_ok=True)
+    (root / "scripts").mkdir(exist_ok=True)
     shutil.copy(REPO / "deploy/systemd/heb-cal-web.service", root / "deploy/systemd/heb-cal-web.service")
     shutil.copy(REPO / "deploy/systemd/heb-cal-worker.service", root / "deploy/systemd/heb-cal-worker.service")
     shutil.copy(REPO / "scripts/install_services.sh", root / "scripts/install_services.sh")
     shutil.copy(REPO / "scripts/restart.sh", root / "scripts/restart.sh")
+    shutil.copy(REPO / "scripts/instance_select.py", root / "scripts/instance_select.py")
     (root / "scripts" / "install_services.sh").chmod(0o755)
     (root / "scripts" / "restart.sh").chmod(0o755)
+
+
+def test_install_services_script_is_idempotent(tmp_path):
+    root = tmp_path / "HEB-CAL"
+    _copy_install_tree(root)
     (root / ".env").write_text(
         "HEB_CAL_BIND_HOST=0.0.0.0\nHEB_CAL_PORT=59992\nHEB_CAL_RESTART_COMMAND=\n",
         encoding="utf-8",
@@ -197,6 +203,7 @@ def test_install_services_script_is_idempotent(tmp_path):
     env["HEB_CAL_SKIP_LINGER"] = "1"
     env["HEB_CAL_BIND_HOST"] = "0.0.0.0"
     env["HEB_CAL_PORT"] = "59992"
+    env.pop("HEB_CAL_INSTANCE_NAME", None)
     for _ in range(2):
         proc = subprocess.run(
             ["bash", str(root / "scripts" / "install_services.sh")],
@@ -217,10 +224,17 @@ def test_install_services_script_is_idempotent(tmp_path):
     assert "59992" in web
     assert "Restart=always" in web
     assert "RestartPreventExitStatus=75" in worker
+    assert "SyslogIdentifier=heb-cal-web" in web
+    assert "@INSTANCE@" not in web
     assert "TELEGRAM_BOT_TOKEN" not in web
     assert "SECRET_KEY" not in worker
+    instance_env = (root / "data" / "instance.env").read_text(encoding="utf-8")
+    assert "HEB_CAL_INSTANCE_NAME=heb-cal" in instance_env
+    assert "HEB_CAL_PORT=59992" in instance_env
+    assert "TELEGRAM" not in instance_env
     env_text = (root / ".env").read_text(encoding="utf-8")
     assert "HEB_CAL_RESTART_COMMAND=scripts/restart.sh" in env_text
+    assert "HEB_CAL_HEALTH_URL=http://127.0.0.1:59992/api/updates/health" in env_text
     logged = log.read_text(encoding="utf-8")
     assert "daemon-reload" in logged
     assert "enable heb-cal-web.service heb-cal-worker.service" in logged
@@ -246,3 +260,166 @@ def test_settings_apply_unblocked_when_units_match_repo(client, monkeypatch, tmp
     assert body["can_apply"] is True
     assert body["restart_configured"] is True
     assert body["block"] is None
+
+
+def _install_env(tmp_path, root, unit_dir, extra=None):
+    bin_dir = tmp_path / "bin"
+    log = tmp_path / "systemctl.log"
+    _stub_bin(bin_dir, log)
+    python = shutil.which("python3") or shutil.which("python")
+    assert python
+    venv_python = root / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True, exist_ok=True)
+    if not venv_python.exists():
+        venv_python.symlink_to(python)
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["HOME"] = str(tmp_path / "home")
+    env["HEB_CAL_UNIT_DIR"] = str(unit_dir)
+    env["HEB_CAL_SKIP_LINGER"] = "1"
+    env.pop("HEB_CAL_INSTANCE_NAME", None)
+    env.pop("HEB_CAL_PORT", None)
+    if extra:
+        env.update(extra)
+    return env, log
+
+
+def test_install_second_instance_does_not_overwrite_first(tmp_path):
+    first = tmp_path / "family1"
+    second = tmp_path / "family2"
+    _copy_install_tree(first)
+    _copy_install_tree(second)
+    (first / ".env").write_text("HEB_CAL_RESTART_COMMAND=\nSECRET_KEY=one\n", encoding="utf-8")
+    (second / ".env").write_text("HEB_CAL_RESTART_COMMAND=\nSECRET_KEY=two\n", encoding="utf-8")
+    unit_dir = tmp_path / "units"
+    env1, log = _install_env(tmp_path, first, unit_dir, {"HEB_CAL_PORT": "59981"})
+    proc = subprocess.run(
+        ["bash", str(first / "scripts" / "install_services.sh")],
+        cwd=first,
+        env=env1,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr + proc.stdout
+    first_web = (unit_dir / "heb-cal-web.service").read_text(encoding="utf-8")
+    env2, log = _install_env(tmp_path, second, unit_dir)
+    log.write_text("", encoding="utf-8")
+    proc = subprocess.run(
+        ["bash", str(second / "scripts" / "install_services.sh")],
+        cwd=second,
+        env=env2,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr + proc.stdout
+    assert (unit_dir / "heb-cal-web.service").read_text(encoding="utf-8") == first_web
+    second_web = (unit_dir / "heb-cal2-web.service").read_text(encoding="utf-8")
+    assert str(second) in second_web
+    assert str(first) not in second_web
+    assert str(first) in first_web
+    assert "59981" in first_web
+    match = re.search(r"--port (\d+)", second_web)
+    assert match is not None
+    assert int(match.group(1)) >= 5001
+    instance = (second / "data" / "instance.env").read_text(encoding="utf-8")
+    assert "HEB_CAL_INSTANCE_NAME=heb-cal2" in instance
+    logged = log.read_text(encoding="utf-8")
+    assert "enable heb-cal2-web.service heb-cal2-worker.service" in logged
+    assert "enable heb-cal-web.service heb-cal-worker.service" not in logged
+
+
+def test_install_refuses_to_overwrite_named_units(tmp_path):
+    root = tmp_path / "intruder"
+    _copy_install_tree(root)
+    (root / ".env").write_text("HEB_CAL_RESTART_COMMAND=\n", encoding="utf-8")
+    unit_dir = tmp_path / "units"
+    unit_dir.mkdir()
+    original = f"WorkingDirectory={tmp_path / 'owner'}\nExecStart=/bin/true --port 5000\n"
+    (unit_dir / "heb-cal-web.service").write_text(original, encoding="utf-8")
+    (unit_dir / "heb-cal-worker.service").write_text(
+        f"WorkingDirectory={tmp_path / 'owner'}\n",
+        encoding="utf-8",
+    )
+    env, _log = _install_env(tmp_path, root, unit_dir)
+    proc = subprocess.run(
+        ["bash", str(root / "scripts" / "install_services.sh"), "--name", "heb-cal"],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert proc.returncode != 0
+    assert "heb-cal-web.service" in proc.stderr
+    assert (unit_dir / "heb-cal-web.service").read_text(encoding="utf-8") == original
+    assert not (unit_dir / "heb-cal2-web.service").exists()
+
+
+def test_restart_script_uses_instance_units_only(tmp_path):
+    src = REPO / "scripts" / "restart.sh"
+    root = tmp_path / "home"
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    dest = scripts / "restart.sh"
+    dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    dest.chmod(0o755)
+    (root / "data").mkdir()
+    (root / "data" / "instance.env").write_text(
+        "HEB_CAL_INSTANCE_NAME=heb-cal2\nHEB_CAL_PORT=5001\n",
+        encoding="utf-8",
+    )
+    unit_dir = tmp_path / "units"
+    unit_dir.mkdir()
+    (unit_dir / "heb-cal-web.service").write_text("WorkingDirectory=/other\n", encoding="utf-8")
+    (unit_dir / "heb-cal-worker.service").write_text("WorkingDirectory=/other\n", encoding="utf-8")
+    (unit_dir / "heb-cal2-web.service").write_text(f"WorkingDirectory={root}\n", encoding="utf-8")
+    (unit_dir / "heb-cal2-worker.service").write_text(f"WorkingDirectory={root}\n", encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    log = tmp_path / "systemctl.log"
+    _stub_bin(bin_dir, log)
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["HOME"] = str(root)
+    env["HEB_CAL_UNIT_DIR"] = str(unit_dir)
+    env.pop("HEB_CAL_INSTANCE_NAME", None)
+    proc = subprocess.run(
+        ["sh", str(dest)],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    logged = log.read_text(encoding="utf-8")
+    assert "stop heb-cal2-web.service heb-cal2-worker.service" in logged
+    assert "start heb-cal2-web.service heb-cal2-worker.service" in logged
+    assert "heb-cal-web.service heb-cal-worker.service" not in logged
+
+
+def test_unit_filenames_follow_instance_env(tmp_path, monkeypatch):
+    repo = tmp_path / "family2"
+    repo.mkdir()
+    (repo / "data").mkdir()
+    (repo / "data" / "instance.env").write_text(
+        "HEB_CAL_INSTANCE_NAME=heb-cal2\nHEB_CAL_PORT=5001\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("HEB_CAL_INSTANCE_NAME", raising=False)
+    assert instance_name(repo) == "heb-cal2"
+    assert unit_filenames(repo) == ("heb-cal2-web.service", "heb-cal2-worker.service")
+    unit_dir = tmp_path / "units"
+    unit_dir.mkdir()
+    monkeypatch.setenv("HEB_CAL_UNIT_DIR", str(unit_dir))
+    (unit_dir / "heb-cal-web.service").write_text("WorkingDirectory=/other\n", encoding="utf-8")
+    (unit_dir / "heb-cal-worker.service").write_text("WorkingDirectory=/other\n", encoding="utf-8")
+    assert systemd_user_units_installed(repo) is False
+    (unit_dir / "heb-cal2-web.service").write_text(f"WorkingDirectory={repo}\n", encoding="utf-8")
+    (unit_dir / "heb-cal2-worker.service").write_text(f"WorkingDirectory={repo}\n", encoding="utf-8")
+    assert systemd_user_units_installed(repo) is True

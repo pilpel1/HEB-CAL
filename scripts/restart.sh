@@ -1,6 +1,7 @@
 #!/bin/sh
 # הפעלה מחדש בלי סודות. HEB_CAL_RESTART_COMMAND=scripts/restart.sh
-# אם יחידות systemd --user מותקנות: systemctl --user (בלי sudo).
+# אם יחידות systemd --user מותקנות: systemctl --user (בלי sudo) רק של המופע הזה.
+# שם המופע: HEB_CAL_INSTANCE_NAME או data/instance.env, ברירת מחדל heb-cal.
 # אחרת nohup, אחרי הריגת התהליכים הישנים של הריפו הזה (pidfile + pgrep לפי נתיב).
 # כתובת ופורט: HEB_CAL_BIND_HOST / HEB_CAL_PORT (ברירת מחדל 127.0.0.1:5000).
 # הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית.
@@ -10,8 +11,6 @@ ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 mkdir -p data logs
 
-WEB_UNIT=heb-cal-web.service
-WORKER_UNIT=heb-cal-worker.service
 UNIT_DIR="${HEB_CAL_UNIT_DIR:-$HOME/.config/systemd/user}"
 
 env_get() {
@@ -22,21 +21,63 @@ env_get() {
         printf '%s' "$current"
         return
     fi
-    if [ -f .env ]; then
-        line=$(grep -E "^${name}=" .env | tail -n 1 || true)
-        if [ -n "$line" ]; then
-            value=${line#*=}
-            value=$(printf '%s' "$value" | tr -d '\r')
-            case "$value" in
-                \"*\") value=${value#\"}; value=${value%\"} ;;
-                \'*\') value=${value#\'}; value=${value%\'} ;;
-            esac
-            printf '%s' "$value"
-            return
+    for file in data/instance.env .env; do
+        if [ -f "$file" ]; then
+            line=$(grep -E "^${name}=" "$file" | tail -n 1 || true)
+            if [ -n "$line" ]; then
+                value=${line#*=}
+                value=$(printf '%s' "$value" | tr -d '\r')
+                case "$value" in
+                    \"*\") value=${value#\"}; value=${value%\"} ;;
+                    \'*\') value=${value#\'}; value=${value%\'} ;;
+                esac
+                printf '%s' "$value"
+                return
+            fi
         fi
-    fi
+    done
     printf '%s' "$default"
 }
+
+unit_working_directory() {
+    unit=$1
+    if [ ! -f "$unit" ]; then
+        return 1
+    fi
+    line=$(grep -E '^WorkingDirectory=' "$unit" | tail -n 1 || true)
+    [ -n "$line" ] || return 1
+    value=${line#WorkingDirectory=}
+    value=$(printf '%s' "$value" | tr -d '\r')
+    case "$value" in
+        \"*\") value=${value#\"}; value=${value%\"} ;;
+        \'*\') value=${value#\'}; value=${value%\'} ;;
+    esac
+    printf '%s' "$value"
+}
+
+INSTANCE_NAME="$(env_get HEB_CAL_INSTANCE_NAME "")"
+case "$INSTANCE_NAME" in
+    [a-z]*[a-z0-9-]|[a-z]) ;;
+    "") INSTANCE_NAME="" ;;
+    *) INSTANCE_NAME="" ;;
+esac
+if [ -z "$INSTANCE_NAME" ]; then
+    # שדרוג בלי instance.env: יחידה שכבר מצביעה לתיקייה הזו.
+    for unit in "$UNIT_DIR"/*-web.service; do
+        [ -f "$unit" ] || continue
+        wd=$(unit_working_directory "$unit" || true)
+        if [ "$wd" = "$ROOT" ]; then
+            base=$(basename "$unit")
+            INSTANCE_NAME=${base%-web.service}
+            break
+        fi
+    done
+fi
+if [ -z "$INSTANCE_NAME" ]; then
+    INSTANCE_NAME=heb-cal
+fi
+WEB_UNIT="${INSTANCE_NAME}-web.service"
+WORKER_UNIT="${INSTANCE_NAME}-worker.service"
 
 HOST="$(env_get HEB_CAL_BIND_HOST 127.0.0.1)"
 PORT="$(env_get HEB_CAL_PORT 5000)"
@@ -163,7 +204,7 @@ if systemd_user_units; then
         exit 0
     fi
     if ! systemctl --user start "$WEB_UNIT" "$WORKER_UNIT"; then
-        echo "systemctl --user start heb-cal-web heb-cal-worker failed" >&2
+        echo "systemctl --user start $WEB_UNIT $WORKER_UNIT failed" >&2
         exit 1
     fi
     exit 0

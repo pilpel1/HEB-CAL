@@ -86,7 +86,7 @@ def test_readme_update_command_matches_docker_mode():
     assert "gcal_sync_worker.py" in readme
     changelog = _text("CHANGELOG.md")
     version = _text("VERSION").strip()
-    assert version == "1.0.23"
+    assert version == "1.0.24"
     assert f"## {version}" in changelog
     assert "Docker" in changelog
 
@@ -169,6 +169,9 @@ def test_household_install_scripts_and_ghcr_workflow():
     worker_unit = _text("deploy/systemd/heb-cal-worker.service")
     assert "systemctl --user" in venv_install
     assert "enable-linger" in venv_install
+    assert "--name" in venv_install
+    assert "--tailscale-serve" in venv_install
+    assert "instance_select.py" in venv_install
     assert "Restart=always" in web_unit
     assert "Restart=always" in worker_unit
     assert "After=network-online.target" in web_unit
@@ -177,6 +180,8 @@ def test_household_install_scripts_and_ghcr_workflow():
     assert "RestartPreventExitStatus=75" in worker_unit
     assert "@INSTALL_DIR@" in web_unit
     assert "@PYTHON@" in web_unit
+    assert "@INSTANCE@" in web_unit
+    assert "@INSTANCE@" in worker_unit
     assert "TELEGRAM_BOT_TOKEN" not in web_unit
     assert "TELEGRAM_BOT_TOKEN" not in worker_unit
     assert "SECRET_KEY" not in web_unit
@@ -185,6 +190,9 @@ def test_household_install_scripts_and_ghcr_workflow():
     assert "ghp_" not in worker_unit
     assert "journalctl --user" in readme
     assert "install_services.sh" in readme
+    assert "מופע נוסף למשפחה אחרת" in readme
+    assert "data/instance.env" in readme
+    assert '"ip": ["10001"]' in readme
     assert "packages: write" in wf
     assert "secrets.GITHUB_TOKEN" in wf
     assert "provenance: false" in wf
