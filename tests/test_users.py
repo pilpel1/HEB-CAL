@@ -176,3 +176,132 @@ def test_telegram_due_skips_people_with_reminders_off(client, app):
             json={"name": "שירה", "telegram_chat_id": "99", "receives_reminders": True},
         )
         assert telegram_due(now)
+
+
+def test_digest_requires_telegram_chat_on_create_update_and_toggle(client):
+    created = client.post(
+        "/api/users",
+        json={"name": "נועה", "telegram_chat_id": None, "daily_digest_enabled": True},
+    )
+    assert created.status_code == 400
+    assert "טלגרם" in created.get_json()["error"]
+
+    person = _person(client, name="נועה").get_json()
+    assert person["daily_digest_enabled"] is False
+    assert person["receives_reminders"] is True
+
+    reminders_on = client.put(
+        f"/api/users/{person['id']}",
+        json={
+            "name": "נועה",
+            "telegram_chat_id": None,
+            "receives_reminders": True,
+        },
+    )
+    assert reminders_on.status_code == 200, reminders_on.get_json()
+    assert reminders_on.get_json()["receives_reminders"] is True
+    assert reminders_on.get_json()["daily_digest_enabled"] is False
+
+    rejected = client.put(
+        f"/api/users/{person['id']}",
+        json={
+            "name": "נועה",
+            "telegram_chat_id": None,
+            "daily_digest_enabled": True,
+        },
+    )
+    assert rejected.status_code == 400
+    assert "טלגרם" in rejected.get_json()["error"]
+
+    linked = client.put(
+        f"/api/users/{person['id']}",
+        json={
+            "name": "נועה",
+            "telegram_chat_id": "42",
+            "daily_digest_enabled": True,
+            "receives_reminders": True,
+        },
+    )
+    assert linked.status_code == 200, linked.get_json()
+    assert linked.get_json()["daily_digest_enabled"] is True
+
+    unlinked = client.put(
+        f"/api/users/{person['id']}",
+        json={"name": "נועה", "telegram_chat_id": None},
+    )
+    assert unlinked.status_code == 200, unlinked.get_json()
+    body = unlinked.get_json()
+    assert body["telegram_chat_id"] in (None, "")
+    assert body["daily_digest_enabled"] is False
+    assert body["receives_reminders"] is True
+
+
+def test_digest_without_chat_is_turned_off_on_existing_rows(tmp_path, capsys):
+    path = tmp_path / "digest-orphan.sqlite"
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        from app.database import apply_pending_migrations
+        from app.reminders.repository import disable_digest_without_telegram
+
+        apply_pending_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO users (name, telegram_chat_id, daily_digest_enabled, receives_reminders)
+            VALUES ('נועה', NULL, 1, 1), ('דני', '99', 1, 1)
+            """
+        )
+        conn.commit()
+        apply_pending_migrations(conn)
+        rows = {
+            row["name"]: row
+            for row in conn.execute(
+                "SELECT name, daily_digest_enabled, telegram_chat_id FROM users"
+            )
+        }
+        assert rows["נועה"]["daily_digest_enabled"] == 0
+        assert rows["דני"]["daily_digest_enabled"] == 1
+        assert disable_digest_without_telegram(conn) == 0
+        err = capsys.readouterr().err
+        assert "נועה" in err
+        assert "no telegram chat" in err
+        assert "דני" not in err
+    finally:
+        conn.close()
+
+
+def test_import_digest_without_chat_is_coerced_off(client, app):
+    payload = {
+        "events": [],
+        "users": [
+            {
+                "name": "נועה",
+                "telegram_chat_id": None,
+                "daily_digest_enabled": True,
+                "receives_reminders": True,
+            }
+        ],
+    }
+    imported = client.post("/api/events/import?mode=merge", json=payload)
+    assert imported.status_code == 200, imported.get_json()
+    with app.app_context():
+        from app.reminders.repository import list_people
+
+        people = list_people()
+    assert len(people) == 1
+    assert people[0]["daily_digest_enabled"] is False
+    assert people[0]["receives_reminders"] is True
+
+
+def test_unlink_confirm_copy_mentions_enabled_features():
+    from app.users.telegram import unlink_telegram_confirm
+
+    both = unlink_telegram_confirm(
+        "נועה", receives_reminders=True, daily_digest_enabled=True
+    )
+    assert both == "בטוח שרוצים לנתק את הטלגרם של נועה? תזכורות וסיכום בוקר ייכבו"
+    digest_only = unlink_telegram_confirm(
+        "דני", receives_reminders=False, daily_digest_enabled=True
+    )
+    assert "סיכום בוקר" in digest_only
+    assert "תזכורות" not in digest_only

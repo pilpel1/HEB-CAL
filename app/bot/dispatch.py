@@ -1039,13 +1039,19 @@ class Bot:
             return self._link_pick(picked)
         moved = _prefix_int(data, "set:move:")
         if moved is not None:
-            return self._link_commit(moved, exclusive=True)
+            return self._confirm_move(moved)
+        moved_yes = _prefix_int(data, "set:movey:")
+        if moved_yes is not None:
+            return self._link_commit(moved_yes, exclusive=True)
         shared = _prefix_int(data, "set:share:")
         if shared is not None:
             return self._link_commit(shared, exclusive=False)
         unlinked = _prefix_int(data, "set:ul:")
         if unlinked is not None:
-            return self._unlink(unlinked)
+            return self._confirm_unlink(unlinked)
+        unlinked_yes = _prefix_int(data, "set:uly:")
+        if unlinked_yes is not None:
+            return self._unlink(unlinked_yes)
         house_id = _prefix_int(data, "set:hh:")
         if house_id is not None:
             return self._pick_house(house_id)
@@ -1109,6 +1115,26 @@ class Bot:
         self.toast = "חובר"
         return self.settings(note=f"חובר אל {person['name']}.")
 
+    def _confirm_unlink(self, person_id: int) -> dict:
+        person = self.by_id.get(person_id)
+        if person is None:
+            self.toast = "האדם לא נמצא"
+            self.reload_people()
+            return self.settings()
+        if not (person.get("telegram_chat_id") or "").strip():
+            return self.settings(note="כבר מנותק.")
+        return self.out(*ui.unlink_confirm_screen(person))
+
+    def _confirm_move(self, person_id: int) -> dict:
+        status = directory.link_status(person_id, self.chat_id)
+        if status is None:
+            self.toast = "האדם לא נמצא"
+            return self.out(*ui.link_picker(self.people, self.session.get("link_page") or 0))
+        others = status.get("others") or []
+        if not others:
+            return self._link_commit(person_id, exclusive=True)
+        return self.out(*ui.unlink_others_confirm_screen(others, person_id))
+
     def _unlink(self, person_id: int) -> dict:
         person = directory.unlink_person(person_id)
         self.reload_people()
@@ -1155,9 +1181,13 @@ class Bot:
         if person is None:
             self.toast = "האדם לא מחובר לצ'אט"
             return self.settings()
-        updated = directory.set_daily_digest(
-            person_id, not person.get("daily_digest_enabled")
-        )
+        try:
+            updated = directory.set_daily_digest(
+                person_id, not person.get("daily_digest_enabled")
+            )
+        except ValueError as exc:
+            self.toast = str(exc)
+            return self.settings()
         self.reload_people()
         if updated is None:
             self.toast = "האדם לא נמצא"
@@ -1171,7 +1201,11 @@ class Bot:
             return self.settings(note="קודם מחברים את הצ'אט לאדם ביומן.")
         enable = not all(person.get("daily_digest_enabled") for person in self.linked)
         for person in self.linked:
-            directory.set_daily_digest(person["id"], enable)
+            try:
+                directory.set_daily_digest(person["id"], enable)
+            except ValueError as exc:
+                self.toast = str(exc)
+                return self.settings()
         self.reload_people()
         self.toast = "עודכן"
         state = "דלוק" if enable else "כבוי"

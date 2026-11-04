@@ -210,3 +210,6 @@ def ensure_users_schema(db) -> None:
         ensure_unique_people_names(db)
         merge_compatible_telegram_duplicates(db)
         _ensure_users_indexes(db)
+        from app.reminders.repository import disable_digest_without_telegram
+
+        disable_digest_without_telegram(db)

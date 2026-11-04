@@ -63,6 +63,10 @@ def test_settings_lists_all_people_and_reuses_name(live_server, client):
         shira = page.locator("#reminderPeopleList .reminder-person-row").filter(has_text="שירה")
         expect(shira.locator('input[aria-label="תזכורות לשירה"]')).to_be_checked()
         expect(shira.locator('input[aria-label="משמרות לשירה"]')).to_be_checked()
+        expect(shira.locator('input[aria-label="סיכום בוקר לשירה"]')).to_be_enabled()
+        danny_row = page.locator("#reminderPeopleList .reminder-person-row").filter(has_text="דני")
+        expect(danny_row.locator('input[aria-label="סיכום בוקר לדני"]')).to_be_disabled()
+        expect(danny_row).to_contain_text("דורש חיבור לטלגרם")
 
         page.fill("#reminderPersonName", "שירה כהן")
         expect(page.locator("#reminderPersonSuggest")).to_contain_text("שם דומה")
@@ -124,3 +128,56 @@ def test_delete_blocked_until_reassign(live_server, client):
         browser.close()
     leftover = client.get("/api/reminder-people").get_json()
     assert [row["name"] for row in leftover] == ["שירה"]
+
+
+def test_unlink_telegram_asks_and_turns_digest_off(live_server, client):
+    person = client.post(
+        "/api/users",
+        json={
+            "name": "נועה",
+            "telegram_chat_id": "42",
+            "receives_reminders": True,
+            "daily_digest_enabled": True,
+        },
+    ).get_json()
+    assert person["daily_digest_enabled"] is True
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.goto(live_server + "/settings#settings-reminders", wait_until="load")
+        page.wait_for_selector("#reminderPeopleList .reminder-person-row")
+        row = page.locator("#reminderPeopleList .reminder-person-row").filter(has_text="נועה")
+        expect(row.locator('input[aria-label="סיכום בוקר לנועה"]')).to_be_checked()
+        row.locator("text=עריכה").click()
+        expect(page.locator("#reminderPersonChat")).to_have_value("42")
+
+        page.fill("#reminderPersonChat", "")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.click("#reminderPersonSave")
+        expect(page.locator("#reminderPersonChat")).to_have_value("42")
+        still = next(
+            row for row in client.get("/api/users").get_json() if row["id"] == person["id"]
+        )
+        assert still["telegram_chat_id"] == "42"
+        assert still["daily_digest_enabled"] is True
+
+        page.fill("#reminderPersonChat", "")
+
+        def _accept(dialog):
+            assert "בטוח שרוצים לנתק את הטלגרם של נועה" in dialog.message
+            assert "תזכורות וסיכום בוקר ייכבו" in dialog.message
+            dialog.accept()
+
+        page.once("dialog", _accept)
+        page.click("#reminderPersonSave")
+        expect(row).to_contain_text("אין קישור לטלגרם")
+        expect(row.locator('input[aria-label="סיכום בוקר לנועה"]')).to_be_disabled()
+        expect(row).to_contain_text("דורש חיבור לטלגרם")
+        expect(row.locator('input[aria-label="תזכורות לנועה"]')).to_be_checked()
+        browser.close()
+    after = next(
+        row for row in client.get("/api/users").get_json() if row["id"] == person["id"]
+    )
+    assert after["telegram_chat_id"] in (None, "")
+    assert after["daily_digest_enabled"] is False
+    assert after["receives_reminders"] is True

@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from app.reminders.digest import (
     DEFAULT_HOUR,
     DEFAULT_MINUTE,
@@ -103,10 +105,10 @@ def test_digest_ready_at_six_not_before_and_never_saturday(monkeypatch):
 
 def test_new_person_digest_defaults_off(app):
     linked = _person(app, "דני", chat="42")
-    unlinked = _person(app, "נועה", chat=None, daily_digest_enabled=True)
+    with pytest.raises(ValueError, match="טלגרם"):
+        _person(app, "נועה", chat=None, daily_digest_enabled=True)
     opted = _person(app, "רינה", chat="99", daily_digest_enabled=True)
     assert linked["daily_digest_enabled"] is False
-    assert unlinked["daily_digest_enabled"] is True
     assert opted["daily_digest_enabled"] is True
     with app.app_context():
         recipients = opted_in_people()
@@ -115,7 +117,17 @@ def test_new_person_digest_defaults_off(app):
 
 def test_opt_in_gate_skips_flag_off_unlinked_and_empty_token(app):
     _person(app, "כבוי", chat="1")
-    _person(app, "בלי צ׳אט", chat=None, daily_digest_enabled=True)
+    with app.app_context():
+        from app.database import get_db
+
+        db = get_db()
+        db.execute(
+            """
+            INSERT INTO users (name, telegram_chat_id, daily_digest_enabled, receives_reminders)
+            VALUES ('בלי צ׳אט', NULL, 1, 1)
+            """
+        )
+        db.commit()
     on = _person(app, "דלוק", chat="42", daily_digest_enabled=True)
     sent = []
 

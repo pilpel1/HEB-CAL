@@ -1112,6 +1112,21 @@
     cursor: pointer;
 }
 
+.reminder-person-flag.is-disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.reminder-person-flag.is-disabled .form-check-input {
+    cursor: not-allowed;
+}
+
+.reminder-person-flag-hint {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
 .reminder-person-suggest {
     display: flex;
     flex-wrap: wrap;

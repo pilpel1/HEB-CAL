@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import sys
 from datetime import datetime, timezone
 
 from app.database import get_db
@@ -14,6 +15,7 @@ from app.users.table import (
     quote_people_table,
     resolve_people_table,
 )
+from app.users.telegram import DIGEST_REQUIRES_TELEGRAM
 
 _CHAT_ID = re.compile(r"^-?\d{1,20}$")
 
@@ -100,6 +102,48 @@ def _clean_chat_id(value) -> str | None:
     if not _CHAT_ID.fullmatch(text):
         raise ValueError("מזהה הצ׳אט חייב להיות מספר (עם מינוס לקבוצה)")
     return text
+
+
+def _require_chat_for_digest(chat_id, digest_on) -> None:
+    """סיכום בוקר נשלח רק בטלגרם. תזכורות (receives_reminders) עובדות גם בדפדפן."""
+    if digest_on and not chat_id:
+        raise ValueError(DIGEST_REQUIRES_TELEGRAM)
+
+
+def disable_digest_without_telegram(db) -> int:
+    """כיבוי סיכום בוקר כשאין צ׳אט. אידמפוטנטי. מדפיס לכל שורה ששונתה."""
+    from app.users.table import list_tables
+
+    table_name = resolve_people_table(db)
+    if table_name not in list_tables(db):
+        return 0
+    table = quote_people_table(table_name)
+    cols = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+    if "daily_digest_enabled" not in cols:
+        return 0
+    rows = db.execute(
+        f"""
+        SELECT id, name FROM {table}
+        WHERE daily_digest_enabled = 1
+          AND (telegram_chat_id IS NULL OR trim(telegram_chat_id) = '')
+        """
+    ).fetchall()
+    if not rows:
+        return 0
+    db.execute(
+        f"""
+        UPDATE {table}
+        SET daily_digest_enabled = 0
+        WHERE daily_digest_enabled = 1
+          AND (telegram_chat_id IS NULL OR trim(telegram_chat_id) = '')
+        """
+    )
+    for row in rows:
+        print(
+            f"daily digest disabled for user {row['id']} ({row['name']}): no telegram chat",
+            file=sys.stderr,
+        )
+    return len(rows)
 
 
 def _clean_name(value) -> str:
@@ -505,6 +549,8 @@ def _merge_group_into_keeper(db, table: str, people_cols: set[str], members: lis
     params: list = []
     chat = chats[0] if chats else None
     email = emails[0] if emails else None
+    if not chat:
+        digest = 0
     if "telegram_chat_id" in people_cols and chat is not None:
         assignments.append("telegram_chat_id = ?")
         params.append(chat)
@@ -650,16 +696,18 @@ def _reuse_existing_person(
         extras["color"] = color
     if shift_allowed is not _MISSING:
         extras["shift_allowed"] = shift_allowed
+    resulting_chat = chat_id or existing_chat
     if daily_digest_enabled is not _MISSING:
         extras["daily_digest_enabled"] = bool(existing.get("daily_digest_enabled")) or bool(
             _clean_flag(daily_digest_enabled)
         )
+        _require_chat_for_digest(resulting_chat, extras["daily_digest_enabled"])
     if google_email is not _MISSING:
         extras["google_email"] = incoming_email or existing_email
     updated = update_person(
         existing["id"],
         existing["name"],
-        chat_id or existing_chat,
+        resulting_chat,
         **extras,
     )
     if updated is None:
@@ -717,6 +765,7 @@ def create_person(
         if daily_digest_enabled is _MISSING
         else _clean_flag(daily_digest_enabled)
     )
+    _require_chat_for_digest(chat_id, digest)
     try:
         if person_id is None:
             cursor = db.execute(
@@ -798,8 +847,13 @@ def update_person(
             raise ValueError(_email_conflict_message(taken["name"]))
     db = get_db()
     table = _people(db)
+    new_chat = _clean_chat_id(telegram_chat_id)
+    digest_on = None
+    if daily_digest_enabled is not _MISSING:
+        digest_on = _clean_flag(daily_digest_enabled)
+        _require_chat_for_digest(new_chat, digest_on)
     assignments = ["name = ?", "telegram_chat_id = ?"]
-    params: list = [clean_name, _clean_chat_id(telegram_chat_id)]
+    params: list = [clean_name, new_chat]
     if google_email is not _MISSING:
         assignments.append("google_email = ?")
         params.append(email)
@@ -819,7 +873,10 @@ def update_person(
         params.append(_clean_flag(works_shifts))
     if daily_digest_enabled is not _MISSING:
         assignments.append("daily_digest_enabled = ?")
-        params.append(_clean_flag(daily_digest_enabled))
+        params.append(digest_on)
+    elif not new_chat:
+        assignments.append("daily_digest_enabled = ?")
+        params.append(0)
     params.append(person_id)
     try:
         db.execute(
@@ -1155,16 +1212,27 @@ def _apply_imported_person_extras(db, person_id: int, person: dict) -> None:
         params.append(1)
         assignments.append("works_shifts = ?")
         params.append(works)
+    table = _people(db)
+    chat_row = db.execute(
+        f"SELECT telegram_chat_id FROM {table} WHERE id = ?",
+        (person_id,),
+    ).fetchone()
+    imported_chat = str(chat_row["telegram_chat_id"] or "").strip() if chat_row else ""
     if "daily_digest_enabled" in person:
+        digest = _clean_flag(person.get("daily_digest_enabled"))
+        if digest and not imported_chat:
+            digest = 0
         assignments.append("daily_digest_enabled = ?")
-        params.append(_clean_flag(person.get("daily_digest_enabled")))
+        params.append(digest)
+    elif not imported_chat:
+        assignments.append("daily_digest_enabled = ?")
+        params.append(0)
     if "google_email" in person:
         assignments.append("google_email = ?")
         params.append(clean_google_email(person.get("google_email")))
     if not assignments:
         return
     params.append(person_id)
-    table = _people(db)
     db.execute(
         f"UPDATE {table} SET {', '.join(assignments)} WHERE id = ?",
         params,

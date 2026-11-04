@@ -234,6 +234,9 @@ def test_people_ui_lists_everyone_and_warns_about_chat(client):
     people_js = client.get("/static/js/events/reminder-people.js").get_data(as_text=True)
     assert "filter((person) => person.receives_reminders)" not in people_js
     assert "appendPersonRoleSwitch" in people_js
+    assert "telegramUnlinkConfirm" in people_js
+    assert "דורש חיבור לטלגרם" in people_js
+    assert "בטוח שרוצים לנתק את הטלגרם של" in people_js
     assert "telegramLinkStatus" in people_js
     assert "suggestSimilarReminderPerson" in people_js
     assert "reassign_to" in people_js

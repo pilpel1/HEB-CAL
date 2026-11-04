@@ -223,18 +223,47 @@ function highlightReminderPersonRow(personId) {
     });
 }
 
+function telegramUnlinkConfirm(person) {
+    const name = (person && person.name) || 'האדם';
+    const features = [];
+    if (person && person.receives_reminders) {
+        features.push('תזכורות');
+    }
+    if (person && person.daily_digest_enabled) {
+        features.push('סיכום בוקר');
+    }
+    let question = `בטוח שרוצים לנתק את הטלגרם של ${name}?`;
+    if (features.length) {
+        question += ` ${features.join(' ו')} ייכבו`;
+    }
+    return question;
+}
+
 function appendPersonRoleSwitch(parent, person, flag, label) {
     const wrap = document.createElement('label');
     wrap.className = 'reminder-person-flag';
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.className = 'form-check-input';
-    input.checked = Boolean(person[flag]);
+    const linked = Boolean((person.telegram_chat_id || '').trim());
+    const needsTelegram = flag === 'daily_digest_enabled';
+    input.checked = needsTelegram && !linked ? false : Boolean(person[flag]);
     input.setAttribute('aria-label', `${label} ל${person.name}`);
-    input.addEventListener('change', () => toggleReminderPersonFlag(person, flag, input.checked, input));
     const text = document.createElement('span');
     text.textContent = label;
     wrap.append(input, text);
+    if (needsTelegram && !linked) {
+        wrap.classList.add('is-disabled');
+        wrap.title = 'דורש חיבור לטלגרם';
+        input.disabled = true;
+        const hint = document.createElement('span');
+        hint.className = 'reminder-person-flag-hint';
+        hint.textContent = 'דורש חיבור לטלגרם';
+        wrap.append(hint);
+        parent.append(wrap);
+        return;
+    }
+    input.addEventListener('change', () => toggleReminderPersonFlag(person, flag, input.checked, input));
     parent.append(wrap);
 }
 
@@ -349,6 +378,14 @@ async function saveReminderPerson(event) {
         return;
     }
     const id = document.getElementById('reminderPersonId').value;
+    const existing = (reminderPeopleState.people || []).find((item) => String(item.id) === String(id));
+    const hadChat = Boolean(((existing && existing.telegram_chat_id) || '').trim());
+    if (hadChat && !chatId) {
+        if (!confirm(telegramUnlinkConfirm(existing))) {
+            document.getElementById('reminderPersonChat').value = existing.telegram_chat_id || '';
+            return;
+        }
+    }
     const payload = {
         name,
         telegram_chat_id: chatId || null,

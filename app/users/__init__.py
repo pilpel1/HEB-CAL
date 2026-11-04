@@ -13,9 +13,14 @@ from app.users.table import (
     USERS_TABLE,
     resolve_people_table,
 )
+from app.users.telegram import (
+    DIGEST_REQUIRES_TELEGRAM,
+    unlink_telegram_confirm,
+)
 
 __all__ = [
     "ACCESS_EMAIL_HEADER",
+    "DIGEST_REQUIRES_TELEGRAM",
     "LEGACY_PEOPLE_TABLE",
     "USERS_BACKUP_TABLE",
     "USERS_TABLE",
@@ -24,5 +29,6 @@ __all__ = [
     "clean_google_email",
     "current_access_user",
     "resolve_people_table",
+    "unlink_telegram_confirm",
     "user_for_access_headers",
 ]

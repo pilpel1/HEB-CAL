@@ -22,6 +22,8 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # גרסה 6: סיכום בוקר בטלגרם — daily_digest_enabled / daily_digest_last_sent על reminder_people.
 # גרסה 7: אינדקס ייחודי על שם מנורמל ב-reminder_people, אחרי מיזוג כפילויות תואמות.
 # גרסה 8: טבלת users (גיבוי users_backup_v8, מיזוג כפילויות לפי שם/טלגרם, google_email).
+# סיכום בוקר בלי telegram_chat_id נכבה ב-ensure_users_schema ושוב ב-init_db
+# (גם על בסיס שכבר על 8).
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
 SCHEMA_VERSION = 8
@@ -188,9 +190,16 @@ def apply_pending_migrations(db) -> None:
 
     db.execute(f"PRAGMA busy_timeout = {SCHEMA_BUSY_TIMEOUT_MS}")
     if _read_user_version(db) >= SCHEMA_VERSION:
+        from app.reminders.repository import disable_digest_without_telegram
+
+        if disable_digest_without_telegram(db):
+            db.commit()
         return
     with exclusive_schema_transaction(db):
         if _read_user_version(db) >= SCHEMA_VERSION:
+            from app.reminders.repository import disable_digest_without_telegram
+
+            disable_digest_without_telegram(db)
             return
         _ensure_base_schema(db)
         ensure_reminder_schema(db)
@@ -218,9 +227,14 @@ def init_db():
 
     ensure_bot_schema(db)
     ensure_live_sync_schema(db)
-    from app.reminders.repository import ensure_unique_people_names
+    from app.reminders.repository import (
+        disable_digest_without_telegram,
+        ensure_unique_people_names,
+    )
 
     ensure_unique_people_names(db)
+    if disable_digest_without_telegram(db):
+        db.commit()
 
 
 _RECURRENCE_COLUMNS = (

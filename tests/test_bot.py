@@ -788,7 +788,18 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
 
     picker = _press(app, done, "חיבור לאדם")
     conflict = _press(app, picker, "דני")
-    moved = _press(app, conflict, "העברה")
+    ask_move = _press(app, conflict, "העברה")
+    assert "בטוח שרוצים לנתק את הטלגרם של נועה" in ask_move["text"]
+    stayed = _press(app, ask_move, "לא")
+    with app.app_context():
+        from app.reminders.repository import get_person
+
+        assert get_person(danny["id"])["telegram_chat_id"] == "42"
+        assert get_person(noa["id"])["telegram_chat_id"] == "42"
+    picker = _press(app, stayed, "חיבור לאדם")
+    conflict = _press(app, picker, "דני")
+    ask_move = _press(app, conflict, "העברה")
+    moved = _press(app, ask_move, "כן")
     with app.app_context():
         from app.reminders.repository import get_person
 
@@ -804,7 +815,17 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
     created = _go(app, _msg("רינה"))
     assert "רינה" in created["text"]
 
-    unlinked = _press(app, created, "ניתוק רינה")
+    ask_unlink = _press(app, created, "ניתוק רינה")
+    assert "בטוח שרוצים לנתק את הטלגרם של רינה" in ask_unlink["text"]
+    assert "תזכורות" in ask_unlink["text"]
+    cancelled = _press(app, ask_unlink, "לא")
+    with app.app_context():
+        from app.reminders.repository import list_people
+
+        rina = next(person for person in list_people() if person["name"] == "רינה")
+        assert rina["telegram_chat_id"] == "42"
+    ask_unlink = _press(app, cancelled, "ניתוק רינה")
+    unlinked = _press(app, ask_unlink, "כן")
     assert "נותק" in unlinked["text"] or "רינה" in unlinked["text"]
 
     labels = [b["text"] for b in _buttons(unlinked)]
@@ -1429,6 +1450,32 @@ def test_digest_toggle_in_settings_and_slash_command(app):
     unlinked = _go(app, _msg("/digest", chat=99))
     assert "קודם מחברים" in unlinked["text"]
     assert "סיכום בוקר יומי" not in [button["text"] for button in _buttons(unlinked)]
+
+
+def test_bot_unlink_turns_digest_off_after_confirm(app):
+    person = _person(app, "דני", chat=42, daily_digest_enabled=True, receives_reminders=True)
+    settings = _go(app, _msg("/settings"))
+    ask = _press(app, settings, "ניתוק דני")
+    assert "בטוח שרוצים לנתק את הטלגרם של דני" in ask["text"]
+    assert "תזכורות וסיכום בוקר ייכבו" in ask["text"]
+    cancelled = _press(app, ask, "לא")
+    with app.app_context():
+        from app.reminders.repository import get_person
+
+        still = get_person(person["id"])
+        assert still["telegram_chat_id"] == "42"
+        assert still["daily_digest_enabled"] is True
+        assert still["receives_reminders"] is True
+    ask = _press(app, cancelled, "ניתוק דני")
+    done = _press(app, ask, "כן")
+    assert "נותק" in done["text"] or "דני" in done["text"]
+    with app.app_context():
+        from app.reminders.repository import get_person
+
+        after = get_person(person["id"])
+        assert after["telegram_chat_id"] in (None, "")
+        assert after["daily_digest_enabled"] is False
+        assert after["receives_reminders"] is True
 
 
 def test_bot_create_person_reuses_existing_shift_worker(app):
