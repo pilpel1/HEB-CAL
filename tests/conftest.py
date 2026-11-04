@@ -41,7 +41,14 @@ def _empty_events_table(app):
         db.execute("DELETE FROM reminder_sends")
         db.execute("DELETE FROM reminders")
         db.execute("DELETE FROM event_exceptions")
-        db.execute("DELETE FROM reminder_people")
+        tables = {
+            row[0]
+            for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "users" in tables:
+            db.execute("DELETE FROM users")
+        if "reminder_people" in tables:
+            db.execute("DELETE FROM reminder_people")
         db.execute("DELETE FROM events")
         if db.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'gcal_sources'"

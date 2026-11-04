@@ -104,10 +104,11 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
             "shift_person_id",
             "shift_label",
         } <= cols
-        people = {row[1] for row in conn.execute("PRAGMA table_info(reminder_people)")}
+        people = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
         assert {
             "name",
             "telegram_chat_id",
+            "google_email",
             "color",
             "shift_allowed",
             "receives_reminders",
@@ -124,7 +125,8 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
             "event_colors",
             "event_exceptions",
             "reminder_sends",
-            "reminder_people",
+            "users",
+            "users_backup_v8",
             "reminders",
             "household_settings",
         ):
@@ -376,9 +378,9 @@ def test_version_two_rewrites_shift_rows_already_at_version_one(tmp_path):
         apply_pending_migrations(conn)
         conn.execute("PRAGMA user_version = 1")
         conn.execute(
-            "INSERT INTO reminder_people (name, telegram_chat_id, color) VALUES ('אביחי', '1', 'cyan')"
+            "INSERT INTO users (name, telegram_chat_id, color) VALUES ('אביחי', '1', 'cyan')"
         )
-        person_id = conn.execute("SELECT id FROM reminder_people").fetchone()["id"]
+        person_id = conn.execute("SELECT id FROM users").fetchone()["id"]
         conn.execute(
             """
             INSERT INTO events (
@@ -423,19 +425,19 @@ def test_version_four_backfills_people_role_flags(tmp_path):
         apply_pending_migrations(conn)
         conn.execute("PRAGMA user_version = 3")
         conn.execute(
-            "INSERT INTO reminder_people (name, telegram_chat_id) VALUES ('עם צ׳אט', '99')"
+            "INSERT INTO users (name, telegram_chat_id) VALUES ('עם צ׳אט', '99')"
         )
-        conn.execute("INSERT INTO reminder_people (name) VALUES ('רק שם')")
+        conn.execute("INSERT INTO users (name) VALUES ('רק שם')")
         conn.execute(
-            "INSERT INTO reminder_people (name, shift_allowed) VALUES ('עם כללים', '{\"בוקר\":[0]}')"
+            "INSERT INTO users (name, shift_allowed) VALUES ('עם כללים', '{\"בוקר\":[0]}')"
         )
-        conn.execute("INSERT INTO reminder_people (name) VALUES ('נמען')")
+        conn.execute("INSERT INTO users (name) VALUES ('נמען')")
         recipient_id = conn.execute(
-            "SELECT id FROM reminder_people WHERE name = 'נמען'"
+            "SELECT id FROM users WHERE name = 'נמען'"
         ).fetchone()["id"]
-        conn.execute("INSERT INTO reminder_people (name) VALUES ('שומר')")
+        conn.execute("INSERT INTO users (name) VALUES ('שומר')")
         shifter_id = conn.execute(
-            "SELECT id FROM reminder_people WHERE name = 'שומר'"
+            "SELECT id FROM users WHERE name = 'שומר'"
         ).fetchone()["id"]
         event_id = conn.execute(
             "INSERT INTO events (title, gregorian_date, hebrew_date) VALUES ('פגישה', '2026-10-18', 'א')"
@@ -461,7 +463,7 @@ def test_version_four_backfills_people_role_flags(tmp_path):
         flags = {
             row["name"]: (row["receives_reminders"], row["works_shifts"])
             for row in conn.execute(
-                "SELECT name, receives_reminders, works_shifts FROM reminder_people"
+                "SELECT name, receives_reminders, works_shifts FROM users"
             )
         }
         assert flags["עם צ׳אט"] == (1, 0)
@@ -485,21 +487,21 @@ def test_version_six_adds_digest_columns(tmp_path):
         assert SCHEMA_VERSION >= 6
         apply_pending_migrations(conn)
         conn.execute("PRAGMA user_version = 5")
-        conn.execute("ALTER TABLE reminder_people DROP COLUMN daily_digest_enabled")
-        conn.execute("ALTER TABLE reminder_people DROP COLUMN daily_digest_last_sent")
+        conn.execute("ALTER TABLE users DROP COLUMN daily_digest_enabled")
+        conn.execute("ALTER TABLE users DROP COLUMN daily_digest_last_sent")
         conn.execute(
-            "INSERT INTO reminder_people (name, telegram_chat_id) VALUES ('דני', '42')"
+            "INSERT INTO users (name, telegram_chat_id) VALUES ('דני', '42')"
         )
         conn.commit()
-        people = {row[1] for row in conn.execute("PRAGMA table_info(reminder_people)")}
+        people = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
         assert "daily_digest_enabled" not in people
 
         apply_pending_migrations(conn)
-        people = {row[1] for row in conn.execute("PRAGMA table_info(reminder_people)")}
+        people = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
         assert "daily_digest_enabled" in people
         assert "daily_digest_last_sent" in people
         row = conn.execute(
-            "SELECT daily_digest_enabled, daily_digest_last_sent FROM reminder_people WHERE name = 'דני'"
+            "SELECT daily_digest_enabled, daily_digest_last_sent FROM users WHERE name = 'דני'"
         ).fetchone()
         assert row["daily_digest_enabled"] == 0
         assert row["daily_digest_last_sent"] is None

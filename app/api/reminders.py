@@ -34,10 +34,15 @@ def _person_extras(data: dict) -> dict:
         extra["receives_reminders"] = data.get("receives_reminders")
     if "works_shifts" in data:
         extra["works_shifts"] = data.get("works_shifts")
+    if "daily_digest_enabled" in data:
+        extra["daily_digest_enabled"] = data.get("daily_digest_enabled")
+    if "google_email" in data:
+        extra["google_email"] = data.get("google_email")
     return extra
 
 
 @api.route("/reminder-people", methods=["GET"])
+@api.route("/users", methods=["GET"])
 def get_reminder_people():
     role = (request.args.get("role") or "").strip() or None
     if role not in (None, "reminders", "shifts"):
@@ -46,6 +51,7 @@ def get_reminder_people():
 
 
 @api.route("/reminder-people", methods=["POST"])
+@api.route("/users", methods=["POST"])
 def add_reminder_person():
     data = _payload()
     existed = find_person_by_normalized_name(data.get("name") or "")
@@ -61,6 +67,7 @@ def add_reminder_person():
 
 
 @api.route("/reminder-people/<int:person_id>", methods=["PUT"])
+@api.route("/users/<int:person_id>", methods=["PUT"])
 def edit_reminder_person(person_id):
     data = _payload()
     try:
@@ -90,15 +97,20 @@ def _reassign_to_value(data: dict):
 
 
 @api.route("/reminder-people/<int:person_id>", methods=["DELETE"])
+@api.route("/users/<int:person_id>", methods=["DELETE"])
 def remove_reminder_person(person_id):
     try:
         reassign_to = _reassign_to_value(_payload())
         deleted = delete_person(person_id, reassign_to=reassign_to)
     except ValueError as exc:
-        status = 409 if "תזכורות" in str(exc) else 400
-        payload = {"error": str(exc), "success": False}
+        message = str(exc)
+        status = 409 if "אי אפשר למחוק" in message else 400
+        payload = {"error": message, "success": False}
         if status == 409:
+            from app.reminders.repository import shift_event_count
+
             payload["referenced_event_ids"] = reminder_recipient_event_ids(person_id)
+            payload["shift_event_count"] = shift_event_count(person_id)
         return jsonify(payload), status
     if not deleted:
         return jsonify({"error": "האדם לא נמצא", "success": False}), 404

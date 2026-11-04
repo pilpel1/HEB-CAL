@@ -142,21 +142,22 @@ def test_version_seven_merges_compatible_duplicates(tmp_path):
         apply_pending_migrations(conn)
         conn.execute("PRAGMA user_version = 6")
         conn.execute(f"DROP INDEX IF EXISTS {_PEOPLE_NAME_INDEX}")
+        conn.execute("DROP INDEX IF EXISTS idx_users_name_norm")
         conn.execute(
             """
-            INSERT INTO reminder_people (name, telegram_chat_id, receives_reminders, works_shifts)
+            INSERT INTO users (name, telegram_chat_id, receives_reminders, works_shifts)
             VALUES ('שירה', '99', 0, 1)
             """
         )
-        worker_id = conn.execute("SELECT id FROM reminder_people WHERE name = 'שירה'").fetchone()["id"]
+        worker_id = conn.execute("SELECT id FROM users WHERE name = 'שירה'").fetchone()["id"]
         conn.execute(
             """
-            INSERT INTO reminder_people (name, telegram_chat_id, receives_reminders, works_shifts)
+            INSERT INTO users (name, telegram_chat_id, receives_reminders, works_shifts)
             VALUES ('  שירה', NULL, 1, 0)
             """
         )
         extra_id = conn.execute(
-            "SELECT id FROM reminder_people WHERE id != ? AND trim(name) = 'שירה'",
+            "SELECT id FROM users WHERE id != ? AND trim(name) = 'שירה'",
             (worker_id,),
         ).fetchone()["id"]
         event_id = conn.execute(
@@ -177,7 +178,7 @@ def test_version_seven_merges_compatible_duplicates(tmp_path):
         conn.commit()
 
         apply_pending_migrations(conn)
-        rows = conn.execute("SELECT * FROM reminder_people ORDER BY id").fetchall()
+        rows = conn.execute("SELECT * FROM users ORDER BY id").fetchall()
         assert len(rows) == 1
         person = rows[0]
         assert person["id"] == worker_id
@@ -209,15 +210,16 @@ def test_version_seven_leaves_conflicting_chat_duplicates(tmp_path):
         apply_pending_migrations(conn)
         conn.execute("PRAGMA user_version = 6")
         conn.execute(f"DROP INDEX IF EXISTS {_PEOPLE_NAME_INDEX}")
+        conn.execute("DROP INDEX IF EXISTS idx_users_name_norm")
         conn.execute(
-            "INSERT INTO reminder_people (name, telegram_chat_id) VALUES ('שירה', '11')"
+            "INSERT INTO users (name, telegram_chat_id) VALUES ('שירה', '11')"
         )
         conn.execute(
-            "INSERT INTO reminder_people (name, telegram_chat_id) VALUES ('שירה', '22')"
+            "INSERT INTO users (name, telegram_chat_id) VALUES ('שירה', '22')"
         )
         conn.commit()
         apply_pending_migrations(conn)
-        names = [row["telegram_chat_id"] for row in conn.execute("SELECT telegram_chat_id FROM reminder_people")]
+        names = [row["telegram_chat_id"] for row in conn.execute("SELECT telegram_chat_id FROM users")]
         assert sorted(names) == ["11", "22"]
         assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     finally:

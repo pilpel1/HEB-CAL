@@ -14,12 +14,19 @@ from app.bot.query import collect_list
 from app.reminders.repository import list_people
 from app.reminders.schedule import reminder_timezone
 from app.services.shifts import weekday_index
+from app.users.table import quote_people_table, resolve_people_table
 
 DEFAULT_HOUR = 6
 DEFAULT_MINUTE = 0
 SATURDAY = 6
 FRIDAY = 5
 EMPTY_DAY = "אין אירועים היום"
+
+
+def _people_table() -> str:
+    from app.database import get_db
+
+    return quote_people_table(resolve_people_table(get_db()))
 
 
 def _env_int(name: str, default: int, lo: int, hi: int) -> int:
@@ -97,7 +104,7 @@ def digest_last_sent(person_id: int) -> date | None:
     from app.database import get_db
 
     row = get_db().execute(
-        "SELECT daily_digest_last_sent FROM reminder_people WHERE id = ?",
+        f"SELECT daily_digest_last_sent FROM {_people_table()} WHERE id = ?",
         (person_id,),
     ).fetchone()
     if row is None or not row["daily_digest_last_sent"]:
@@ -113,7 +120,7 @@ def mark_digest_sent(person_id: int, day: date) -> None:
 
     db = get_db()
     db.execute(
-        "UPDATE reminder_people SET daily_digest_last_sent = ? WHERE id = ?",
+        f"UPDATE {_people_table()} SET daily_digest_last_sent = ? WHERE id = ?",
         (day.isoformat(), person_id),
     )
     db.commit()

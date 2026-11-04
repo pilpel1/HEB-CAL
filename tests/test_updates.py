@@ -22,11 +22,12 @@ from app.updates.gitops import (
     restore_sqlite,
     restart_argv,
 )
-from app.updates.service import format_checked_at, public_cache
+from app.updates.service import format_checked_at, public_cache, recover_interrupted_update
 from app.updates.store import (
     acquire_lock,
     blank_status,
     cache_path,
+    lock_dir,
     public_status,
     read_json,
     release_lock,
@@ -72,7 +73,7 @@ def _update_env(monkeypatch, tmp_path):
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert parse_version(version) == (1, 0, 24)
+    assert parse_version(version) == (1, 0, 25)
     assert f"## {version}" in changelog
     assert "## 1.0.8" in changelog
     assert "## 1.0.3" in changelog
@@ -269,10 +270,11 @@ def test_outcome_messages():
 
 
 class FakeOps:
-    def __init__(self, fail_at=None, restart_on=True, restart_fails=0):
+    def __init__(self, fail_at=None, restart_on=True, restart_fails=0, detached=False):
         self.fail_at = fail_at
         self.restart_on = restart_on
         self.restart_fails = restart_fails
+        self.detached = detached
         self.calls = []
         self.payload = {}
 
@@ -330,6 +332,7 @@ class FakeOps:
             self.restart_fails -= 1
             raise UpdateError("ההפעלה מחדש נכשלה.", step="restart")
         self._fail("restart", "ההפעלה מחדש נכשלה.", "restart")
+        return True if self.detached else False
 
     def stop_app(self):
         self.calls.append(("stop_app",))
@@ -391,6 +394,13 @@ def test_flow_success_and_rollback_paths():
     assert "restore_database" in _names(stuck)
     assert "checkout_sha" in _names(stuck)
 
+    detached = FakeOps(detached=True)
+    execute_update(detached, Plan("git", "v1.2.0", "1.2.0"))
+    assert detached.payload["state"] == "running"
+    assert detached.payload["step"] == "restart"
+    assert "wait_healthy" not in _names(detached)
+    assert detached.payload.get("finished_at") is None
+
 
 def _csrf(client) -> str:
     return client.get("/api/updates").get_json()["csrf_token"]
@@ -413,7 +423,7 @@ def test_settings_and_gear_markup(client):
     assert "עדכן עכשיו" in settings
     assert "סיסמת מנהל" not in settings
     assert "updateLoginForm" not in settings
-    assert ">1.0.24<" in settings
+    assert f">{installed_version()}<" in settings
     assert "עדיין לא נבדק" in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
@@ -515,17 +525,17 @@ def test_hard_reload_waits_for_new_version_after_restart():
             "sawDisconnect": False,
         },
     ])
-    assert out == [False, True, True, False, False, False, True]
+    assert out == [True, True, True, False, False, False, True]
 
 
 def test_health_is_public_and_summary_has_no_secrets(client):
     health = client.get("/api/updates/health")
     assert health.status_code == 200
-    assert health.get_json()["version"] == "1.0.24"
+    assert health.get_json()["version"] == installed_version()
     assert health.headers.get("Cache-Control") == "no-store"
     body = client.get("/api/updates").get_json()
     dumped = json.dumps(body)
-    assert body["current"] == "1.0.24"
+    assert body["current"] == installed_version()
     assert body["cached"]["checked"] is False
     assert body["cached"]["available"] is False
     assert "עדיין לא נבדק" in body["cached"]["message"]
@@ -833,7 +843,11 @@ def test_restart_script_is_generic_and_stop_is_safe(tmp_path):
     assert "HEB_CAL_UPDATE_ACTION" in text
     assert "reminder_worker.py" in text
     assert "systemctl --user" in text
+    assert "systemd-run" in text
+    assert "--no-block" in text
+    assert "--unit=" in text
     assert "pid_is_ours" in text
+    assert "systemd_queue_restart" in text
     assert "SECRET" not in text
     assert "TELEGRAM" not in text
     assert "ghp_" not in text
@@ -869,3 +883,46 @@ def test_restart_script_is_generic_and_stop_is_safe(tmp_path):
     assert (root / "data").is_dir()
     assert (root / "logs").is_dir()
     assert list((root / "data").iterdir()) == []
+
+
+def test_recover_marks_success_when_restart_killed_runner(tmp_path, client):
+    path = status_path(tmp_path)
+    acquire_lock(tmp_path)
+    write_status(path, {
+        **blank_status("1.0.23"),
+        "state": "running",
+        "step": "restart",
+        "message": "מפעיל מחדש",
+        "target": installed_version(),
+        "pid": 999999,
+        "started_at": "2026-01-01T00:00:00+00:00",
+    })
+    assert lock_dir(tmp_path).is_dir()
+    health = client.get("/api/updates/health").get_json()
+    assert health["version"] == installed_version()
+    recovered = recover_interrupted_update(tmp_path, installed_version())
+    assert recovered["state"] == "success"
+    assert recovered["step"] == "done"
+    assert not lock_dir(tmp_path).is_dir()
+    status = client.get("/api/updates/status").get_json()
+    assert status["state"] in ("success", "idle")
+
+
+def test_recover_marks_failed_when_pid_dead_before_restart(tmp_path):
+    path = status_path(tmp_path)
+    acquire_lock(tmp_path)
+    write_status(path, {
+        **blank_status("1.0.23"),
+        "state": "running",
+        "step": "checkout",
+        "message": "עובר לגרסה החדשה",
+        "target": "9.9.9",
+        "pid": 999999,
+        "started_at": "2026-01-01T00:00:00+00:00",
+    })
+    recovered = recover_interrupted_update(tmp_path, installed_version())
+    assert recovered["state"] == "failed"
+    assert "נעצר באמצע" in recovered["message"]
+    assert not lock_dir(tmp_path).is_dir()
+    leftover = recover_interrupted_update(tmp_path, installed_version())
+    assert leftover["state"] == "failed"

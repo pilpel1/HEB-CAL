@@ -392,6 +392,11 @@
     color: #93c5fd;
 }
 
+[data-bs-theme="dark"] .settings-section-toggle:hover,
+[data-bs-theme="dark"] .settings-section-toggle:focus-visible {
+    background: rgba(147, 197, 253, 0.08);
+}
+
 [data-bs-theme="dark"] .reminder-settings-gear {
     color: var(--bs-secondary-color);
 }

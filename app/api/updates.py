@@ -23,7 +23,15 @@ def _guard_write():
 
 @api.route("/updates/health")
 def updates_health():
-    return _json({"ok": True, "version": installed_version()})
+    current = installed_version()
+    try:
+        from app.updates.envconfig import load_config
+        from app.updates.service import recover_interrupted_update
+
+        recover_interrupted_update(load_config().update_dir, current)
+    except Exception:
+        pass
+    return _json({"ok": True, "version": current})
 
 
 @api.route("/updates/badge")

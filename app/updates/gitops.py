@@ -478,6 +478,7 @@ class LiveOps:
                 argv = [
                     "systemctl",
                     "--user",
+                    "--no-block",
                     "stop" if action == "stop" else "restart",
                     *unit_filenames(self.cfg.repo_root),
                 ]
@@ -501,8 +502,10 @@ class LiveOps:
         if proc.returncode != 0:
             raise UpdateError("ההפעלה מחדש נכשלה.", step="restart")
 
-    def restart(self) -> None:
+    def restart(self) -> bool:
+        """True אם הריסטרט מנותק (systemd) — אל תחכו ל-health בתהליך הזה."""
         self._restart("restart")
+        return systemd_user_units_installed(self.cfg.repo_root)
 
     def stop_app(self) -> None:
         self._restart("stop")

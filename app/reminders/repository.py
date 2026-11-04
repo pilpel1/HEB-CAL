@@ -7,9 +7,26 @@ import sqlite3
 from datetime import datetime, timezone
 
 from app.database import get_db
+from app.users.emails import clean_google_email
+from app.users.flags import USER_FLAG_KEYS
+from app.users.table import (
+    LEGACY_NAME_INDEX as _PEOPLE_NAME_INDEX,
+    quote_people_table,
+    resolve_people_table,
+)
 
 _CHAT_ID = re.compile(r"^-?\d{1,20}$")
-_PEOPLE_NAME_INDEX = "idx_reminder_people_name_norm"
+
+
+def _people(db=None) -> str:
+    return quote_people_table(resolve_people_table(db if db is not None else get_db()))
+
+
+def _has_people_table(db) -> bool:
+    from app.users.table import LEGACY_PEOPLE_TABLE, USERS_TABLE, list_tables
+
+    tables = list_tables(db)
+    return USERS_TABLE in tables or LEGACY_PEOPLE_TABLE in tables
 
 _REMINDER_COLUMNS = (
     ("event_id", "INTEGER"),
@@ -21,6 +38,7 @@ _REMINDER_COLUMNS = (
 _PEOPLE_COLUMNS = (
     ("name", "TEXT NOT NULL DEFAULT ''"),
     ("telegram_chat_id", "TEXT"),
+    ("google_email", "TEXT"),
     ("receives_reminders", "INTEGER NOT NULL DEFAULT 0"),
     ("works_shifts", "INTEGER NOT NULL DEFAULT 0"),
     ("daily_digest_enabled", "INTEGER NOT NULL DEFAULT 0"),
@@ -40,16 +58,9 @@ def ensure_reminder_schema(db) -> None:
     )
 
     with exclusive_schema_transaction(db):
-        _schema_execute(
-            db,
-            """
-            CREATE TABLE IF NOT EXISTS reminder_people (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                telegram_chat_id TEXT
-            )
-            """,
-        )
+        from app.users.schema import ensure_people_base_table
+
+        ensure_people_base_table(db)
         _schema_execute(
             db,
             """
@@ -63,8 +74,10 @@ def ensure_reminder_schema(db) -> None:
             )
             """,
         )
-        for name, decl in _PEOPLE_COLUMNS:
-            _add_column_if_missing(db, "reminder_people", name, decl)
+        if _has_people_table(db):
+            table = _people(db)
+            for name, decl in _PEOPLE_COLUMNS:
+                _add_column_if_missing(db, table, name, decl)
         for name, decl in _REMINDER_COLUMNS:
             _add_column_if_missing(db, "reminders", name, decl)
         _schema_execute(
@@ -111,11 +124,22 @@ def _chat_conflict_message(name: str) -> str:
     return f"כבר יש אדם בשם {name} עם מזהה צ׳אט אחר"
 
 
-def _delete_referenced_message(name: str, count: int) -> str:
+def _delete_referenced_message(name: str, reminder_count: int, shift_count: int = 0) -> str:
+    bits = []
+    if reminder_count:
+        bits.append(f"נמען/ת ב-{reminder_count} תזכורות")
+    if shift_count:
+        bits.append(f"מופיע/ה ב-{shift_count} משמרות")
+    if not bits:
+        bits.append("מקושר/ת לרשומות")
     return (
-        f"אי אפשר למחוק — {name} נמען/ת ב-{count} תזכורות. "
-        "העבירו את הנמענים לאדם אחר."
+        f"אי אפשר למחוק — {name} {' ו'.join(bits)}. "
+        "העבירו את ההפניות למשתמש אחר."
     )
+
+
+def _email_conflict_message(name: str) -> str:
+    return f"האימייל כבר בשימוש אצל {name}"
 
 
 def find_person_by_normalized_name(name, *, exclude_id: int | None = None) -> dict | None:
@@ -123,10 +147,11 @@ def find_person_by_normalized_name(name, *, exclude_id: int | None = None) -> di
     if not key:
         return None
     db = get_db()
+    table = _people(db)
     if exclude_id is None:
         row = db.execute(
-            """
-            SELECT * FROM reminder_people
+            f"""
+            SELECT * FROM {table}
             WHERE lower(trim(name)) = ?
             ORDER BY id
             LIMIT 1
@@ -135,9 +160,41 @@ def find_person_by_normalized_name(name, *, exclude_id: int | None = None) -> di
         ).fetchone()
     else:
         row = db.execute(
-            """
-            SELECT * FROM reminder_people
+            f"""
+            SELECT * FROM {table}
             WHERE lower(trim(name)) = ? AND id != ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (key, int(exclude_id)),
+        ).fetchone()
+    return person_to_dict(row) if row else None
+
+
+def find_person_by_google_email(email, *, exclude_id: int | None = None) -> dict | None:
+    try:
+        key = clean_google_email(email)
+    except ValueError:
+        return None
+    if not key:
+        return None
+    db = get_db()
+    table = _people(db)
+    if exclude_id is None:
+        row = db.execute(
+            f"""
+            SELECT * FROM {table}
+            WHERE google_email = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (key,),
+        ).fetchone()
+    else:
+        row = db.execute(
+            f"""
+            SELECT * FROM {table}
+            WHERE google_email = ? AND id != ?
             ORDER BY id
             LIMIT 1
             """,
@@ -188,15 +245,19 @@ def person_to_dict(row) -> dict:
 
     keys = row.keys()
     raw_allowed = row["shift_allowed"] if "shift_allowed" in keys else None
+    flags = {name: _row_flag(row, name) for name in USER_FLAG_KEYS}
+    email = None
+    if "google_email" in keys and row["google_email"]:
+        email = str(row["google_email"]).strip().lower() or None
     return {
         "id": row["id"],
         "name": row["name"],
         "telegram_chat_id": row["telegram_chat_id"],
+        "google_email": email,
         "color": row["color"] if "color" in keys else None,
         "shift_allowed": parse_shift_allowed(raw_allowed),
-        "receives_reminders": _row_flag(row, "receives_reminders"),
-        "works_shifts": _row_flag(row, "works_shifts"),
-        "daily_digest_enabled": _row_flag(row, "daily_digest_enabled"),
+        "flags": flags,
+        **flags,
     }
 
 
@@ -225,8 +286,9 @@ def reminder_to_dict(row) -> dict:
 
 def list_people(*, role: str | None = None) -> list[dict]:
     db = get_db()
+    table = _people(db)
     rows = db.execute(
-        "SELECT * FROM reminder_people ORDER BY name, id"
+        f"SELECT * FROM {table} ORDER BY name, id"
     ).fetchall()
     people = [person_to_dict(row) for row in rows]
     if role == "reminders":
@@ -238,8 +300,9 @@ def list_people(*, role: str | None = None) -> list[dict]:
 
 def get_person(person_id: int) -> dict | None:
     db = get_db()
+    table = _people(db)
     row = db.execute(
-        "SELECT * FROM reminder_people WHERE id = ?",
+        f"SELECT * FROM {table} WHERE id = ?",
         (person_id,),
     ).fetchone()
     return person_to_dict(row) if row else None
@@ -297,9 +360,10 @@ def backfill_people_role_flags(db) -> None:
     tables = {
         row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
-    if "reminder_people" not in tables:
+    if not _has_people_table(db):
         return
-    columns = {row[1] for row in db.execute("PRAGMA table_info(reminder_people)")}
+    table = _people(db)
+    columns = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
     if "receives_reminders" not in columns or "works_shifts" not in columns:
         return
     recipient_ids: set[int] = set()
@@ -332,7 +396,7 @@ def backfill_people_role_flags(db) -> None:
                 except (TypeError, ValueError):
                     continue
     people_cols = columns
-    for row in db.execute("SELECT * FROM reminder_people"):
+    for row in db.execute(f"SELECT * FROM {table}"):
         keys = row.keys()
         person_id = row["id"]
         chat = str(row["telegram_chat_id"] or "").strip() if "telegram_chat_id" in keys else ""
@@ -351,7 +415,7 @@ def backfill_people_role_flags(db) -> None:
             params.append(works)
         params.append(person_id)
         db.execute(
-            f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
+            f"UPDATE {table} SET {', '.join(assignments)} WHERE id = ?",
             params,
         )
 
@@ -411,19 +475,79 @@ def _row_text(row, key: str) -> str:
     return str(row[key] or "").strip()
 
 
-def _merge_compatible_name_duplicates(db) -> None:
-    tables = {
-        row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    }
-    if "reminder_people" not in tables:
+def _merge_group_into_keeper(db, table: str, people_cols: set[str], members: list) -> None:
+    keeper = members[0]
+    extras = members[1:]
+    receives = 0
+    works = 0
+    digest = 0
+    chats: list[str] = []
+    emails: list[str] = []
+    color = None
+    allowed = None
+    for row in members:
+        chat = _row_text(row, "telegram_chat_id")
+        if chat and chat not in chats:
+            chats.append(chat)
+        email = _row_text(row, "google_email").lower()
+        if email and email not in emails:
+            emails.append(email)
+        receives = 1 if receives or _row_flag(row, "receives_reminders") else 0
+        works = 1 if works or _row_flag(row, "works_shifts") else 0
+        digest = 1 if digest or _row_flag(row, "daily_digest_enabled") else 0
+        if color is None and _row_text(row, "color"):
+            color = row["color"]
+        if allowed is None and _row_text(row, "shift_allowed"):
+            allowed = row["shift_allowed"]
+    if len(chats) > 1 or len(emails) > 1:
         return
+    assignments = []
+    params: list = []
+    chat = chats[0] if chats else None
+    email = emails[0] if emails else None
+    if "telegram_chat_id" in people_cols and chat is not None:
+        assignments.append("telegram_chat_id = ?")
+        params.append(chat)
+    if "google_email" in people_cols and email is not None:
+        assignments.append("google_email = ?")
+        params.append(email)
+    if "receives_reminders" in people_cols:
+        assignments.append("receives_reminders = ?")
+        params.append(receives)
+    if "works_shifts" in people_cols:
+        assignments.append("works_shifts = ?")
+        params.append(works)
+    if "daily_digest_enabled" in people_cols:
+        assignments.append("daily_digest_enabled = ?")
+        params.append(digest)
+    if "color" in people_cols and color is not None:
+        assignments.append("color = ?")
+        params.append(color)
+    if "shift_allowed" in people_cols and allowed is not None:
+        assignments.append("shift_allowed = ?")
+        params.append(allowed)
+    if assignments:
+        params.append(keeper["id"])
+        db.execute(
+            f"UPDATE {table} SET {', '.join(assignments)} WHERE id = ?",
+            params,
+        )
+    for extra in extras:
+        _remap_person_refs(db, extra["id"], keeper["id"])
+        db.execute(f"DELETE FROM {table} WHERE id = ?", (extra["id"],))
+
+
+def _merge_compatible_name_duplicates(db) -> None:
+    if not _has_people_table(db):
+        return
+    table = _people(db)
     groups: dict[str, list] = {}
-    for row in db.execute("SELECT * FROM reminder_people ORDER BY id"):
+    for row in db.execute(f"SELECT * FROM {table} ORDER BY id"):
         key = normalize_person_name(row["name"])
         if not key:
             continue
         groups.setdefault(key, []).append(row)
-    people_cols = {row[1] for row in db.execute("PRAGMA table_info(reminder_people)")}
+    people_cols = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
     for members in groups.values():
         if len(members) < 2:
             continue
@@ -434,57 +558,38 @@ def _merge_compatible_name_duplicates(db) -> None:
                 chats.append(chat)
         if len(chats) > 1:
             continue
-        keeper = members[0]
-        extras = members[1:]
-        receives = 0
-        works = 0
-        digest = 0
-        chat = chats[0] if chats else None
-        color = None
-        allowed = None
-        for row in members:
-            receives = 1 if receives or _row_flag(row, "receives_reminders") else 0
-            works = 1 if works or _row_flag(row, "works_shifts") else 0
-            digest = 1 if digest or _row_flag(row, "daily_digest_enabled") else 0
-            if color is None and _row_text(row, "color"):
-                color = row["color"]
-            if allowed is None and _row_text(row, "shift_allowed"):
-                allowed = row["shift_allowed"]
-        assignments = []
-        params: list = []
-        if "telegram_chat_id" in people_cols and chat is not None:
-            assignments.append("telegram_chat_id = ?")
-            params.append(chat)
-        if "receives_reminders" in people_cols:
-            assignments.append("receives_reminders = ?")
-            params.append(receives)
-        if "works_shifts" in people_cols:
-            assignments.append("works_shifts = ?")
-            params.append(works)
-        if "daily_digest_enabled" in people_cols:
-            assignments.append("daily_digest_enabled = ?")
-            params.append(digest)
-        if "color" in people_cols and color is not None:
-            assignments.append("color = ?")
-            params.append(color)
-        if "shift_allowed" in people_cols and allowed is not None:
-            assignments.append("shift_allowed = ?")
-            params.append(allowed)
-        if assignments:
-            params.append(keeper["id"])
-            db.execute(
-                f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
-                params,
-            )
-        for extra in extras:
-            _remap_person_refs(db, extra["id"], keeper["id"])
-            db.execute("DELETE FROM reminder_people WHERE id = ?", (extra["id"],))
+        _merge_group_into_keeper(db, table, people_cols, members)
+
+
+def merge_compatible_telegram_duplicates(db) -> None:
+    """ממזג שורות עם אותו מזהה צ׳אט רק אם השמות תואמים. לא מוחק סתירות."""
+    if not _has_people_table(db):
+        return
+    table = _people(db)
+    groups: dict[str, list] = {}
+    for row in db.execute(f"SELECT * FROM {table} ORDER BY id"):
+        chat = _row_text(row, "telegram_chat_id")
+        if not chat:
+            continue
+        groups.setdefault(chat, []).append(row)
+    people_cols = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        names = {normalize_person_name(row["name"]) for row in members}
+        names.discard("")
+        if len(names) > 1:
+            continue
+        _merge_group_into_keeper(db, table, people_cols, members)
 
 
 def _has_normalized_name_duplicates(db) -> bool:
+    if not _has_people_table(db):
+        return False
+    table = _people(db)
     row = db.execute(
-        """
-        SELECT 1 FROM reminder_people
+        f"""
+        SELECT 1 FROM {table}
         GROUP BY lower(trim(name))
         HAVING COUNT(*) > 1
         LIMIT 1
@@ -502,11 +607,9 @@ def ensure_unique_people_names(db) -> None:
     from app.database import _schema_execute, exclusive_schema_transaction
 
     with exclusive_schema_transaction(db):
-        tables = {
-            row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        }
-        if "reminder_people" not in tables:
+        if not _has_people_table(db):
             return
+        table = _people(db)
         _merge_compatible_name_duplicates(db)
         if _has_normalized_name_duplicates(db):
             return
@@ -514,7 +617,7 @@ def ensure_unique_people_names(db) -> None:
             db,
             f"""
             CREATE UNIQUE INDEX IF NOT EXISTS {_PEOPLE_NAME_INDEX}
-            ON reminder_people (lower(trim(name)))
+            ON {table} (lower(trim(name)))
             """,
         )
 
@@ -527,10 +630,15 @@ def _reuse_existing_person(
     receives_reminders,
     works_shifts,
     daily_digest_enabled,
+    google_email=_MISSING,
 ) -> dict:
     existing_chat = existing.get("telegram_chat_id") or None
     if chat_id and existing_chat and str(chat_id) != str(existing_chat):
         raise ValueError(_chat_conflict_message(existing["name"]))
+    incoming_email = None if google_email is _MISSING else clean_google_email(google_email)
+    existing_email = existing.get("google_email") or None
+    if incoming_email and existing_email and incoming_email != existing_email:
+        raise ValueError(_email_conflict_message(existing["name"]))
     incoming_receives, incoming_works = _default_role_flags(
         color, shift_allowed, receives_reminders, works_shifts
     )
@@ -546,6 +654,8 @@ def _reuse_existing_person(
         extras["daily_digest_enabled"] = bool(existing.get("daily_digest_enabled")) or bool(
             _clean_flag(daily_digest_enabled)
         )
+    if google_email is not _MISSING:
+        extras["google_email"] = incoming_email or existing_email
     updated = update_person(
         existing["id"],
         existing["name"],
@@ -567,10 +677,13 @@ def create_person(
     receives_reminders=_MISSING,
     works_shifts=_MISSING,
     daily_digest_enabled=_MISSING,
+    google_email=_MISSING,
 ) -> dict:
     db = get_db()
+    table = _people(db)
     clean_name = _clean_name(name)
     chat_id = _clean_chat_id(telegram_chat_id)
+    email = None if google_email is _MISSING else clean_google_email(google_email)
     existing = find_person_by_normalized_name(
         clean_name,
         exclude_id=None if person_id is None else int(person_id),
@@ -585,8 +698,16 @@ def create_person(
                 receives_reminders,
                 works_shifts,
                 daily_digest_enabled,
+                google_email,
             )
         raise ValueError(_name_conflict_message(existing["name"]))
+    if email:
+        taken = find_person_by_google_email(
+            email,
+            exclude_id=None if person_id is None else int(person_id),
+        )
+        if taken is not None:
+            raise ValueError(_email_conflict_message(taken["name"]))
     color_value, rules_value = _person_color_and_rules(color, shift_allowed)
     receives, works = _default_role_flags(
         color, shift_allowed, receives_reminders, works_shifts
@@ -599,28 +720,29 @@ def create_person(
     try:
         if person_id is None:
             cursor = db.execute(
-                """
-                INSERT INTO reminder_people (
-                    name, telegram_chat_id, color, shift_allowed,
-                    receives_reminders, works_shifts, daily_digest_enabled
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (clean_name, chat_id, color_value, rules_value, receives, works, digest),
-            )
-        else:
-            cursor = db.execute(
-                """
-                INSERT INTO reminder_people (
-                    id, name, telegram_chat_id, color, shift_allowed,
+                f"""
+                INSERT INTO {table} (
+                    name, telegram_chat_id, google_email, color, shift_allowed,
                     receives_reminders, works_shifts, daily_digest_enabled
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (clean_name, chat_id, email, color_value, rules_value, receives, works, digest),
+            )
+        else:
+            cursor = db.execute(
+                f"""
+                INSERT INTO {table} (
+                    id, name, telegram_chat_id, google_email, color, shift_allowed,
+                    receives_reminders, works_shifts, daily_digest_enabled
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     int(person_id),
                     clean_name,
                     chat_id,
+                    email,
                     color_value,
                     rules_value,
                     receives,
@@ -640,7 +762,12 @@ def create_person(
                 receives_reminders,
                 works_shifts,
                 daily_digest_enabled,
+                google_email,
             )
+        if email:
+            taken = find_person_by_google_email(email)
+            if taken is not None:
+                raise ValueError(_email_conflict_message(taken["name"])) from None
         raise ValueError(_name_conflict_message(clean_name)) from None
     db.commit()
     return get_person(cursor.lastrowid)
@@ -656,6 +783,7 @@ def update_person(
     receives_reminders=_MISSING,
     works_shifts=_MISSING,
     daily_digest_enabled=_MISSING,
+    google_email=_MISSING,
 ) -> dict | None:
     if get_person(person_id) is None:
         return None
@@ -663,9 +791,18 @@ def update_person(
     other = find_person_by_normalized_name(clean_name, exclude_id=person_id)
     if other is not None:
         raise ValueError(_name_conflict_message(other["name"]))
+    email = None if google_email is _MISSING else clean_google_email(google_email)
+    if email:
+        taken = find_person_by_google_email(email, exclude_id=person_id)
+        if taken is not None:
+            raise ValueError(_email_conflict_message(taken["name"]))
     db = get_db()
+    table = _people(db)
     assignments = ["name = ?", "telegram_chat_id = ?"]
     params: list = [clean_name, _clean_chat_id(telegram_chat_id)]
+    if google_email is not _MISSING:
+        assignments.append("google_email = ?")
+        params.append(email)
     if color is not _MISSING or shift_allowed is not _MISSING:
         color_value, rules_value = _person_color_and_rules(color, shift_allowed)
         if color is not _MISSING:
@@ -686,13 +823,34 @@ def update_person(
     params.append(person_id)
     try:
         db.execute(
-            f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
+            f"UPDATE {table} SET {', '.join(assignments)} WHERE id = ?",
             params,
         )
     except sqlite3.IntegrityError as exc:
+        if email:
+            taken = find_person_by_google_email(email, exclude_id=person_id)
+            if taken is not None:
+                raise ValueError(_email_conflict_message(taken["name"])) from exc
         raise ValueError(_name_conflict_message(clean_name)) from exc
     db.commit()
     return get_person(person_id)
+
+
+def shift_event_count(person_id: int) -> int:
+    db = get_db()
+    tables = {
+        row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "events" not in tables:
+        return 0
+    cols = {row[1] for row in db.execute("PRAGMA table_info(events)")}
+    if "shift_person_id" not in cols:
+        return 0
+    row = db.execute(
+        "SELECT COUNT(*) FROM events WHERE is_shift = 1 AND shift_person_id = ?",
+        (person_id,),
+    ).fetchone()
+    return int(row[0] if row else 0)
 
 
 def delete_person(person_id: int, *, reassign_to: int | None = None) -> bool:
@@ -700,10 +858,12 @@ def delete_person(person_id: int, *, reassign_to: int | None = None) -> bool:
     if person is None:
         return False
     db = get_db()
+    table = _people(db)
     refs = reminder_recipient_event_ids(person_id)
-    if refs:
+    shifts = shift_event_count(person_id)
+    if refs or shifts:
         if reassign_to is None:
-            raise ValueError(_delete_referenced_message(person["name"], len(refs)))
+            raise ValueError(_delete_referenced_message(person["name"], len(refs), shifts))
         try:
             target_id = int(reassign_to)
         except (TypeError, ValueError) as exc:
@@ -722,7 +882,7 @@ def delete_person(person_id: int, *, reassign_to: int | None = None) -> bool:
                     "UPDATE reminders SET recipient_ids = ? WHERE id = ?",
                     (json.dumps(leftover), row["id"]),
                 )
-    cursor = db.execute("DELETE FROM reminder_people WHERE id = ?", (person_id,))
+    cursor = db.execute(f"DELETE FROM {table} WHERE id = ?", (person_id,))
     db.commit()
     return cursor.rowcount > 0
 
@@ -998,11 +1158,15 @@ def _apply_imported_person_extras(db, person_id: int, person: dict) -> None:
     if "daily_digest_enabled" in person:
         assignments.append("daily_digest_enabled = ?")
         params.append(_clean_flag(person.get("daily_digest_enabled")))
+    if "google_email" in person:
+        assignments.append("google_email = ?")
+        params.append(clean_google_email(person.get("google_email")))
     if not assignments:
         return
     params.append(person_id)
+    table = _people(db)
     db.execute(
-        f"UPDATE reminder_people SET {', '.join(assignments)} WHERE id = ?",
+        f"UPDATE {table} SET {', '.join(assignments)} WHERE id = ?",
         params,
     )
 
@@ -1022,10 +1186,11 @@ def upsert_person_for_import(person: dict, *, replace_ids: bool) -> None:
             raise ValueError("reminder person id must be an integer") from exc
 
     db = get_db()
+    table = _people(db)
     saved_id = None
     by_name = db.execute(
-        """
-        SELECT id FROM reminder_people
+        f"""
+        SELECT id FROM {table}
         WHERE lower(trim(name)) = lower(trim(?))
         ORDER BY id LIMIT 1
         """,
@@ -1034,46 +1199,46 @@ def upsert_person_for_import(person: dict, *, replace_ids: bool) -> None:
     try:
         if person_id is not None:
             existing = db.execute(
-                "SELECT id FROM reminder_people WHERE id = ?",
+                f"SELECT id FROM {table} WHERE id = ?",
                 (person_id,),
             ).fetchone()
             if by_name and by_name["id"] != person_id:
                 raise ValueError(_name_conflict_message(name))
             if existing:
                 db.execute(
-                    "UPDATE reminder_people SET name = ?, telegram_chat_id = ? WHERE id = ?",
+                    f"UPDATE {table} SET name = ?, telegram_chat_id = ? WHERE id = ?",
                     (name, chat_id, person_id),
                 )
                 saved_id = person_id
             else:
                 db.execute(
-                    "INSERT INTO reminder_people (id, name, telegram_chat_id) VALUES (?, ?, ?)",
+                    f"INSERT INTO {table} (id, name, telegram_chat_id) VALUES (?, ?, ?)",
                     (person_id, name, chat_id),
                 )
                 saved_id = person_id
         elif replace_ids:
             if by_name:
                 db.execute(
-                    "UPDATE reminder_people SET telegram_chat_id = ? WHERE id = ?",
+                    f"UPDATE {table} SET telegram_chat_id = ? WHERE id = ?",
                     (chat_id, by_name["id"]),
                 )
                 saved_id = by_name["id"]
             else:
                 cursor = db.execute(
-                    "INSERT INTO reminder_people (name, telegram_chat_id) VALUES (?, ?)",
+                    f"INSERT INTO {table} (name, telegram_chat_id) VALUES (?, ?)",
                     (name, chat_id),
                 )
                 saved_id = cursor.lastrowid
         else:
             if by_name:
                 db.execute(
-                    "UPDATE reminder_people SET telegram_chat_id = ? WHERE id = ?",
+                    f"UPDATE {table} SET telegram_chat_id = ? WHERE id = ?",
                     (chat_id, by_name["id"]),
                 )
                 saved_id = by_name["id"]
             else:
                 cursor = db.execute(
-                    "INSERT INTO reminder_people (name, telegram_chat_id) VALUES (?, ?)",
+                    f"INSERT INTO {table} (name, telegram_chat_id) VALUES (?, ?)",
                     (name, chat_id),
                 )
                 saved_id = cursor.lastrowid
@@ -1084,7 +1249,8 @@ def upsert_person_for_import(person: dict, *, replace_ids: bool) -> None:
 
 
 def delete_all_people() -> None:
-    get_db().execute("DELETE FROM reminder_people")
+    db = get_db()
+    db.execute(f"DELETE FROM {_people(db)}")
 
 
 def delete_all_reminders() -> None:

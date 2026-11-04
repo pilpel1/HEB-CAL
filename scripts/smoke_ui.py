@@ -237,6 +237,7 @@ def check_events_list(page: Page, base: str, snap: dict) -> None:
 
     page.goto(base + "/settings")
     expect(page.locator("#settingsBackup")).to_be_visible()
+    page.locator("#settingsBackup .settings-section-toggle").click()
     with page.expect_download() as dl:
         page.click("#exportEventsBtn")
     path = dl.value.path()

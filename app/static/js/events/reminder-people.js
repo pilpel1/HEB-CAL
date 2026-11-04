@@ -201,6 +201,10 @@ function resetReminderPersonForm() {
 function startEditReminderPerson(person) {
     document.getElementById('reminderPersonId').value = String(person.id);
     document.getElementById('reminderPersonName').value = person.name || '';
+    const emailInput = document.getElementById('reminderPersonEmail');
+    if (emailInput) {
+        emailInput.value = person.google_email || '';
+    }
     document.getElementById('reminderPersonChat').value = person.telegram_chat_id || '';
     document.getElementById('reminderPersonSave').textContent = 'שמירה';
     document.getElementById('reminderPersonCancel').hidden = false;
@@ -265,10 +269,17 @@ function renderReminderPeople(people) {
         chat.className = `reminder-person-status small ${status.linked ? 'is-linked' : 'is-missing'}`;
         chat.textContent = status.text;
         text.append(name, chat);
+        if (person.google_email) {
+            const email = document.createElement('div');
+            email.className = 'reminder-person-status small';
+            email.textContent = person.google_email;
+            text.append(email);
+        }
         const flags = document.createElement('div');
         flags.className = 'reminder-person-flags';
         appendPersonRoleSwitch(flags, person, 'receives_reminders', 'תזכורות');
         appendPersonRoleSwitch(flags, person, 'works_shifts', 'משמרות');
+        appendPersonRoleSwitch(flags, person, 'daily_digest_enabled', 'סיכום בוקר');
         text.append(flags);
         const actions = document.createElement('div');
         actions.className = 'd-flex gap-2';
@@ -328,6 +339,7 @@ async function saveReminderPerson(event) {
     event.preventDefault();
     const name = document.getElementById('reminderPersonName').value.trim();
     const chatId = cleanChatId(document.getElementById('reminderPersonChat').value);
+    const emailRaw = (document.getElementById('reminderPersonEmail')?.value || '').trim();
     if (!name) {
         setReminderPersonError('חסר שם');
         return;
@@ -340,6 +352,7 @@ async function saveReminderPerson(event) {
     const payload = {
         name,
         telegram_chat_id: chatId || null,
+        google_email: emailRaw || null,
         receives_reminders: true,
     }
     const response = await fetch(id ? `/api/reminder-people/${id}` : '/api/reminder-people', {
@@ -376,6 +389,8 @@ function personWritePayload(person, extra) {
         shift_allowed: person.shift_allowed,
         receives_reminders: person.receives_reminders,
         works_shifts: person.works_shifts,
+        daily_digest_enabled: person.daily_digest_enabled,
+        google_email: person.google_email || null,
         ...extra,
     };
 }
@@ -462,6 +477,9 @@ function suggestSimilarReminderPerson() {
     if (person.works_shifts) {
         roles.push('משמרות');
     }
+    if (person.daily_digest_enabled) {
+        roles.push('סיכום בוקר');
+    }
     const bits = [status.text];
     if (roles.length) {
         bits.unshift(roles.join(' ו'));
@@ -489,9 +507,15 @@ async function sendDeleteReminderPerson(person, reassignTo) {
 }
 
 async function deleteReminderPerson(person) {
-    const question = person.works_shifts
-        ? `למחוק את ${person.name}? גם כללי המשמרות יימחקו.`
-        : `למחוק את ${person.name}?`;
+    const bits = [];
+    if (person.receives_reminders) {
+        bits.push('תזכורות');
+    }
+    if (person.works_shifts) {
+        bits.push('משמרות');
+    }
+    const extra = bits.length ? ` גם ${bits.join(' ו')} יימחקו.` : '';
+    const question = `למחוק את ${person.name}?${extra}`;
     if (!confirm(question)) {
         return;
     }

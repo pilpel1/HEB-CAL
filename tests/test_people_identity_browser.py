@@ -53,7 +53,7 @@ def test_settings_lists_all_people_and_reuses_name(live_server, client):
         expect(page.locator("#reminderPeopleList")).to_contain_text("דני")
         expect(page.locator("#reminderPeopleList")).to_contain_text("מחובר לטלגרם")
         expect(page.locator("#reminderPeopleList")).to_contain_text("אין קישור לטלגרם")
-        expect(page.locator("#reminderPeopleList .reminder-person-flag")).to_have_count(4)
+        expect(page.locator("#reminderPeopleList .reminder-person-flag")).to_have_count(6)
 
         page.fill("#reminderPersonName", "שירה")
         expect(page.locator("#reminderPersonSuggest")).to_be_visible()

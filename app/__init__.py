@@ -23,6 +23,9 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # אתחול בסיס הנתונים
 with app.app_context():
     init_db()
+    from app.updates.service import recover_on_boot
+
+    recover_on_boot()
 
 # רישום פונקציית הסגירה
 app.teardown_appcontext(close_db)
