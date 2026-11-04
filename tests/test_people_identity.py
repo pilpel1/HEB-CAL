@@ -237,6 +237,8 @@ def test_people_ui_lists_everyone_and_warns_about_chat(client):
     assert "telegramUnlinkConfirm" in people_js
     assert "דורש חיבור לטלגרם" in people_js
     assert "בטוח שרוצים לנתק את הטלגרם של" in people_js
+    assert "סיכום הבוקר ייכבה ותזכורות לא יגיעו בטלגרם (רק בדפדפן)." in people_js
+    assert "ייכבו" not in people_js
     assert "telegramLinkStatus" in people_js
     assert "suggestSimilarReminderPerson" in people_js
     assert "reassign_to" in people_js

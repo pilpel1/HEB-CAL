@@ -225,18 +225,7 @@ function highlightReminderPersonRow(personId) {
 
 function telegramUnlinkConfirm(person) {
     const name = (person && person.name) || 'האדם';
-    const features = [];
-    if (person && person.receives_reminders) {
-        features.push('תזכורות');
-    }
-    if (person && person.daily_digest_enabled) {
-        features.push('סיכום בוקר');
-    }
-    let question = `בטוח שרוצים לנתק את הטלגרם של ${name}?`;
-    if (features.length) {
-        question += ` ${features.join(' ו')} ייכבו`;
-    }
-    return question;
+    return `בטוח שרוצים לנתק את הטלגרם של ${name}? סיכום הבוקר ייכבה ותזכורות לא יגיעו בטלגרם (רק בדפדפן).`;
 }
 
 function appendPersonRoleSwitch(parent, person, flag, label) {

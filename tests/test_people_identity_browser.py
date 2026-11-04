@@ -165,7 +165,7 @@ def test_unlink_telegram_asks_and_turns_digest_off(live_server, client):
 
         def _accept(dialog):
             assert "בטוח שרוצים לנתק את הטלגרם של נועה" in dialog.message
-            assert "תזכורות וסיכום בוקר ייכבו" in dialog.message
+            assert "סיכום הבוקר ייכבה ותזכורות לא יגיעו בטלגרם (רק בדפדפן)." in dialog.message
             dialog.accept()
 
         page.once("dialog", _accept)

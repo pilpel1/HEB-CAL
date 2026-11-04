@@ -790,6 +790,7 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
     conflict = _press(app, picker, "דני")
     ask_move = _press(app, conflict, "העברה")
     assert "בטוח שרוצים לנתק את הטלגרם של נועה" in ask_move["text"]
+    assert "סיכום הבוקר ייכבה ותזכורות לא יגיעו בטלגרם (רק בדפדפן)." in ask_move["text"]
     stayed = _press(app, ask_move, "לא")
     with app.app_context():
         from app.reminders.repository import get_person
@@ -817,7 +818,7 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
 
     ask_unlink = _press(app, created, "ניתוק רינה")
     assert "בטוח שרוצים לנתק את הטלגרם של רינה" in ask_unlink["text"]
-    assert "תזכורות" in ask_unlink["text"]
+    assert "תזכורות לא יגיעו בטלגרם (רק בדפדפן)" in ask_unlink["text"]
     cancelled = _press(app, ask_unlink, "לא")
     with app.app_context():
         from app.reminders.repository import list_people
@@ -1457,7 +1458,7 @@ def test_bot_unlink_turns_digest_off_after_confirm(app):
     settings = _go(app, _msg("/settings"))
     ask = _press(app, settings, "ניתוק דני")
     assert "בטוח שרוצים לנתק את הטלגרם של דני" in ask["text"]
-    assert "תזכורות וסיכום בוקר ייכבו" in ask["text"]
+    assert "סיכום הבוקר ייכבה ותזכורות לא יגיעו בטלגרם (רק בדפדפן)." in ask["text"]
     cancelled = _press(app, ask, "לא")
     with app.app_context():
         from app.reminders.repository import get_person

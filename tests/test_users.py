@@ -293,15 +293,13 @@ def test_import_digest_without_chat_is_coerced_off(client, app):
     assert people[0]["receives_reminders"] is True
 
 
-def test_unlink_confirm_copy_mentions_enabled_features():
-    from app.users.telegram import unlink_telegram_confirm
+def test_unlink_confirm_copy_keeps_browser_reminders():
+    from app.users.telegram import UNLINK_CONFIRM_CONSEQUENCES, unlink_telegram_confirm
 
-    both = unlink_telegram_confirm(
-        "נועה", receives_reminders=True, daily_digest_enabled=True
+    text = unlink_telegram_confirm("נועה")
+    assert text == (
+        "בטוח שרוצים לנתק את הטלגרם של נועה? "
+        "סיכום הבוקר ייכבה ותזכורות לא יגיעו בטלגרם (רק בדפדפן)."
     )
-    assert both == "בטוח שרוצים לנתק את הטלגרם של נועה? תזכורות וסיכום בוקר ייכבו"
-    digest_only = unlink_telegram_confirm(
-        "דני", receives_reminders=False, daily_digest_enabled=True
-    )
-    assert "סיכום בוקר" in digest_only
-    assert "תזכורות" not in digest_only
+    assert text.endswith(UNLINK_CONFIRM_CONSEQUENCES)
+    assert "ייכבו" not in text
