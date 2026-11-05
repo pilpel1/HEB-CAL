@@ -5,32 +5,15 @@ from flask import jsonify, make_response, request
 
 from . import api
 from app.database import (
-    create_event,
-    delete_event,
     export_data,
     get_all_events,
-    get_db,
     get_event,
     import_data,
-    update_event,
-    upsert_exception,
 )
-from app.reminders.repository import clear_reminder_delivery, people_ids, replace_event_reminders
-from app.reminders.schedule import OffsetError, parse_reminders_payload, reminder_timezone
-from app.gcal.repository import READONLY_MESSAGE, is_gcal_event
-from app.services.event_payload import EventPayloadError, clean_event_write
-from app.services.shifts import ShiftError, resolve_manual_shift, shifts_enabled
-from app.services.recurrence import (
-    RecurrenceError,
-    clean_recurrence,
-    expand_event,
-    is_recurring,
-    is_series_date,
-    recurrence_fields,
-)
-
-
-REQUIRED_EVENT_FIELDS = ("title", "gregorian_date", "hebrew_date")
+from app.reminders.schedule import reminder_timezone
+from app.services import event_ops
+from app.services.event_ops import EventOpError
+from app.services.recurrence import RecurrenceError, expand_event
 
 
 def _export_timestamp():
@@ -46,19 +29,8 @@ def _get_payload():
     return request.get_json(silent=True) or {}
 
 
-def _validate_event_payload(data):
-    missing_fields = [field for field in REQUIRED_EVENT_FIELDS if not data.get(field)]
-    if missing_fields:
-        return (
-            jsonify({"error": f"Missing required fields: {missing_fields}", "success": False}),
-            400,
-        )
-    try:
-        cleaned = clean_event_write(data)
-    except EventPayloadError as exc:
-        return jsonify({"error": str(exc), "success": False}), 400
-    data.update(cleaned)
-    return None
+def _op_error(exc: EventOpError):
+    return jsonify({"error": exc.message, "success": False}), exc.status
 
 
 def _parse_range_date(value):
@@ -69,80 +41,6 @@ def _parse_range_date(value):
             jsonify({"error": "Invalid date format. Expected YYYY-MM-DD", "success": False}),
             400,
         )
-
-
-def _recurrence_from_payload(data, gregorian_date):
-    """'keep' אם המפתח לא נשלח, None אם אין חזרה, dict אם יש."""
-    if "recurrence_freq" not in data and not isinstance(data.get("recurrence"), dict):
-        return "keep", None
-    anchor = datetime.strptime(gregorian_date, "%Y-%m-%d").date()
-    source = data["recurrence"] if isinstance(data.get("recurrence"), dict) and "recurrence_freq" not in data else data
-    if "recurrence_freq" in data:
-        freq = data.get("recurrence_freq")
-        calendar_name = data.get("recurrence_calendar")
-        until = data.get("recurrence_until")
-        count = data.get("recurrence_count")
-    else:
-        freq = source.get("freq")
-        calendar_name = source.get("calendar")
-        until = source.get("until")
-        count = source.get("count")
-    try:
-        return clean_recurrence(freq, calendar_name, until, count, anchor), None
-    except RecurrenceError as exc:
-        return None, (jsonify({"error": str(exc), "success": False}), 400)
-
-
-def _identity_changed(old, gregorian_date, rule):
-    if (old.get("gregorian_date") or "") != gregorian_date:
-        return True
-    old_rule = recurrence_fields(old)
-    new_freq = None if rule is None or rule == "keep" else rule.get("recurrence_freq")
-    new_cal = None if rule is None or rule == "keep" else rule.get("recurrence_calendar")
-    if rule == "keep":
-        return False
-    return old_rule["recurrence_freq"] != new_freq or old_rule["recurrence_calendar"] != new_cal
-
-
-def _serialize_rows(rows):
-    return [dict(row) for row in rows]
-
-
-def _manual_shift(data):
-    """('keep' | tuple, data, error response).
-
-    משמרת ידנית לא נבדקת מול הימים המותרים. בלי המפתחות — לא נוגעים בדגל.
-    """
-    try:
-        resolved = resolve_manual_shift(data)
-    except ShiftError as exc:
-        return "keep", data, (jsonify({"error": str(exc), "success": False}), 400)
-    if resolved is None:
-        return "keep", data, None
-    if not resolved["is_shift"]:
-        return (0, None, None), data, None
-    adjusted = dict(data)
-    # הכותרת נשארת מהטופס. סוג המשמרת נשמר לחוד ב-shift_label.
-    adjusted["color"] = resolved["color"]
-    adjusted["time"] = None
-    adjusted["end_date"] = None
-    adjusted["recurrence_freq"] = None
-    return (
-        (1, resolved["shift_person_id"], resolved["shift_label"]),
-        adjusted,
-        None,
-    )
-
-
-def _parsed_reminders(data):
-    """None = המפתח לא נשלח (בעדכון משאירים את הקיים). שגיאה = tuple של תשובה."""
-    if "reminders" not in data:
-        return None, None
-    try:
-        parsed = parse_reminders_payload(data.get("reminders"), people_ids(role="reminders"))
-    except OffsetError as exc:
-        return None, (jsonify({"error": str(exc), "success": False}), 400)
-    return parsed, None
 
 
 def _load_import_payload():
@@ -179,59 +77,7 @@ def get_events():
         return end_error
     if end < start:
         return jsonify({"error": "to is before from", "success": False}), 400
-
-    rows = []
-    for event in get_all_events():
-        try:
-            rows.extend(expand_event(event, event.get("exceptions") or [], start, end))
-        except RecurrenceError:
-            continue
-    return jsonify(rows)
-
-
-def _occurrence_payload(event, occurrence_date):
-    """מופע אחד לעריכה, בתוספת ``series`` (השורת אב) כדי שאפשר לעבור ל"כל הסדרה"."""
-    if not is_recurring(event):
-        return event
-    try:
-        original = date.fromisoformat(occurrence_date)
-    except ValueError:
-        return None
-    if not is_series_date(event, original):
-        return None
-    # המופע יכול היה לזוז לפני או אחרי תאריך המקור
-    window_start = original
-    window_end = original
-    for ex in event.get("exceptions") or []:
-        if (ex.get("original_date") or "")[:10] != occurrence_date:
-            continue
-        for key in ("gregorian_date", "end_date"):
-            raw = ex.get(key)
-            if not raw:
-                continue
-            try:
-                moved = date.fromisoformat(raw[:10])
-            except ValueError:
-                continue
-            window_start = min(window_start, moved)
-            window_end = max(window_end, moved)
-    matches = [
-        row for row in expand_event(event, event.get("exceptions") or [], window_start, window_end)
-        if row.get("occurrence_date") == occurrence_date
-    ]
-    if not matches:
-        # נמחק
-        return None
-    payload = matches[0]
-    payload["series"] = {
-        key: event.get(key)
-        for key in (
-            "id", "title", "gregorian_date", "hebrew_date", "time", "description",
-            "end_date", "color", "recurrence_freq", "recurrence_calendar",
-            "recurrence_until", "recurrence_count", "reminders",
-        )
-    }
-    return payload
+    return jsonify(event_ops.list_range(start, end))
 
 
 @api.route('/events/<int:event_id>', methods=['GET'])
@@ -241,7 +87,7 @@ def get_single_event(event_id):
         return jsonify({"error": "Event not found"}), 404
     occurrence_date = (request.args.get("occurrence_date") or "").strip()
     if occurrence_date:
-        payload = _occurrence_payload(event, occurrence_date)
+        payload = event_ops.occurrence_payload(event, occurrence_date)
         if payload is None:
             return jsonify({"error": "Occurrence not found"}), 404
         return jsonify(payload)
@@ -250,175 +96,37 @@ def get_single_event(event_id):
 
 @api.route('/events', methods=['POST'])
 def add_event():
-    data = _get_payload()
-    validation_error = _validate_event_payload(data)
-    if validation_error:
-        return validation_error
-
-    reminders, reminder_error = _parsed_reminders(data)
-    if reminder_error:
-        return reminder_error
-
-    shift, data, shift_error = _manual_shift(data)
-    if shift_error:
-        return shift_error
-
-    rule, recurrence_error = _recurrence_from_payload(data, data["gregorian_date"])
-    if recurrence_error:
-        return recurrence_error
-    if rule == "keep" or (shift != "keep" and shift[0]):
-        rule = None
-    if shift != "keep" and shift[0] and not shifts_enabled():
-        return jsonify({"error": "המשמרות כבויות", "success": False}), 400
-
-    event_id = create_event(
-        title=data['title'],
-        gregorian_date=data['gregorian_date'],
-        hebrew_date=data['hebrew_date'],
-        time=data.get('time') or None,
-        description=data.get('description', ''),
-        end_date=data.get('end_date'),
-        color=data.get('color'),
-        recurrence=rule,
-        shift=None if shift == "keep" else shift,
-    )
-
-    if event_id:
-        replace_event_reminders(event_id, reminders or [])
-        return jsonify({"success": True, "id": event_id})
-
-    return jsonify({"error": "Failed to create event", "success": False}), 400
+    try:
+        event_id = event_ops.create(_get_payload())
+    except EventOpError as exc:
+        return _op_error(exc)
+    return jsonify({"success": True, "id": event_id})
 
 
 @api.route('/events/<int:event_id>', methods=['PUT'])
 def update_single_event(event_id):
-    data = _get_payload()
-    validation_error = _validate_event_payload(data)
-    if validation_error:
-        return validation_error
-
-    reminders, reminder_error = _parsed_reminders(data)
-    if reminder_error:
-        return reminder_error
-
-    existing = get_event(event_id)
-    if existing is None:
-        return jsonify({"error": "Event not found", "success": False}), 404
-    if is_gcal_event(existing):
-        return jsonify({"error": READONLY_MESSAGE, "success": False}), 403
-
-    scope = (data.get("scope") or "all").strip()
-    if scope == "occurrence" and "reminders" in data:
-        return jsonify({"error": "תזכורות נשמרות על כל הסדרה", "success": False}), 400
-    if scope == "occurrence" and data.get("is_shift"):
-        return jsonify({"error": "משמרת נשמרת על האירוע כולו", "success": False}), 400
-    if scope == "occurrence":
-        if not is_recurring(existing):
-            return jsonify({"error": "לאירוע אין חזרה", "success": False}), 400
-        occurrence_date = (data.get("occurrence_date") or "").strip()
-        try:
-            original = date.fromisoformat(occurrence_date)
-        except ValueError:
-            return jsonify({"error": "חסר תאריך מופע", "success": False}), 400
-        if not is_series_date(existing, original):
-            return jsonify({"error": "התאריך לא מופיע בסדרה", "success": False}), 400
-        end_date = data.get("end_date") or None
-        if end_date:
-            try:
-                if date.fromisoformat(end_date) < date.fromisoformat(data["gregorian_date"]):
-                    return jsonify({
-                        "error": "תאריך הסיום לא יכול להיות לפני ההתחלה",
-                        "success": False,
-                    }), 400
-            except ValueError:
-                return jsonify({"error": "Invalid date format. Expected YYYY-MM-DD", "success": False}), 400
-        upsert_exception(
-            event_id,
-            occurrence_date,
-            "edited",
-            {
-                "title": data["title"],
-                "gregorian_date": data["gregorian_date"],
-                "hebrew_date": data["hebrew_date"],
-                "time": data.get("time") or None,
-                "description": data.get("description", ""),
-                "end_date": end_date,
-                "color": data.get("color"),
-            },
-        )
+    try:
+        result = event_ops.update(event_id, _get_payload())
+    except EventOpError as exc:
+        return _op_error(exc)
+    if result["scope"] == "occurrence":
         return jsonify({"success": True, "scope": "occurrence"})
-
-    if scope != "all":
-        return jsonify({"error": "scope חייב להיות all או occurrence", "success": False}), 400
-
-    shift, data, shift_error = _manual_shift(data)
-    if shift_error:
-        return shift_error
-    marking_shift = shift != "keep" and shift[0]
-
-    rule, recurrence_error = _recurrence_from_payload(data, data["gregorian_date"])
-    if recurrence_error:
-        return recurrence_error
-    if marking_shift:
-        rule = None
-    if marking_shift and not shifts_enabled():
-        return jsonify({"error": "המשמרות כבויות", "success": False}), 400
-
-    if (
-        (existing.get("gregorian_date") or "") != data["gregorian_date"]
-        or (existing.get("time") or None) != (data.get("time") or None)
-    ):
-        clear_reminder_delivery(event_id)
-
-    clear_exceptions = _identity_changed(existing, data["gregorian_date"], rule) or marking_shift
-    success = update_event(
-        event_id,
-        data['title'],
-        data['gregorian_date'],
-        data['hebrew_date'],
-        data.get('time') or None,
-        data.get('description', ''),
-        data.get('end_date'),
-        data.get('color'),
-        recurrence=rule,
-        clear_exceptions=clear_exceptions,
-        shift=shift,
-    )
-
-    if success:
-        if reminders is not None:
-            replace_event_reminders(event_id, reminders)
-        return jsonify({"success": True})
-
-    return jsonify({"error": "Failed to update event", "success": False}), 400
+    return jsonify({"success": True})
 
 
 @api.route('/events/<int:event_id>', methods=['DELETE'])
 def delete_single_event(event_id):
-    scope = (request.args.get("scope") or "all").strip()
-    existing = get_event(event_id)
-    if is_gcal_event(existing):
-        return jsonify({"error": READONLY_MESSAGE, "success": False}), 403
+    try:
+        scope = event_ops.delete(
+            event_id,
+            request.args.get("scope") or "all",
+            request.args.get("occurrence_date") or "",
+        )
+    except EventOpError as exc:
+        return _op_error(exc)
     if scope == "occurrence":
-        if existing is None:
-            return jsonify({"error": "Event not found", "success": False}), 404
-        if not is_recurring(existing):
-            return jsonify({"error": "לאירוע אין חזרה", "success": False}), 400
-        occurrence_date = (request.args.get("occurrence_date") or "").strip()
-        try:
-            original = date.fromisoformat(occurrence_date)
-        except ValueError:
-            return jsonify({"error": "חסר תאריך מופע", "success": False}), 400
-        if not is_series_date(existing, original):
-            return jsonify({"error": "התאריך לא מופיע בסדרה", "success": False}), 400
-        upsert_exception(event_id, occurrence_date, "deleted", {"gregorian_date": occurrence_date})
         return jsonify({"success": True, "scope": "occurrence"})
-    if scope != "all":
-        return jsonify({"error": "scope חייב להיות all או occurrence", "success": False}), 400
-    success = delete_event(event_id)
-    if success:
-        return jsonify({"success": True})
-    return jsonify({"error": "Failed to delete event", "success": False}), 404
+    return jsonify({"success": True})
 
 
 def _text_matches(value, needle):
