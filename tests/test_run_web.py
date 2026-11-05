@@ -1,9 +1,12 @@
 """יורש LISTEN_FDS בבטחה, בלי פורט 0 ובלי סריקה."""
 from __future__ import annotations
 
+import errno
 import importlib.util
 import os
+import signal
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -125,6 +128,149 @@ def test_serve_on_inherited_listen_fd():
         body = _wait_http(f"http://127.0.0.1:{port}/")
         assert body == b"ok"
     finally:
+        listen.close()
+
+
+_CHILD_SERVE = r"""
+import os
+import sys
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+
+repo = Path(sys.argv[1])
+marker = sys.argv[2].encode("ascii")
+src_fd = int(sys.argv[3])
+if src_fd != 3:
+    os.dup2(src_fd, 3)
+os.environ["LISTEN_FDS"] = "1"
+os.environ["LISTEN_PID"] = str(os.getpid())
+spec = spec_from_file_location("hebcal_run_web_child", repo / "scripts" / "run_web.py")
+mod = module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+def app(environ, start_response):
+    start_response("200 OK", [("Content-Type", "text/plain; charset=utf-8")])
+    return [marker]
+
+fd = mod.inherited_listen_fd()
+if fd is None:
+    raise SystemExit("no inherited listen fd")
+mod.serve(app, fd=fd)
+"""
+
+
+def _kill_proc(proc: subprocess.Popen | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=2)
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        try:
+            proc.kill()
+            proc.wait(timeout=2)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            pass
+
+
+def _spawn_inherited_child(listen: socket.socket, marker: str, log_path: Path) -> subprocess.Popen:
+    listen_fd = listen.fileno()
+    handle = open(log_path, "ab")
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-c", _CHILD_SERVE, str(REPO), marker, str(listen_fd)],
+            pass_fds=(listen_fd,),
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            close_fds=True,
+            cwd=str(REPO),
+        )
+    finally:
+        handle.close()
+    return proc
+
+
+def test_parent_listen_socket_queues_across_child_restart(tmp_path):
+    """הסוקט אצל ההורה נשאר כשהילד מת; חיבור ברווח נכנס לתור, לא ECONNREFUSED."""
+    if os.name != "posix":
+        pytest.skip("socket activation is a Linux systemd path")
+
+    listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listen.bind(("127.0.0.1", 0))
+    listen.listen(16)
+    _host, port = listen.getsockname()
+    first = None
+    second = None
+    try:
+        first = _spawn_inherited_child(listen, "first", tmp_path / "first.log")
+        try:
+            warmup = _wait_http(f"http://127.0.0.1:{port}/")
+        except AssertionError:
+            log = (tmp_path / "first.log").read_bytes()
+            raise AssertionError(
+                f"child {first.pid} poll={first.poll()} log={log!r}"
+            ) from None
+        assert warmup == b"first"
+        _kill_proc(first)
+        assert first.poll() is not None
+
+        accepting = listen.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN)
+        assert accepting
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            probe.bind(("127.0.0.1", port))
+            raise AssertionError("listen port was released after child exit")
+        except OSError as exc:
+            assert exc.errno in {errno.EADDRINUSE, errno.EACCES}
+        finally:
+            probe.close()
+
+        result: dict = {}
+        connected = threading.Event()
+
+        def _queued_client() -> None:
+            try:
+                client = socket.create_connection(("127.0.0.1", port), timeout=3)
+            except OSError as exc:
+                result["err"] = exc
+                connected.set()
+                return
+            connected.set()
+            try:
+                client.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+                client.settimeout(8)
+                chunks = []
+                while True:
+                    buf = client.recv(4096)
+                    if not buf:
+                        break
+                    chunks.append(buf)
+                result["data"] = b"".join(chunks)
+            except OSError as exc:
+                result["err"] = exc
+            finally:
+                client.close()
+
+        thread = threading.Thread(target=_queued_client, daemon=True)
+        thread.start()
+        assert connected.wait(4), result
+        assert not isinstance(result.get("err"), ConnectionRefusedError), result
+        assert "data" not in result
+
+        second = _spawn_inherited_child(listen, "second", tmp_path / "second.log")
+        thread.join(8)
+        assert not thread.is_alive(), result
+        assert "err" not in result, result
+        body = result.get("data") or b""
+        assert b"second" in body
+        assert b"first" not in body
+        assert _wait_http(f"http://127.0.0.1:{port}/") == b"second"
+    finally:
+        _kill_proc(first)
+        _kill_proc(second)
         listen.close()
 
 

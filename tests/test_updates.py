@@ -388,6 +388,12 @@ def test_flow_success_and_rollback_paths():
     assert "checkout_sha" in order
     restored_at = order.index("restore_database")
     assert "restart" in order[restored_at:]
+    # systemd-run: ה-runner שורד, wait_healthy רץ. יחידות חדשות לפני הריסטארט,
+    # ושחזור יחידות לפני הריסטארט של החזרה לאחור — בלי להשאיר socket יתום.
+    restarts = [i for i, name in enumerate(order) if name == "restart"]
+    assert len(restarts) >= 2
+    assert order.index("install_runtime_units") < restarts[0]
+    assert restarts[0] < order.index("restore_units") < restarts[1]
 
     packages = FakeOps(fail_at="pip_install")
     execute_update(packages, Plan("git", "v1.2.0", "1.2.0"))

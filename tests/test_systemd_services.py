@@ -629,6 +629,59 @@ def test_unit_backup_restore_drops_socket_added_after_upgrade(tmp_path, monkeypa
     assert "gisim" not in joined
     assert "daemon-reload" in joined
 
+    def _idx(needle):
+        for i, args in enumerate(argv_log):
+            if needle in args:
+                return i
+        raise AssertionError(needle, argv_log)
+
+    assert _idx("heb-cal-web.service") < _idx("heb-cal-web.socket")
+    web_stop = next(a for a in argv_log if "heb-cal-web.service" in a and "stop" in a)
+    assert "--no-block" not in web_stop
+    assert "heb-cal-worker.service" in web_stop
+
+
+def test_restore_units_keeps_socket_when_it_was_backed_up(tmp_path, monkeypatch):
+    from app.updates import units as unitmod
+
+    unit_dir = tmp_path / "units"
+    unit_dir.mkdir()
+    repo = tmp_path / "HEB-CAL"
+    repo.mkdir()
+    (repo / "data").mkdir()
+    (repo / "data" / "instance.env").write_text(
+        "HEB_CAL_INSTANCE_NAME=heb-cal\nHEB_CAL_PORT=5000\n",
+        encoding="utf-8",
+    )
+    (unit_dir / "heb-cal-web.service").write_text(f"WorkingDirectory={repo}\n", encoding="utf-8")
+    (unit_dir / "heb-cal-worker.service").write_text(f"WorkingDirectory={repo}\n", encoding="utf-8")
+    (unit_dir / "heb-cal-web.socket").write_text("ListenStream=127.0.0.1:5000\n", encoding="utf-8")
+    monkeypatch.setenv("HEB_CAL_UNIT_DIR", str(unit_dir))
+    monkeypatch.delenv("HEB_CAL_INSTANCE_NAME", raising=False)
+    argv_log = []
+
+    def fake_run(args, **kwargs):
+        argv_log.append(args)
+
+        class Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Proc()
+
+    monkeypatch.setattr(unitmod, "run_argv", fake_run)
+    backup = tmp_path / "unit-backup"
+    saved = unitmod.backup_instance_units(repo, backup)
+    (unit_dir / "heb-cal-web.service").write_text("CHANGED\n", encoding="utf-8")
+    unitmod.restore_instance_units(repo, saved)
+    assert "WorkingDirectory=" in (unit_dir / "heb-cal-web.service").read_text(encoding="utf-8")
+    assert (unit_dir / "heb-cal-web.socket").is_file()
+    joined = " ".join(" ".join(a) for a in argv_log)
+    assert "daemon-reload" in joined
+    assert "stop" not in joined
+    assert "disable" not in joined
+
 
 def test_install_runtime_units_calls_units_only(tmp_path, monkeypatch):
     from app.updates import units as unitmod

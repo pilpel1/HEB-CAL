@@ -48,38 +48,45 @@ def backup_instance_units(repo_root: Path, dest_dir: Path) -> Path | None:
 
 
 def restore_instance_units(repo_root: Path, backup_dir: Path | None) -> None:
-    """מחזיר יחידות מהגיבוי, ומוחק socket שנוסף ולא היה קודם."""
+    """מחזיר יחידות מהגיבוי, ומוחק socket שנוסף ולא היה קודם.
+
+    בשדרוג הראשון ל-socket: עוצרים web+worker (חוסם) *לפני* הסוקט, אחר כך
+    משחזרים את קבצי היחידה הישנים. בלי זה ה-fd נשאר אצל התהליך החדש, הסוקט
+    מנותק ב-systemd, ו-flask הישן נכשל ב-EADDRINUSE אחרי daemon-reload.
+    """
     base = user_units_dir()
-    names = instance_unit_names(repo_root)
-    backed = set()
+    web_name, worker_name, socket_name = instance_unit_names(repo_root)
+    names = (web_name, worker_name, socket_name)
+    backed: dict[str, Path] = {}
     has_backup = backup_dir is not None and Path(backup_dir).is_dir()
     if has_backup:
-        base.mkdir(parents=True, exist_ok=True)
         for path in Path(backup_dir).iterdir():
-            if not path.is_file() or path.name not in names:
-                continue
-            shutil.copy2(path, base / path.name)
-            backed.add(path.name)
-    socket_name = socket_filename(repo_root)
+            if path.is_file() and path.name in names:
+                backed[path.name] = path
     extra = base / socket_name
-    dropped_socket = False
-    if socket_name not in backed:
+    drop_socket = socket_name not in backed
+    if drop_socket:
         if not has_backup and not extra.is_file() and not systemd_user_units_installed(repo_root):
             return
         env = systemd_user_env()
-        for argv in (
-            ["systemctl", "--user", "--no-block", "stop", socket_name],
-            ["systemctl", "--user", "disable", socket_name],
-        ):
-            try:
-                run_argv(argv, cwd=repo_root, env=env, timeout=30)
-            except UpdateError:
-                pass
+        _systemctl_user(repo_root, env, ["stop", web_name, worker_name])
+        _systemctl_user(repo_root, env, ["stop", socket_name])
+        _systemctl_user(repo_root, env, ["disable", socket_name])
         if extra.is_file():
             extra.unlink()
-            dropped_socket = True
-    if has_backup or dropped_socket or systemd_user_units_installed(repo_root):
+    if has_backup:
+        base.mkdir(parents=True, exist_ok=True)
+        for name, path in backed.items():
+            shutil.copy2(path, base / name)
+    if has_backup or drop_socket or systemd_user_units_installed(repo_root):
         _daemon_reload(repo_root)
+
+
+def _systemctl_user(repo_root: Path, env: dict, args: list[str]) -> None:
+    try:
+        run_argv(["systemctl", "--user", *args], cwd=repo_root, env=env, timeout=30)
+    except UpdateError:
+        pass
 
 
 def install_runtime_units(repo_root: Path, backup_dir: Path) -> Path | None:
