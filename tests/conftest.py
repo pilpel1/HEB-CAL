@@ -58,6 +58,8 @@ def _empty_events_table(app):
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'bot_sessions'"
         ).fetchone():
             db.execute("DELETE FROM bot_sessions")
+        if "mcp_keys" in tables:
+            db.execute("DELETE FROM mcp_keys")
         db.execute(
             "DELETE FROM event_colors WHERE lower(color_code) NOT IN ('cyan', 'yellow', 'orange', 'green')"
         )
