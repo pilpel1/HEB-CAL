@@ -200,7 +200,7 @@ class Bot:
             return None
         return bool(self.household.get("shifts_enabled"))
 
-    def out(self, text: str, markup: dict) -> dict:
+    def out(self, text: str, markup: dict | None) -> dict:
         return {"text": text, "markup": markup, "toast": self.toast}
 
     def _clear_flow(self) -> None:
@@ -215,7 +215,19 @@ class Bot:
         text, markup = ui.home_screen(self.chat_id, self.linked, note=note)
         return self.out(text, markup)
 
+    def _allow_unlinked(self, parsed: dict) -> bool:
+        """צ'אט לא מחובר: רק /start. בלי כפתורים ובלי מסך המשך."""
+        if parsed["kind"] != "message":
+            return False
+        text = (parsed.get("text") or "").strip()
+        if not text.startswith("/"):
+            return False
+        command = parse_command(text)
+        return bool(command and command[0] == "start")
+
     def run(self, parsed: dict) -> dict:
+        if not self.linked and not self._allow_unlinked(parsed):
+            return {"skip": True}
         if parsed["kind"] == "callback":
             data = parsed["data"]
             if not data or not _CB.fullmatch(data):

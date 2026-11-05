@@ -38,6 +38,22 @@ def _go(app, update, now=NOW):
         return handle_update(update, now=now)
 
 
+UNLINKED_START_HINT = (
+    "שולחים /start, מעתיקים את המספר, "
+    "מדביקים בהגדרות → משתמשים בשדה מזהה צ׳אט של האדם, ושומרים."
+)
+
+
+def _assert_unlinked_start(reply, chat_id):
+    assert reply.get("skip") is not True
+    assert reply["text"] == (
+        f"מזהה הצ'אט שלך: <code>{chat_id}</code>\n{UNLINKED_START_HINT}"
+    )
+    assert not reply.get("markup"), reply.get("markup")
+    assert "חיבור כאן" not in reply["text"]
+    assert "inline_keyboard" not in str(reply.get("markup") or {})
+
+
 def _buttons(reply):
     found = []
     for row in reply["markup"]["inline_keyboard"]:
@@ -237,18 +253,11 @@ def test_plain_adar_follows_the_hebrew_year():
 
 def test_start_unlinked_is_only_the_chat_id(app):
     reply = _go(app, _msg("/start"))
-    assert reply["text"] == (
-        "מזהה הצ'אט שלך: <code>42</code>\n"
-        "מעתיקים את המספר להגדרות, תחת תזכורות."
-    )
-    labels = [button["text"] for button in _buttons(reply)]
-    assert labels == ["חיבור כאן"]
-    for label in ("היום", "השבוע", "אירועי החודש", "משמרות", "לפי אדם", "חיפוש", "אירוע חדש", "הגדרות"):
-        assert label not in labels
+    _assert_unlinked_start(reply, 42)
     assert "מה עושים?" not in reply["text"]
-    link = _press(app, reply, "חיבור כאן")
-    assert "לחבר את הצ'אט" in link["text"]
-    _has_exit(link)
+    stale = _go(app, _cb("set:link"))
+    assert stale.get("skip") is True
+    assert not stale.get("text")
 
 
 def test_start_linked_is_only_the_menu(app):
@@ -285,15 +294,59 @@ def test_start_linked_is_only_the_menu(app):
     assert "דני" in settings["text"]
     assert "נועה" in settings["text"]
     group = _go(app, _msg("/start", chat=-100))
-    assert "<code>-100</code>" in group["text"]
-    assert [button["text"] for button in _buttons(group)] == ["חיבור כאן"]
+    _assert_unlinked_start(group, -100)
+
+
+def test_unlinked_chat_is_silent_except_start(app):
+    start = _go(app, _msg("/start", chat=99))
+    _assert_unlinked_start(start, 99)
+    again = _go(app, _msg("/start@HebCalBot", chat=99))
+    _assert_unlinked_start(again, 99)
+
+    silent = [
+        _msg("שלום", chat=99),
+        _msg("/today", chat=99),
+        _msg("/week", chat=99),
+        _msg("/add", chat=99),
+        _msg("/find", chat=99),
+        _msg("/settings", chat=99),
+        _msg("/digest", chat=99),
+        _msg("/help", chat=99),
+        _msg("/menu", chat=99),
+        _msg("/nope", chat=99),
+        {"update_id": 3, "message": {"chat": {"id": 99}}},
+        _cb("today", chat=99),
+        _cb("add", chat=99),
+        _cb("who", chat=99),
+        _cb("set:link", chat=99),
+        _cb("set:new", chat=99),
+        _cb("home", chat=99),
+    ]
+    for payload in silent:
+        reply = _go(app, payload)
+        assert reply.get("skip") is True, payload
+        assert not reply.get("text"), reply
+        assert not reply.get("markup"), reply.get("markup")
+
+    _person(app, "דני", chat=42)
+    menu = _go(app, _msg("/start"))
+    assert "מה להציג" in menu["text"]
+    assert menu.get("markup")
+    assert "חיבור כאן" not in [button["text"] for button in _buttons(menu)]
+    hello = _go(app, _msg("שלום"))
+    assert hello.get("skip") is not True
+    assert "בחרו כפתור" in hello["text"]
+    nope = _go(app, _msg("/nope"))
+    assert "אין פקודה" in nope["text"]
+    today = _go(app, _msg("/today"))
+    assert today.get("skip") is not True
+    assert today.get("text")
 
 
 def test_unknown_command_sticker_and_bad_callback(app):
     unlinked = _go(app, _msg("/nope"))
-    assert "אין פקודה" in unlinked["text"]
-    assert "<code>42</code>" in unlinked["text"]
-    assert "היום" not in [button["text"] for button in _buttons(unlinked)]
+    assert unlinked.get("skip") is True
+    assert not unlinked.get("text")
     _person(app, "דני", chat=42)
     reply = _go(app, _msg("/nope"))
     assert "אין פקודה" in reply["text"]
@@ -308,6 +361,7 @@ def test_unknown_command_sticker_and_bad_callback(app):
 
 
 def test_today_week_soon_and_pagination(app):
+    _person(app, "דני", chat=42)
     sunday = TODAY - timedelta(days=weekday_index(TODAY))
     saturday = sunday + timedelta(days=6)
     _event(app, "היום-אירוע", TODAY, time="18:30")
@@ -427,6 +481,7 @@ def test_filters_person_and_find(app):
 
 
 def test_add_defaults_invalid_input_and_cancel(app):
+    _person(app, "דני", chat=42)
     asked = _go(app, _msg("/add"))
     assert "שם" in asked["text"]
     _has_exit(asked)
@@ -484,6 +539,7 @@ def test_add_defaults_invalid_input_and_cancel(app):
 
 
 def test_edit_delete_conflict_and_missing(app):
+    _person(app, "דני", chat=42)
     event_id = _event(app, "ישן", TODAY, time="10:00")
     listed = _go(app, _msg("/today"))
     card = _press(app, listed, "ישן")
@@ -567,6 +623,7 @@ def test_edit_delete_conflict_and_missing(app):
 
 
 def test_html_escape_and_recurring_delete_warning(app):
+    _person(app, "דני", chat=42)
     event_id = _event(
         app,
         "<b>xss</b>",
@@ -590,6 +647,7 @@ def test_html_escape_and_recurring_delete_warning(app):
 
 
 def test_shifts_toggle_create_and_date_edit(app):
+    _person(app, "דני", chat=42)
     off = _go(app, _cb("shifts"))
     assert "כבויות" in off["text"]
     _has_exit(off)
@@ -645,7 +703,7 @@ def test_shifts_toggle_create_and_date_edit(app):
 
 
 def test_shift_detail_edit_reaches_title_note_person_and_label(app):
-    danny = _person(app, "דני", works_shifts=1)
+    danny = _person(app, "דני", chat=42, works_shifts=1)
     noa = _person(app, "נועה", works_shifts=1)
     _person(app, "אורח", works_shifts=0)
     _event(app, "בוקר", TODAY, shift=(1, danny["id"], "בוקר"))
@@ -751,7 +809,7 @@ def test_shift_detail_edit_reaches_title_note_person_and_label(app):
 
 
 def test_shift_display_uses_label_when_title_differs(app):
-    person = _person(app, "דני", works_shifts=1)
+    person = _person(app, "דני", chat=42, works_shifts=1)
     _event(app, "בוקר מוקדם", TODAY, shift=(1, person["id"], "בוקר"))
     listed = _go(app, _msg("/today"))
     assert "<b>בוקר</b>" in listed["text"]
@@ -868,6 +926,7 @@ def test_settings_link_unlink_and_households(app, monkeypatch):
 
 
 def test_single_missing_household_falls_back(app):
+    _person(app, "דני", chat=7)
     with app.app_context():
         from app.bot.session import save_session
 
@@ -878,6 +937,7 @@ def test_single_missing_household_falls_back(app):
 
 
 def test_other_date_hint_and_edit_field_saved(app):
+    _person(app, "דני", chat=42)
     _go(app, _msg("/add"))
     confirm = _go(app, _msg("פגישה"))
     asked = _press(app, confirm, "תאריך אחר")
@@ -901,6 +961,7 @@ def test_other_date_hint_and_edit_field_saved(app):
 
 
 def test_edit_time_and_replace_lonely_chat(app):
+    _person(app, "עורך", chat=42)
     _event(app, "שעה", TODAY)
     card = _press(app, _go(app, _msg("/today")), "שעה")
     editor = _press(app, card, "עריכה")
@@ -916,9 +977,8 @@ def test_edit_time_and_replace_lonely_chat(app):
     person = _person(app, "יחיד", chat=77)
     settings = _go(app, _msg("/settings"))
     conflict = _press(app, _press(app, settings, "חיבור לאדם"), "יחיד")
-    assert "להחליף" in conflict["text"]
-    assert "<code>77</code>" in conflict["text"]
-    done = _press(app, conflict, "כן, להחליף")
+    assert "77" in conflict["text"]
+    done = _press(app, conflict, "חיבור בלי לנתק")
     assert "יחיד" in done["text"]
     with app.app_context():
         from app.reminders.repository import get_person
@@ -927,6 +987,7 @@ def test_edit_time_and_replace_lonely_chat(app):
 
 
 def test_chats_do_not_share_a_draft(app):
+    _person(app, "א", chat=1)
     _go(app, _msg("/add", chat=1))
     other = _go(app, _msg("/start", chat=2))
     assert "בוטל" not in other["text"]
@@ -937,6 +998,7 @@ def test_chats_do_not_share_a_draft(app):
 
 
 def test_today_during_draft_cancels_it(app):
+    _person(app, "דני", chat=42)
     _go(app, _msg("/add"))
     _go(app, _msg("טיוטה"))
     listed = _go(app, _msg("/today"))
@@ -946,6 +1008,7 @@ def test_today_during_draft_cancels_it(app):
 
 def test_consume_updates_sends_menu_and_answers_buttons(app):
     # consume_updates קורא ל-handle_update בלי שעון מוזרק, אז האירוע חייב להיות על היום האמיתי.
+    _person(app, "דני", chat=42)
     _event(app, "סיור", datetime.now(TZ).date())
     calls = []
 
@@ -967,13 +1030,8 @@ def test_consume_updates_sends_menu_and_answers_buttons(app):
 
     assert consume_updates("token", None, api=api) == 9
     sent = next(call[1] for call in calls if call[0] == "sendMessage")
-    assert "<code>42</code>" in sent["text"]
-    start_labels = [
-        button["text"]
-        for row in sent["reply_markup"]["inline_keyboard"]
-        for button in row
-    ]
-    assert start_labels == ["חיבור כאן"]
+    assert "מה להציג" in sent["text"]
+    assert "<code>42</code>" not in sent["text"]
     methods = [call[0] for call in calls]
     answers = [call for call in calls if call[0] == "answerCallbackQuery"]
     assert len(answers) == 1
@@ -986,9 +1044,32 @@ def test_consume_updates_sends_menu_and_answers_buttons(app):
     assert edited["parse_mode"] == "HTML"
 
 
+def test_consume_updates_skips_unlinked_ordinary_messages(app):
+    calls = []
+
+    def api(token, method, payload=None, timeout=30):
+        calls.append((method, payload))
+        if method == "getUpdates":
+            return [
+                {"update_id": 7, "message": {"text": "/start", "chat": {"id": 99}}},
+                {"update_id": 8, "message": {"text": "שלום", "chat": {"id": 99}}},
+                {"update_id": 9, "message": {"text": "/today", "chat": {"id": 99}}},
+            ]
+        return {"ok": True}
+
+    assert consume_updates("token", None, api=api) == 10
+    sends = [call[1] for call in calls if call[0] == "sendMessage"]
+    assert len(sends) == 1
+    assert sends[0]["chat_id"] == 99
+    assert "<code>99</code>" in sends[0]["text"]
+    assert "reply_markup" not in sends[0]
+    assert "חיבור כאן" not in sends[0]["text"]
+    assert [call[0] for call in calls if call[0] == "editMessageText"] == []
+
+
 def test_people_picker_paginates(app):
     for index in range(7):
-        _person(app, f"אדם-{index}")
+        _person(app, f"אדם-{index}", chat=42 if index == 0 else None)
     picker = _go(app, _cb("who"))
     assert "הבא ←" in [button["text"] for button in _buttons(picker)]
     assert "אדם-0" in picker["text"] or any(button["text"] == "אדם-0" for button in _buttons(picker))
@@ -999,6 +1080,7 @@ def test_people_picker_paginates(app):
 
 
 def test_all_day_word_and_shift_disabled_blocks_create(app):
+    _person(app, "דני", chat=42)
     asked = _go(app, _msg("/add"))
     confirm = _go(app, _msg("בלי שעה"))
     times = _press(app, confirm, "שעה")
@@ -1254,7 +1336,7 @@ def test_updates_poll_while_reminders_are_still_running():
 
 
 def test_person_view_groups_shifts_then_events(app):
-    person = _person(app, "דני", works_shifts=1)
+    person = _person(app, "דני", chat=42, works_shifts=1)
     later = TODAY + timedelta(days=3)
     _event(app, "לילה", later, shift=(1, person["id"], "לילה"))
     meeting = _event(app, "פגישה", TODAY, time="11:00")
@@ -1333,6 +1415,7 @@ def test_add_event_reminder_uses_the_same_offsets(app):
 
 
 def test_find_shows_description_in_italics_under_the_title(app):
+    _person(app, "דני", chat=42)
     _event(app, "פגישה", TODAY, time="18:30", description="להביא <עוגה>\nונרות")
     _event(app, "בלי תיאור", TODAY + timedelta(days=1))
     found = _go(app, _msg("/find עוגה"))
@@ -1351,6 +1434,7 @@ def test_find_shows_description_in_italics_under_the_title(app):
 def test_find_clips_a_long_description(app):
     from app.bot.ui import SEARCH_BLURB
 
+    _person(app, "דני", chat=42)
     _event(app, "ארוך", TODAY, description="א" * (SEARCH_BLURB + 20))
     found = _go(app, _msg("/find ארוך"))
     assert f"<i>{'א' * (SEARCH_BLURB - 1)}…</i>" in found["text"]
@@ -1449,8 +1533,8 @@ def test_digest_toggle_in_settings_and_slash_command(app):
 
         assert get_person(person["id"])["daily_digest_enabled"] is True
     unlinked = _go(app, _msg("/digest", chat=99))
-    assert "קודם מחברים" in unlinked["text"]
-    assert "סיכום בוקר יומי" not in [button["text"] for button in _buttons(unlinked)]
+    assert unlinked.get("skip") is True
+    assert not unlinked.get("text")
 
 
 def test_bot_unlink_turns_digest_off_after_confirm(app):
@@ -1481,6 +1565,7 @@ def test_bot_unlink_turns_digest_off_after_confirm(app):
 
 def test_bot_create_person_reuses_existing_shift_worker(app):
     shira = _person(app, "שירה", works_shifts=1, receives_reminders=0)
+    _person(app, "מחבר", chat=7)
     settings = _go(app, _msg("/settings", chat=7))
     picker = _press(app, settings, "חיבור לאדם", chat=7)
     fresh = _press(app, picker, "אני לא ברשימה", chat=7)
@@ -1488,12 +1573,9 @@ def test_bot_create_person_reuses_existing_shift_worker(app):
     assert "שירה" in reused["text"]
     assert "נוצר" not in reused["text"]
     with app.app_context():
-        from app.reminders.repository import list_people
+        from app.reminders.repository import get_person
 
-        people = list_people()
-        assert len(people) == 1
-        person = people[0]
-        assert person["id"] == shira["id"]
+        person = get_person(shira["id"])
         assert person["telegram_chat_id"] == "7"
         assert person["receives_reminders"] is True
         assert person["works_shifts"] is True
@@ -1501,6 +1583,7 @@ def test_bot_create_person_reuses_existing_shift_worker(app):
 
 def test_bot_create_person_conflicts_on_other_chat(app):
     _person(app, "שירה", chat=99, works_shifts=1)
+    _person(app, "מחבר", chat=7)
     settings = _go(app, _msg("/settings", chat=7))
     picker = _press(app, settings, "חיבור לאדם", chat=7)
     _press(app, picker, "אני לא ברשימה", chat=7)
@@ -1509,4 +1592,4 @@ def test_bot_create_person_conflicts_on_other_chat(app):
     with app.app_context():
         from app.reminders.repository import list_people
 
-        assert len(list_people()) == 1
+        assert len(list_people()) == 2

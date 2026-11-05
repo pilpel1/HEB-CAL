@@ -899,7 +899,12 @@ def test_calendar_and_settings_markup(client):
     help_btn = settings.index('id="chatIdHelpBtn"')
     help_pop = settings.index('id="chatIdHelp"')
     assert label < help_btn < help_pop
-    assert "TELEGRAM_BOT_TOKEN" in settings[help_pop:help_pop + 1200]
+    help_text = settings[help_pop:help_pop + 1200]
+    assert "TELEGRAM_BOT_TOKEN" not in help_text
+    assert "/start" in help_text
+    assert "הבוט של המשפחה" in help_text
+    assert "מדביקים כאן בשדה של האדם המתאים, ושומרים" in help_text
+    assert "סקריפט" not in help_text
     assert '<h2 class="h5">איך מקבלים מזהה צ׳אט</h2>' not in settings
     shifts_js = client.get("/static/js/events/shifts.js").get_data(as_text=True)
     assert "function persistEditedShiftRules" not in shifts_js
