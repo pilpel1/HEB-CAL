@@ -250,8 +250,10 @@ def test_frontend_connects_without_reload():
 def test_server_runner_is_explicitly_threaded():
     dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
     assert "--with-threads" in dockerfile
+    run_web = (REPO / "scripts/run_web.py").read_text(encoding="utf-8")
+    assert "threaded=True" in run_web
     restart = (REPO / "scripts/restart.sh").read_text(encoding="utf-8")
-    assert "--with-threads" in restart
+    assert "run_web.py" in restart
     main = (REPO / "app/main.py").read_text(encoding="utf-8")
     assert "threaded=True" in main
     for path in (REPO / "tests").glob("test_*.py"):

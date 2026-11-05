@@ -1,0 +1,14 @@
+# תבנית. scripts/install_services.sh מחליף @INSTALL_DIR@ @BIND_HOST@ @PORT@ @INSTANCE@ @LISTEN_STREAM@
+# וכותב ל-~/.config/systemd/user/@INSTANCE@-web.socket.
+# מאזין על פורט המופע הקיים. בלי פורט שני. Accept=no — ה-fd עובר ל-@INSTANCE@-web.service.
+# לא BindsTo על ה-service: בריסטארט של ה-web הסוקט נשאר, והחיבורים ממתינים בתור.
+[Unit]
+Description=HEB-CAL web listen (@INSTANCE@)
+Documentation=file://@INSTALL_DIR@/README.md
+
+[Socket]
+ListenStream=@LISTEN_STREAM@
+Accept=no
+
+[Install]
+WantedBy=sockets.target

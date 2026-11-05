@@ -41,7 +41,52 @@ def test_default_name_and_port_when_nothing_exists(tmp_path):
     assert plan.port == 5000
     assert plan.web_unit == "heb-cal-web.service"
     assert plan.worker_unit == "heb-cal-worker.service"
+    assert plan.socket_unit == "heb-cal-web.socket"
     assert plan.reused is False
+    text = select.format_plan(plan)
+    assert "SOCKET_UNIT=heb-cal-web.socket" in text
+    assert "WEB_UNIT=heb-cal-web.service" in text
+
+
+def test_parse_unit_port_from_environment_and_listen_stream():
+    assert select.parse_unit_port("Environment=HEB_CAL_PORT=5001\n") == 5001
+    assert select.parse_unit_port("ListenStream=127.0.0.1:5002\n") == 5002
+    assert select.parse_unit_port("ListenStream=[::1]:5003\n") == 5003
+    assert select.parse_unit_port(
+        "ExecStart=/usr/bin/python scripts/run_web.py\nEnvironment=HEB_CAL_PORT=5004\n"
+    ) == 5004
+    assert select.parse_unit_port(
+        "ExecStart=/usr/bin/python -m flask --app app run --port 5005\n"
+    ) == 5005
+    assert select.parse_listen_stream_port("0.0.0.0:5000") == 5000
+    assert select.socket_unit_name("gisim") == "gisim-web.socket"
+
+
+def test_occupied_ports_from_env_not_from_own_socket_without_wd(tmp_path):
+    units = tmp_path / "units"
+    other = tmp_path / "other"
+    other.mkdir()
+    root = tmp_path / "new"
+    root.mkdir()
+    units.mkdir()
+    (units / "heb-cal-web.service").write_text(
+        f"[Service]\nWorkingDirectory={other}\nEnvironment=HEB_CAL_PORT=5000\n"
+        "ExecStart=/usr/bin/python scripts/run_web.py\n",
+        encoding="utf-8",
+    )
+    (units / "heb-cal-worker.service").write_text(
+        f"WorkingDirectory={other}\n",
+        encoding="utf-8",
+    )
+    (units / "heb-cal-web.socket").write_text(
+        "ListenStream=127.0.0.1:5000\n",
+        encoding="utf-8",
+    )
+    occupied = select.occupied_unit_ports(units, root)
+    assert 5000 in occupied
+    with pytest.raises(select.InstanceError) as exc:
+        select.resolve_install(root, units, requested_name="gisim", requested_port=5000)
+    assert exc.value.overwrite is True
 
 
 def test_first_instance_keeps_env_port(tmp_path):

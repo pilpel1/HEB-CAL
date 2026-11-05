@@ -1,9 +1,12 @@
 """בדיקה והתחלת עדכון. התהליך שנפתח כאן נפרד, כדי שישרוד את ההפעלה מחדש."""
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -12,7 +15,7 @@ from app.database import BASE_DIR
 from app.updates.envconfig import describe_mode, load_config
 from app.updates.errors import UpdateError
 from app.updates.gitops import assert_not_shallow, assert_worktree_clean, is_git_checkout, run_argv
-from app.updates.systemd import systemd_user_units_installed
+from app.updates.systemd import instance_name, systemd_user_env, systemd_user_units_installed
 from app.updates.github_api import fetch_latest, release_view
 from app.updates.store import (
     acquire_lock,
@@ -34,7 +37,7 @@ _JERUSALEM = ZoneInfo("Asia/Jerusalem")
 _UNCHECKED = "עדיין לא נבדק."
 
 _HINTS = {
-    "git": "העדכון מוריד תג מ-GitHub, מגבה את הנתונים, ומפעיל מחדש.",
+    "git": "העדכון מוריד תג מ-GitHub, מגבה את הנתונים, ומפעיל מחדש. אחרי שדרוג ה-socket, מבקרים ממתינים בזמן הריסטארט במקום לקבל 502.",
     "docker": "בהתקנת Docker לא מעדכנים מתוך המסך.",
     "hook": "העדכון מריץ סקריפט קבוע מההגדרות, אחרי גיבוי.",
     "off": "העדכון מהממשק כבוי.",
@@ -326,6 +329,71 @@ def schedule_autocheck() -> None:
     threading.Thread(target=_run, name="heb-cal-update-check", daemon=True).start()
 
 
+def _update_job_unit() -> str:
+    return f"{instance_name(BASE_DIR)}-update-job"
+
+
+def _spawn_runner_via_systemd(command: list[str]) -> int | None:
+    """מריץ את ה-runner מחוץ ל-cgroup של ה-web, כדי ש-wait_healthy ישרוד ריסטרט."""
+    if not systemd_user_units_installed(BASE_DIR):
+        return None
+    if not shutil.which("systemd-run"):
+        return None
+    unit = _update_job_unit()
+    env = systemd_user_env()
+    env.pop("HEB_CAL_UPDATE_MAY_DIE", None)
+    run_argv(
+        ["systemctl", "--user", "reset-failed", f"{unit}.service"],
+        cwd=BASE_DIR,
+        env=env,
+        timeout=15,
+    )
+    argv = [
+        "systemd-run",
+        "--user",
+        "--collect",
+        f"--unit={unit}",
+        f"--working-directory={BASE_DIR}",
+        "--description=HEB-CAL in-app update",
+        "--",
+        *command,
+    ]
+    try:
+        proc = subprocess.run(
+            argv,
+            cwd=str(BASE_DIR),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    for _ in range(40):
+        shown = run_argv(
+            ["systemctl", "--user", "show", "-p", "MainPID", "--value", f"{unit}.service"],
+            cwd=BASE_DIR,
+            env=env,
+            timeout=10,
+        )
+        text = (shown.stdout or "").strip()
+        if text.isdigit() and int(text) > 1:
+            return int(text)
+        time.sleep(0.05)
+    # systemd-run כבר התחיל את העבודה — לא לפתוח runner שני ב-Popen.
+    run_argv(
+        ["systemctl", "--user", "--no-block", "stop", f"{unit}.service"],
+        cwd=BASE_DIR,
+        env=env,
+        timeout=15,
+    )
+    return None
+
+
 def spawn_updater(version: str, tag: str, mode: str, status_file: Path) -> int:
     """פותח תהליך מנותק. הארגומנטים הם רק גרסה, תג, ומצב — לא פקודה מהבקשה."""
     validate_tag(tag)
@@ -346,13 +414,19 @@ def spawn_updater(version: str, tag: str, mode: str, status_file: Path) -> int:
         "--status",
         str(status_file),
     ]
+    systemd_pid = _spawn_runner_via_systemd(command)
+    if systemd_pid:
+        return systemd_pid
     log_path = status_file.parent / "update-runner.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handle = open(log_path, "ab")
+    env = os.environ.copy()
+    env["HEB_CAL_UPDATE_MAY_DIE"] = "1"
     try:
         proc = subprocess.Popen(
             command,
             cwd=str(BASE_DIR),
+            env=env,
             start_new_session=True,
             stdin=subprocess.DEVNULL,
             stdout=handle,

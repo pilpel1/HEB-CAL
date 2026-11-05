@@ -502,10 +502,30 @@ class LiveOps:
         if proc.returncode != 0:
             raise UpdateError("ההפעלה מחדש נכשלה.", step="restart")
 
+    def install_runtime_units(self) -> None:
+        from app.updates.units import install_runtime_units as write_units
+
+        dest = self.cfg.update_dir / "unit-backup"
+        saved = write_units(self.cfg.repo_root, dest)
+        if saved is not None:
+            self.payload["unit_backup"] = str(saved)
+            self.write(message="יחידות systemd עודכנו")
+
+    def restore_units(self) -> None:
+        from app.updates.units import restore_instance_units
+
+        raw = self.payload.get("unit_backup")
+        if not raw and not systemd_user_units_installed(self.cfg.repo_root):
+            return
+        backup = Path(raw) if isinstance(raw, str) and raw else None
+        restore_instance_units(self.cfg.repo_root, backup)
+
     def restart(self) -> bool:
-        """True אם הריסטרט מנותק (systemd) — אל תחכו ל-health בתהליך הזה."""
+        """True אם התהליך הזה עלול למות בריסטרט — אל תחכו ל-health כאן."""
         self._restart("restart")
-        return systemd_user_units_installed(self.cfg.repo_root)
+        if not systemd_user_units_installed(self.cfg.repo_root):
+            return False
+        return (os.environ.get("HEB_CAL_UPDATE_MAY_DIE") or "").strip() == "1"
 
     def stop_app(self) -> None:
         self._restart("stop")

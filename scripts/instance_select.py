@@ -27,6 +27,7 @@ NAME_RE = re.compile(r"^[a-z][a-z0-9-]{0,39}$")
 PORT_RE = re.compile(r"--port(?:=|\s+)(\d+)")
 WD_RE = re.compile(r"^WorkingDirectory=(.*)$", re.M)
 ENV_PORT_RE = re.compile(r"^Environment=HEB_CAL_PORT=(\d+)\s*$", re.M)
+LISTEN_STREAM_RE = re.compile(r"^ListenStream=(.*)$")
 KEY_RE = re.compile(r"^(HEB_CAL_INSTANCE_NAME|HEB_CAL_PORT|HEB_CAL_BIND_HOST|HEB_CAL_TAILSCALE_HTTPS_PORT)=(.*)$")
 
 OVERWRITE_EXIT = 2
@@ -58,6 +59,7 @@ class InstallPlan:
     reused: bool
     bind_host: str | None = None
     tailscale_https_port: int | None = None
+    socket_unit: str = ""
 
 
 def valid_instance_name(value: str | None) -> bool:
@@ -97,6 +99,10 @@ def web_unit_name(name: str) -> str:
 
 def worker_unit_name(name: str) -> str:
     return f"{validate_name(name)}-worker.service"
+
+
+def socket_unit_name(name: str) -> str:
+    return f"{validate_name(name)}-web.socket"
 
 
 def unit_names(name: str) -> tuple[str, str]:
@@ -207,6 +213,27 @@ def parse_working_directory(text: str) -> Path | None:
     return None
 
 
+def parse_listen_stream_port(value: str) -> int | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    if text.isdigit():
+        try:
+            return validate_port(text)
+        except InstanceError:
+            return None
+    if text.startswith("[") and "]:" in text:
+        text = text.rsplit("]:", 1)[-1]
+    elif ":" in text:
+        text = text.rsplit(":", 1)[-1]
+    if text.isdigit():
+        try:
+            return validate_port(text)
+        except InstanceError:
+            return None
+    return None
+
+
 def parse_unit_port(text: str) -> int | None:
     if not isinstance(text, str) or not text:
         return None
@@ -220,6 +247,12 @@ def parse_unit_port(text: str) -> int | None:
                 return validate_port(env_match.group(1))
             except InstanceError:
                 continue
+        listen_match = LISTEN_STREAM_RE.match(line)
+        if listen_match:
+            port = parse_listen_stream_port(listen_match.group(1))
+            if port is not None:
+                return port
+            continue
         exec_match = PORT_RE.search(line)
         if exec_match:
             try:
@@ -457,6 +490,7 @@ def resolve_install(
         reused=reused,
         bind_host=saved.bind_host,
         tailscale_https_port=saved.tailscale_https_port,
+        socket_unit=socket_unit_name(name),
     )
 
 
@@ -613,6 +647,7 @@ def format_plan(plan: InstallPlan) -> str:
         f"PORT={plan.port}",
         f"WEB_UNIT={plan.web_unit}",
         f"WORKER_UNIT={plan.worker_unit}",
+        f"SOCKET_UNIT={plan.socket_unit or socket_unit_name(plan.name)}",
         f"REUSED={'1' if plan.reused else '0'}",
     ]
     if plan.tailscale_https_port:

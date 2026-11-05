@@ -7,6 +7,7 @@ set -euo pipefail
 
 TEMPLATE_WEB=heb-cal-web.service
 TEMPLATE_WORKER=heb-cal-worker.service
+TEMPLATE_SOCKET=heb-cal-web.socket
 
 say() { printf '%s\n' "$*"; }
 die() { printf '%s\n' "$*" >&2; exit 1; }
@@ -15,11 +16,13 @@ usage() {
   cat <<'EOF'
 התקנת יחידות systemd --user ל-HEB-CAL.
 
-  ./scripts/install_services.sh [--name NAME] [--port PORT] [--tailscale-serve]
+  ./scripts/install_services.sh [--name NAME] [--port PORT] [--tailscale-serve] [--units-only]
 
-  --name NAME          שם המופע (יחידות NAME-web / NAME-worker). ברירת מחדל: heb-cal
-  --port PORT          פורט TCP של Flask. ברירת מחדל למופע הראשון: 5000
+  --name NAME          שם המופע (יחידות NAME-web / NAME-worker / NAME-web.socket). ברירת מחדל: heb-cal
+  --port PORT          פורט TCP הציבורי של Flask. ברירת מחדל למופע הראשון: 5000
   --tailscale-serve    מיפוי HTTPS ב-Tailscale ל-localhost:PORT בלי לגעת במיפויים קיימים
+  --units-only         רק כותב/מפעיל יחידות (כולל socket), בלי עצירה/הפעלה ובלי Tailscale.
+                       לעדכון מהממשק: הפורט נשאר זה שב-data/instance.env, בלי פורט שני.
 
 בלי דגלים, אם יש data/instance.env משתמשים בשם ובפורט השמורים.
 אם heb-cal כבר מותקן לתיקייה אחרת — נבחר heb-cal2, heb-cal3... ופורט פנוי מ-5001.
@@ -32,11 +35,16 @@ cd "$ROOT"
 NAME_FLAG=""
 PORT_FLAG=""
 TAILSCALE_SERVE=0
+UNITS_ONLY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
       usage
       exit 0
+      ;;
+    --units-only)
+      UNITS_ONLY=1
+      shift
       ;;
     --name)
       [[ $# -ge 2 ]] || die "חסר ערך ל--name"
@@ -79,6 +87,7 @@ SELECT_PY="$ROOT/scripts/instance_select.py"
 
 [[ -f "$TEMPLATE_DIR/$TEMPLATE_WEB" ]] || die "חסרה התבנית $TEMPLATE_DIR/$TEMPLATE_WEB"
 [[ -f "$TEMPLATE_DIR/$TEMPLATE_WORKER" ]] || die "חסרה התבנית $TEMPLATE_DIR/$TEMPLATE_WORKER"
+[[ -f "$TEMPLATE_DIR/$TEMPLATE_SOCKET" ]] || die "חסרה התבנית $TEMPLATE_DIR/$TEMPLATE_SOCKET"
 [[ -f "$SELECT_PY" ]] || die "חסר $SELECT_PY"
 
 if [[ "$ROOT" == *$'\n'* || "$ROOT" == *'"'* || "$ROOT" == *'@'* ]]; then
@@ -162,12 +171,14 @@ INSTANCE_NAME=""
 PORT=""
 WEB_UNIT=""
 WORKER_UNIT=""
+SOCKET_UNIT=""
 while IFS='=' read -r key value; do
   case "$key" in
     INSTANCE_NAME) INSTANCE_NAME=$value ;;
     PORT) PORT=$value ;;
     WEB_UNIT) WEB_UNIT=$value ;;
     WORKER_UNIT) WORKER_UNIT=$value ;;
+    SOCKET_UNIT) SOCKET_UNIT=$value ;;
   esac
 done <<<"$resolve_out"
 
@@ -182,6 +193,18 @@ case "$WEB_UNIT" in
   *.service) ;;
   *) die "שם יחידה לא תקין: $WEB_UNIT" ;;
 esac
+if [[ -z "$SOCKET_UNIT" ]]; then
+  SOCKET_UNIT="${INSTANCE_NAME}-web.socket"
+fi
+case "$SOCKET_UNIT" in
+  *.socket) ;;
+  *) die "שם יחידת socket לא תקין: $SOCKET_UNIT" ;;
+esac
+
+LISTEN_STREAM="${HOST}:${PORT}"
+case "$HOST" in
+  *:*) LISTEN_STREAM="[${HOST}]:${PORT}" ;;
+esac
 
 render_unit() {
   local src=$1 dest=$2 text
@@ -192,7 +215,8 @@ render_unit() {
   text=${text//@PORT@/$PORT}
   text=${text//@USER@/$USER_NAME}
   text=${text//@INSTANCE@/$INSTANCE_NAME}
-  if [[ "$text" == *"@INSTALL_DIR@"* || "$text" == *"@PYTHON@"* || "$text" == *"@BIND_HOST@"* || "$text" == *"@PORT@"* || "$text" == *"@USER@"* || "$text" == *"@INSTANCE@"* ]]; then
+  text=${text//@LISTEN_STREAM@/$LISTEN_STREAM}
+  if [[ "$text" == *"@INSTALL_DIR@"* || "$text" == *"@PYTHON@"* || "$text" == *"@BIND_HOST@"* || "$text" == *"@PORT@"* || "$text" == *"@USER@"* || "$text" == *"@INSTANCE@"* || "$text" == *"@LISTEN_STREAM@"* ]]; then
     die "התבנית $src לא הוחלפה במלואה."
   fi
   printf '%s\n' "$text" >"$dest"
@@ -366,12 +390,15 @@ ensure_runtime_dir
 
 tmp_web=$(mktemp)
 tmp_worker=$(mktemp)
-trap 'rm -f "$tmp_web" "$tmp_worker"' EXIT
+tmp_socket=$(mktemp)
+trap 'rm -f "$tmp_web" "$tmp_worker" "$tmp_socket"' EXIT
 render_unit "$TEMPLATE_DIR/$TEMPLATE_WEB" "$tmp_web"
 render_unit "$TEMPLATE_DIR/$TEMPLATE_WORKER" "$tmp_worker"
+render_unit "$TEMPLATE_DIR/$TEMPLATE_SOCKET" "$tmp_socket"
 cp "$tmp_web" "$UNIT_DIR/$WEB_UNIT"
 cp "$tmp_worker" "$UNIT_DIR/$WORKER_UNIT"
-chmod 644 "$UNIT_DIR/$WEB_UNIT" "$UNIT_DIR/$WORKER_UNIT"
+cp "$tmp_socket" "$UNIT_DIR/$SOCKET_UNIT"
+chmod 644 "$UNIT_DIR/$WEB_UNIT" "$UNIT_DIR/$WORKER_UNIT" "$UNIT_DIR/$SOCKET_UNIT"
 
 if [[ -f .env ]]; then
   env_set .env HEB_CAL_PORT "$PORT"
@@ -379,25 +406,32 @@ if [[ -f .env ]]; then
 fi
 
 systemctl --user daemon-reload
-systemctl --user enable "$WEB_UNIT" "$WORKER_UNIT"
+systemctl --user enable "$SOCKET_UNIT" "$WEB_UNIT" "$WORKER_UNIT"
+
+if [[ "$UNITS_ONLY" -eq 1 ]]; then
+  ensure_restart_command
+  say "עודכנו יחידות systemd --user (מופע ${INSTANCE_NAME}, בלי הפעלה מחדש)."
+  exit 0
+fi
 
 # עוצר רק את היחידות של המופע הזה, ואז תהליכים ידניים של הריפו הזה, ואז מעלה מחדש.
+# ה-socket עולה אחרי שהפורט השתחרר — בלי פורט TCP נוסף.
 export HEB_CAL_UNIT_DIR="$UNIT_DIR"
 export HEB_CAL_INSTANCE_NAME="$INSTANCE_NAME"
 export HEB_CAL_PORT="$PORT"
 HEB_CAL_UPDATE_ACTION=stop "$ROOT/scripts/restart.sh"
-systemctl --user reset-failed "$WEB_UNIT" "$WORKER_UNIT" >/dev/null 2>&1 || true
-systemctl --user start "$WEB_UNIT" "$WORKER_UNIT"
+systemctl --user reset-failed "$SOCKET_UNIT" "$WEB_UNIT" "$WORKER_UNIT" >/dev/null 2>&1 || true
+systemctl --user start "$SOCKET_UNIT" "$WEB_UNIT" "$WORKER_UNIT"
 
 ensure_restart_command
 maybe_configure_tailscale_serve "$PORT"
 
 say ""
 say "יחידות systemd --user מותקנות ופעילות (מופע ${INSTANCE_NAME})."
-say "סטטוס:  systemctl --user status $WEB_UNIT $WORKER_UNIT"
+say "סטטוס:  systemctl --user status $SOCKET_UNIT $WEB_UNIT $WORKER_UNIT"
 say "לוגים:  journalctl --user -u $WEB_UNIT -u $WORKER_UNIT -f"
 say "עצירה:  systemctl --user stop $WEB_UNIT $WORKER_UNIT"
-say "ביטול עלייה באתחול: systemctl --user disable --now $WEB_UNIT $WORKER_UNIT"
+say "ביטול עלייה באתחול: systemctl --user disable --now $SOCKET_UNIT $WEB_UNIT $WORKER_UNIT"
 say "תיקייה: $ROOT"
 say "משתמש: $USER_NAME"
 say "כתובת: ${HOST}:${PORT}"

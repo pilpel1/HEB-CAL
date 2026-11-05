@@ -54,6 +54,8 @@ def _rollback(ops, done: set[str], backup, sha: str | None) -> bool | str:
             ops.checkout_sha(sha)
             ops.pip_install()
             restored_code = True
+        if "units" in done and hasattr(ops, "restore_units"):
+            ops.restore_units()
         if done & _DB_STEPS:
             if backup is None:
                 raise UpdateError("אין גיבוי לשחזור.", step="rollback")
@@ -109,13 +111,17 @@ def execute_update(ops, plan: Plan) -> None:
             ops.write(step="hook", message="מריץ את סקריפט העדכון")
             done.add("hook")
             ops.run_hook(plan.version)
+        if hasattr(ops, "install_runtime_units"):
+            ops.write(step="units", message="מעדכן את יחידות ההפעלה")
+            done.add("units")
+            ops.install_runtime_units()
         if plan.mode == "git" or ops.restart_configured():
             ops.write(step="restart", message="מפעיל מחדש")
             done.add("restart")
             detached = bool(ops.restart())
             if detached:
-                # הריסטרט רץ מחוץ ל-cgroup של היחידה ויהרוג את התהליך הזה.
-                # התהליך החדש מסמן הצלחה כש-VERSION == target.
+                # הריסטרט עלול להרוג תהליך שנולד ב-cgroup של ה-web.
+                # כשה-runner רץ מחוץ ליחידה (systemd-run) מחכים ל-health כאן.
                 return
         ops.write(step="health", message="בודק שהאפליקציה עלתה")
         ops.wait_healthy(plan.version)
