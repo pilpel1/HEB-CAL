@@ -484,3 +484,97 @@ def test_recurring_due_across_dst(client, app):
         hole = next(item for item in gap if "חודשי בחור" in item["text"])
         assert "2026-03-27 03:30" in hole["text"]
         assert hole["fire_at"].startswith("2026-03-27T03:30:00+03:00")
+
+
+def test_weekly_stays_on_weekday_across_dst():
+    """שבועי = +7 ימים קלנדריים, לא 168 שעות. שלישי נשאר שלישי אחרי הקפיצה."""
+    before = event_start({"gregorian_date": "2026-03-24", "time": "10:00"}, tz=TZ, default_time="09:00")
+    after = event_start({"gregorian_date": "2026-03-31", "time": "10:00"}, tz=TZ, default_time="09:00")
+    assert before.weekday() == 1 and after.weekday() == 1
+    assert before.hour == 10 and after.hour == 10
+    assert before.utcoffset() == timedelta(hours=2)
+    assert after.utcoffset() == timedelta(hours=3)
+    assert _utc(after) - _utc(before) == timedelta(hours=167)
+
+    weekly = {
+        "gregorian_date": "2026-03-24",
+        "time": "10:00",
+        "recurrence_freq": "weekly",
+        "recurrence_calendar": "gregorian",
+        "recurrence_count": 3,
+    }
+    nxt = occurrence_start(
+        weekly,
+        now=datetime(2026, 3, 24, 10, 1, tzinfo=TZ),
+        tz=TZ,
+        default_time="09:00",
+    )
+    assert nxt.date().isoformat() == "2026-03-31"
+    assert nxt.hour == 10
+    assert nxt.utcoffset() == timedelta(hours=3)
+
+
+def test_weekly_localize_on_dst_transition_days():
+    friday_gap = {
+        "gregorian_date": "2026-03-20",
+        "time": "02:30",
+        "recurrence_freq": "weekly",
+        "recurrence_calendar": "gregorian",
+        "recurrence_count": 3,
+    }
+    shifted = occurrence_start(
+        friday_gap,
+        now=datetime(2026, 3, 27, 3, 0, tzinfo=TZ),
+        tz=TZ,
+        default_time="09:00",
+    )
+    assert shifted == datetime(2026, 3, 27, 3, 30, tzinfo=TZ)
+
+    sunday_fold = {
+        "gregorian_date": "2026-10-18",
+        "time": "01:30",
+        "recurrence_freq": "weekly",
+        "recurrence_calendar": "gregorian",
+        "recurrence_count": 3,
+    }
+    first = occurrence_start(
+        sunday_fold,
+        now=datetime(2026, 10, 25, 1, 29, tzinfo=TZ, fold=0),
+        tz=TZ,
+        default_time="09:00",
+    )
+    assert first.date().isoformat() == AUTUMN
+    assert first.fold == 0
+    assert first.utcoffset() == timedelta(hours=3)
+    passed = occurrence_start(
+        sunday_fold,
+        now=datetime(2026, 10, 25, 1, 30, tzinfo=TZ, fold=1),
+        tz=TZ,
+        default_time="09:00",
+    )
+    assert passed.date().isoformat() == "2026-11-01"
+
+
+def test_weekly_due_on_spring_gap(client, app):
+    from app.reminders.due import telegram_due
+
+    person = _person(client, chat_id="888")
+    _event(
+        client,
+        person["id"],
+        title="שבועי בחור",
+        gregorian_date="2026-03-20",
+        time="02:30",
+        offset=0,
+        recurrence_freq="weekly",
+        recurrence_calendar="gregorian",
+        recurrence_count=3,
+    )
+    with app.app_context():
+        pending = telegram_due(now=datetime(2026, 3, 27, 3, 29, tzinfo=TZ))
+        assert all("שבועי בחור" not in item["text"] for item in pending)
+        gap = telegram_due(now=datetime(2026, 3, 27, 3, 30, tzinfo=TZ))
+        hole = next(item for item in gap if "שבועי בחור" in item["text"])
+        assert hole["occurrence_date"] == SPRING
+        assert "2026-03-27 03:30" in hole["text"]
+        assert hole["fire_at"].startswith("2026-03-27T03:30:00+03:00")

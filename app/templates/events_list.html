@@ -737,7 +737,9 @@ function buildEventRowHtml(event) {
         ? (event.recurrence_calendar === 'hebrew' ? 'כל שנה · עברי' : 'כל שנה · לועזי')
         : event.recurrence_freq === 'monthly'
             ? (event.recurrence_calendar === 'hebrew' ? 'כל חודש · עברי' : 'כל חודש · לועזי')
-            : '';
+            : event.recurrence_freq === 'weekly'
+                ? 'כל שבוע'
+                : '';
     const safeTitle = escapeHtml(event.title);
     const metaBits = [event.gregorian_date, event.hebrew_date, event.time, repeatNote]
         .filter(Boolean)

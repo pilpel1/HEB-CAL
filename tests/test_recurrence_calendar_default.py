@@ -33,6 +33,23 @@ for (const [source, touched, expected] of cases) {
     throw new Error(JSON.stringify({ source, touched, got, expected }));
   }
 }
+const visible = sandbox.recurrenceCalendarVisible;
+if (typeof visible !== 'function') {
+  throw new Error('recurrenceCalendarVisible is not global');
+}
+const visibility = [
+  ['', false],
+  [null, false],
+  ['weekly', false],
+  ['monthly', true],
+  ['yearly', true],
+];
+for (const [freq, expected] of visibility) {
+  const got = visible(freq);
+  if (got !== expected) {
+    throw new Error(JSON.stringify({ freq, got, expected }));
+  }
+}
 """
     completed = subprocess.run(
         [NODE, "-e", script],

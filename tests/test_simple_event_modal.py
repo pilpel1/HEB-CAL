@@ -59,6 +59,9 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert 'id="quick_end_wrap"' in advanced
     assert 'id="quick_end_clear"' in advanced
     assert "quick_recurrence" in advanced
+    assert 'value="weekly">כל שבוע<' in advanced
+    assert "function recurrenceCalendarVisible" in MODAL_JS
+    assert "calendar.hidden = !recurrenceCalendarVisible(freq.value)" in MODAL_JS
     assert "quick_description" in advanced
     assert "quick_reminder_enabled" in advanced
     assert "quickShiftBlock" in advanced
@@ -363,6 +366,34 @@ def test_edit_with_advanced_fields_opens_expanded(live_server, client):
         page.evaluate("async (day) => { await openQuickEventModal(day); }", ANCHOR)
         expect(page.locator("#quick_advanced")).to_be_hidden()
         browser.close()
+
+
+def test_weekly_hides_recurrence_calendar(live_server):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 390, "height": 844}, locale="he-IL")
+        _open_calendar(page, live_server)
+        page.evaluate("async (day) => { await openQuickEventModal(day); }", ANCHOR)
+        page.click("#quick_advanced_toggle")
+        expect(page.locator("#quick_recurrence_freq")).to_be_visible()
+        expect(page.locator("#quick_recurrence_calendar")).to_be_hidden()
+        page.select_option("#quick_recurrence_freq", "monthly")
+        expect(page.locator("#quick_recurrence_calendar")).to_be_visible()
+        page.select_option("#quick_recurrence_freq", "weekly")
+        expect(page.locator("#quick_recurrence_calendar")).to_be_hidden()
+        expect(page.locator("#quick_recurrence_end_row")).to_be_visible()
+        page.select_option("#quick_recurrence_freq", "yearly")
+        expect(page.locator("#quick_recurrence_calendar")).to_be_visible()
+        browser.close()
+
+
+def test_weekly_list_badge_copy():
+    listing = (REPO / "app/templates/events_list.html").read_text(encoding="utf-8")
+    assert "event.recurrence_freq === 'weekly'" in listing
+    assert "'כל שבוע'" in listing
 
 
 def test_clear_end_date_removes_it_on_save(live_server, client):

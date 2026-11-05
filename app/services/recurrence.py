@@ -27,6 +27,12 @@
     - חודשי ביום 31 → היום האחרון של החודש (פברואר 28/29, חודש בן 30 → 30).
       היום נמדד מהעוגן, לא מהמופע הקודם, כדי שמרץ אחרי פברואר יישאר 31.
 
+שבועי:
+    +7 ימים קלנדריים מהעוגן, לפי יום השבוע של תאריך ההתחלה.
+    שלישי חוזר כל שלישי, כולל מעבר חודש/שנה ומעבר שעון.
+    ``recurrence_calendar`` נשמר (עברי/לועזי) אבל לא נכנס לחישוב —
+    שבוע עברי הוא אותו מחזור של 7 ימים.
+
 סיום הסדרה (מה שמגיע קודם):
     - ``until``: תאריך לועזי כולל של תחילת המופע.
     - ``count``: N מופעים כולל הראשון.
@@ -87,7 +93,7 @@ HEBREW_DAYS = {
     27: "כז", 28: "כח", 29: "כט", 30: "ל",
 }
 
-FREQS = ("monthly", "yearly")
+FREQS = ("weekly", "monthly", "yearly")
 CALENDARS = ("gregorian", "hebrew")
 
 
@@ -115,7 +121,7 @@ def clean_recurrence(freq, calendar_name, until, count, anchor: date) -> dict | 
     if text in ("", "none", "null"):
         return None
     if text not in FREQS:
-        raise RecurrenceError("חזרה יכולה להיות חודשית, שנתית, או בלי חזרה")
+        raise RecurrenceError("חזרה יכולה להיות שבועית, חודשית, שנתית, או בלי חזרה")
 
     calendar_text = (str(calendar_name).strip().lower() if calendar_name else "") or "gregorian"
     if calendar_text not in CALENDARS:
@@ -224,6 +230,8 @@ def nth_start(anchor: date, freq: str, calendar_name: str, index: int) -> date:
         raise RecurrenceError("אינדקס מופע שלילי")
     if index == 0:
         return anchor
+    if freq == "weekly":
+        return anchor + timedelta(days=7 * index)
     if calendar_name == "hebrew":
         heb = _hebrew_anchor(anchor)
         if freq == "yearly":

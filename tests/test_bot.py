@@ -646,6 +646,29 @@ def test_html_escape_and_recurring_delete_warning(app):
     assert f"<code>{event_id}</code>" in ask["text"]
 
 
+def test_weekly_shows_on_today_and_bot_edits_the_series(app):
+    _person(app, "דני", chat=42)
+    event_id = _event(
+        app,
+        "חוג שבועי",
+        date(2026, 10, 15),
+        recurrence={
+            "recurrence_freq": "weekly",
+            "recurrence_calendar": "gregorian",
+        },
+    )
+    listed = _go(app, _msg("/today"))
+    assert "חוג שבועי" in listed["text"]
+    assert "חוזר" in listed["text"]
+    card = _press(app, listed, "חוג שבועי")
+    assert "כל הסדרה" in card["text"]
+    ask = _press(app, card, "מחיקה")
+    assert "סדרה" in ask["text"]
+    assert f"<code>{event_id}</code>" in ask["text"]
+    week = _go(app, _msg("/week"))
+    assert "חוג שבועי" in week["text"]
+
+
 def test_shifts_toggle_create_and_date_edit(app):
     _person(app, "דני", chat=42)
     off = _go(app, _cb("shifts"))
