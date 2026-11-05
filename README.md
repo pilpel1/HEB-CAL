@@ -228,7 +228,7 @@ python scripts/gcal_sync_worker.py
 
 אם משהו נכשל אחרי שכבר נגענו בקוד או במסד: חוזרים לקומיט הקודם, מתקינים שוב את החבילות הישנות, עוצרים את האפליקציה, משחזרים את מסד הנתונים מהגיבוי, ומפעילים מחדש. במסך מופיעה הודעה בעברית. הגיבוי נשאר בתיקייה גם כשהחזרה הצליחה.
 
-ההורדה לא משתמשת ב-remote של git (לפעמים שמור בו טוקן בכתובת). היא פונה אל `https://github.com/owner/name.git`. עותק shallow (`--depth 1`) נחסם — צריך clone מלא.
+ההורדה לא משתמשת ב-remote של git (לפעמים שמור בו טוקן בכתובת). היא פונה אל `https://github.com/owner/name.git`. עותק shallow (`git clone --depth 1`) נחסם — בהתקנה (כולל מופע נוסף) עושים clone מלא, בלי `--depth`. לא משנים את חסימת ה-shallow בעדכון.
 
 בשרת הבית שמים `FLASK_DEBUG=0`. רילודר של פיתוח קם באמצע החלפת קבצים ומבלבל את הבדיקה.
 
@@ -236,7 +236,7 @@ python scripts/gcal_sync_worker.py
 
 יחידות **systemd --user** (לא system). רצות כמשתמש של הריפו, עולות אחרי אתחול דרך `loginctl enable-linger`, והעדכון מהממשק עושה `systemctl --user` בלי סיסמת sudo. אין כלל sudoers. הריסטארט אחרי עדכון רץ מחוץ ליחידת ה-web (`systemd-run --user --unit=<מופע>-update-restart --collect`, ואם אין — `systemctl --user --no-block restart` של web+worker בפקודה אחת). עצירה ואז הפעלה מפוצלת הייתה הורגת את תהליך העדכון לפני שה-web עלה שוב.
 
-פעם אחת, מתוך הריפו (עם `.venv` ו-`.env`):
+פעם אחת, מתוך ריפו ב-clone מלא (בלי `--depth 1`; עם `.venv` ו-`.env`):
 
 ```bash
 chmod +x scripts/install_services.sh scripts/restart.sh
@@ -268,6 +268,8 @@ systemctl --user daemon-reload
 ### מופע נוסף למשפחה אחרת
 
 אותו שרת בית יכול להריץ כמה יומנים עצמאיים: כל משפחה בתיקיית clone משלה, עם `.venv`, SQLite, פורט, ויחידות systemd משלה. אופציונלי טוקן בוט טלגרם נפרד. לא מעתיקים `data/` ולא את `.env` ממופע קיים.
+
+clone מלא בלבד — בלי `--depth 1`. עותק shallow נחסם בעדכון מהממשק; החסימה הזו נשארת כמו שהיא.
 
 ```bash
 git clone https://github.com/pilpel1/HEB-CAL.git ~/heb-cal-family2
