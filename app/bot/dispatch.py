@@ -215,7 +215,20 @@ class Bot:
         text, markup = ui.home_screen(self.chat_id, self.linked, note=note)
         return self.out(text, markup)
 
+    def _allow_unlinked(self, parsed: dict) -> bool:
+        """צ'אט לא מחובר: רק /start, או מסך החיבור שהמשתמש פתח בעצמו."""
+        if parsed["kind"] == "callback":
+            data = parsed["data"] or ""
+            return data in {"home", "cancel", "set"} or data.startswith("set")
+        text = (parsed.get("text") or "").strip()
+        if text.startswith("/"):
+            command = parse_command(text)
+            return bool(command and command[0] == "start")
+        return self.session.get("flow") == "link_name"
+
     def run(self, parsed: dict) -> dict:
+        if not self.linked and not self._allow_unlinked(parsed):
+            return {"skip": True}
         if parsed["kind"] == "callback":
             data = parsed["data"]
             if not data or not _CB.fullmatch(data):
