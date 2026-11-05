@@ -194,8 +194,11 @@ def test_until_count_and_plain_event_unchanged():
     assert rows[0]["recurring"] is False
     assert expand_event(once, [], date(2026, 6, 1), date(2026, 6, 30)) == []
 
+    weekly_rule = clean_recurrence("weekly", "hebrew", None, None, anchor)
+    assert weekly_rule["recurrence_freq"] == "weekly"
+    assert weekly_rule["recurrence_calendar"] == "hebrew"
     with pytest.raises(RecurrenceError):
-        clean_recurrence("weekly", "gregorian", None, None, anchor)
+        clean_recurrence("daily", "gregorian", None, None, anchor)
     with pytest.raises(RecurrenceError):
         clean_recurrence("yearly", "gregorian", "2026-05-01", None, anchor)
     with pytest.raises(RecurrenceError):
@@ -465,3 +468,261 @@ def test_export_round_trip_keeps_rule_and_exception(client):
     assert len(restored) == 1
     assert restored[0]["recurrence_calendar"] == "hebrew"
     assert restored[0]["exceptions"][0]["kind"] == "deleted"
+
+
+def test_weekly_is_plus_seven_calendar_days_across_month_and_year():
+    tuesday = date(2026, 1, 6)
+    assert tuesday.weekday() == 1
+    assert nth_start(tuesday, "weekly", "gregorian", 1) == date(2026, 1, 13)
+    assert nth_start(tuesday, "weekly", "gregorian", 4) == date(2026, 2, 3)
+    assert nth_start(tuesday, "weekly", "hebrew", 4) == date(2026, 2, 3)
+    assert nth_start(date(2026, 12, 29), "weekly", "gregorian", 1) == date(2027, 1, 5)
+    assert date(2027, 1, 5).weekday() == 1
+
+    counted = _dates(
+        _event(tuesday, "weekly", "gregorian", recurrence_count=3),
+        start=date(2026, 1, 1),
+        end=date(2026, 3, 1),
+    )
+    assert counted == ["2026-01-06", "2026-01-13", "2026-01-20"]
+
+    until = _dates(
+        _event(tuesday, "weekly", "gregorian", recurrence_until="2026-01-20"),
+        start=date(2026, 1, 1),
+        end=date(2026, 3, 1),
+    )
+    assert until == ["2026-01-06", "2026-01-13", "2026-01-20"]
+    assert "2026-01-27" not in until
+
+    endless = _dates(
+        _event(tuesday, "weekly", "hebrew"),
+        start=date(2026, 1, 1),
+        end=date(2026, 2, 3),
+    )
+    assert endless == [
+        "2026-01-06",
+        "2026-01-13",
+        "2026-01-20",
+        "2026-01-27",
+        "2026-02-03",
+    ]
+    rule = clean_recurrence("weekly", "hebrew", None, None, tuesday)
+    assert rule["recurrence_calendar"] == "hebrew"
+
+
+def test_weekly_exceptions_keep_original_date():
+    event = _event(date(2026, 1, 6), "weekly", "gregorian", recurrence_count=5)
+    deleted = _dates(
+        event,
+        exceptions=[{"original_date": "2026-01-13", "kind": "deleted"}],
+        start=date(2026, 1, 1),
+        end=date(2026, 2, 1),
+    )
+    assert deleted == ["2026-01-06", "2026-01-20", "2026-01-27"]
+
+    moved = expand_event(
+        event,
+        [{
+            "original_date": "2026-01-20",
+            "kind": "edited",
+            "title": "הוזז",
+            "gregorian_date": "2026-01-21",
+            "hebrew_date": "אחר",
+            "time": "18:00",
+            "description": "רק הפעם",
+            "end_date": None,
+            "color": "green",
+        }],
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+    )
+    by_date = {row["gregorian_date"]: row for row in moved}
+    assert "2026-01-20" not in by_date
+    assert by_date["2026-01-21"]["title"] == "הוזז"
+    assert by_date["2026-01-21"]["occurrence_date"] == "2026-01-20"
+    assert by_date["2026-01-21"]["is_exception"] is True
+    assert by_date["2026-01-27"]["title"] == "חוזר"
+
+
+def test_weekly_api_expands_and_scopes_edit_delete(client):
+    created = client.post(
+        "/api/events",
+        json={
+            "title": "שיעור",
+            "gregorian_date": "2026-01-06",
+            "hebrew_date": "א",
+            "time": "09:00",
+            "recurrence_freq": "weekly",
+            "recurrence_calendar": "gregorian",
+            "recurrence_count": 4,
+        },
+    )
+    assert created.status_code == 200
+    event_id = created.get_json()["id"]
+
+    masters = client.get("/api/events").get_json()
+    assert len(masters) == 1
+    assert masters[0]["recurrence_freq"] == "weekly"
+    assert masters[0]["exceptions"] == []
+
+    expanded = client.get("/api/events?from=2026-01-01&to=2026-02-01").get_json()
+    assert [row["gregorian_date"] for row in expanded] == [
+        "2026-01-06",
+        "2026-01-13",
+        "2026-01-20",
+        "2026-01-27",
+    ]
+    assert all(row["id"] == event_id for row in expanded)
+    assert all(row["recurring"] is True for row in expanded)
+
+    moved = client.put(
+        f"/api/events/{event_id}",
+        json={
+            "title": "שיעור מוזז",
+            "gregorian_date": "2026-01-14",
+            "hebrew_date": "אחר",
+            "time": "11:00",
+            "scope": "occurrence",
+            "occurrence_date": "2026-01-13",
+        },
+    )
+    assert moved.status_code == 200
+    week = client.get("/api/events?from=2026-01-01&to=2026-01-31").get_json()
+    by_date = {row["gregorian_date"]: row for row in week if row["title"].startswith("שיעור")}
+    assert "2026-01-13" not in by_date
+    assert by_date["2026-01-14"]["title"] == "שיעור מוזז"
+    assert by_date["2026-01-14"]["occurrence_date"] == "2026-01-13"
+    assert by_date["2026-01-20"]["title"] == "שיעור"
+
+    master = client.get(f"/api/events/{event_id}").get_json()
+    assert master["title"] == "שיעור"
+    assert master["gregorian_date"] == "2026-01-06"
+    occurrence = client.get(f"/api/events/{event_id}?occurrence_date=2026-01-13").get_json()
+    assert occurrence["gregorian_date"] == "2026-01-14"
+    assert occurrence["occurrence_date"] == "2026-01-13"
+    assert occurrence["series"]["gregorian_date"] == "2026-01-06"
+
+    removed = client.delete(
+        f"/api/events/{event_id}?scope=occurrence&occurrence_date=2026-01-20"
+    )
+    assert removed.status_code == 200
+    after_delete = client.get("/api/events?from=2026-01-20&to=2026-01-20").get_json()
+    assert all(row["id"] != event_id for row in after_delete)
+    still = client.get(f"/api/events/{event_id}").get_json()
+    assert still["title"] == "שיעור"
+
+    series = client.put(
+        f"/api/events/{event_id}",
+        json={
+            "title": "שיעור מעודכן",
+            "gregorian_date": "2026-01-06",
+            "hebrew_date": "א",
+            "time": "10:00",
+            "recurrence_freq": "weekly",
+            "recurrence_calendar": "gregorian",
+            "recurrence_count": 4,
+            "scope": "all",
+        },
+    )
+    assert series.status_code == 200
+    later = client.get("/api/events?from=2026-01-27&to=2026-01-27").get_json()
+    match = next(row for row in later if row["id"] == event_id)
+    assert match["title"] == "שיעור מעודכן"
+    assert match["time"] == "10:00"
+
+    deleted = client.delete(f"/api/events/{event_id}")
+    assert deleted.status_code == 200
+    assert client.get("/api/events").get_json() == []
+
+
+def test_weekly_reminders_fire_per_occurrence_and_skip_deleted(client, app):
+    from app.reminders.due import telegram_due
+    from app.reminders.repository import mark_reminder_sent
+    from app.reminders.worker import process_due_reminders
+
+    person = client.post(
+        "/api/reminder-people",
+        json={"name": "דני", "telegram_chat_id": "777"},
+    ).get_json()
+    created = client.post(
+        "/api/events",
+        json={
+            "title": "טסט שבועי",
+            "gregorian_date": "2026-01-06",
+            "hebrew_date": "א",
+            "time": "10:00",
+            "recurrence_freq": "weekly",
+            "recurrence_calendar": "gregorian",
+            "recurrence_count": 3,
+            "reminders": [{"offset_minutes": 0, "recipient_ids": [person["id"]]}],
+        },
+    )
+    assert created.status_code == 200
+    event_id = created.get_json()["id"]
+
+    first = datetime(2026, 1, 6, 10, 0, tzinfo=TZ)
+    second = datetime(2026, 1, 13, 10, 0, tzinfo=TZ)
+    third = datetime(2026, 1, 20, 10, 0, tzinfo=TZ)
+    with app.app_context():
+        due = telegram_due(now=first)
+        assert len(due) == 1
+        assert due[0]["event_id"] == event_id
+        assert due[0]["occurrence_date"] == "2026-01-06"
+
+        sent = []
+
+        def fake_send(token, chat_id, text):
+            sent.append(text)
+            return True
+
+        assert process_due_reminders(now=first, send=fake_send, token="t") == 1
+        assert telegram_due(now=first) == []
+
+        nxt = telegram_due(now=second)
+        assert len(nxt) == 1
+        assert nxt[0]["occurrence_date"] == "2026-01-13"
+        mark_reminder_sent(nxt[0]["id"], occurrence_date=nxt[0]["occurrence_date"])
+        assert telegram_due(now=second) == []
+        assert telegram_due(now=first) == []
+
+    removed = client.delete(
+        f"/api/events/{event_id}?scope=occurrence&occurrence_date=2026-01-20"
+    )
+    assert removed.status_code == 200
+    with app.app_context():
+        assert telegram_due(now=third) == []
+
+
+def test_weekly_export_round_trip_keeps_rule_and_exception(client):
+    import json
+
+    created = client.post(
+        "/api/events",
+        json={
+            "title": "חוג",
+            "gregorian_date": "2026-01-06",
+            "hebrew_date": "א",
+            "recurrence_freq": "weekly",
+            "recurrence_calendar": "hebrew",
+        },
+    )
+    event_id = created.get_json()["id"]
+    client.delete(f"/api/events/{event_id}?scope=occurrence&occurrence_date=2026-01-13")
+
+    exported = json.loads(client.get("/api/events/export").data.decode("utf-8"))
+    match = next(row for row in exported["events"] if row["id"] == event_id)
+    assert match["recurrence_freq"] == "weekly"
+    assert match["recurrence_calendar"] == "hebrew"
+    assert any(
+        ex["kind"] == "deleted" and ex["original_date"] == "2026-01-13"
+        for ex in match["exceptions"]
+    )
+
+    imported = client.post("/api/events/import?mode=replace", json=exported)
+    assert imported.status_code == 200
+    restored = client.get("/api/events").get_json()
+    assert restored[0]["recurrence_freq"] == "weekly"
+    assert restored[0]["recurrence_calendar"] == "hebrew"
+    assert restored[0]["exceptions"][0]["original_date"] == "2026-01-13"
+    skipped = client.get("/api/events?from=2026-01-13&to=2026-01-13").get_json()
+    assert all(row["id"] != event_id for row in skipped)

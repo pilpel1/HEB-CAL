@@ -271,6 +271,10 @@ function recurrenceCalendarForDateEntry(source, touched) {
     return source;
 }
 
+function recurrenceCalendarVisible(freq) {
+    return Boolean(freq) && freq !== 'weekly';
+}
+
 function applyRecurrenceCalendarDefault() {
     const next = recurrenceCalendarForDateEntry(dateEntrySource, recurrenceCalendarTouched);
     if (!next) {
@@ -493,7 +497,7 @@ function syncRecurrenceControls() {
         return;
     }
     const repeating = Boolean(freq.value);
-    calendar.hidden = !repeating;
+    calendar.hidden = !recurrenceCalendarVisible(freq.value);
     endRow.hidden = !repeating;
     until.hidden = !repeating || mode.value !== 'until';
     count.hidden = !repeating || mode.value !== 'count';

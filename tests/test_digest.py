@@ -311,6 +311,28 @@ def test_recurring_occurrence_appears_without_series_id(app):
     assert "מזהה:" not in text
 
 
+def test_weekly_occurrence_appears_in_digest(app):
+    _event(
+        app,
+        "חוג שבועי",
+        date(2026, 10, 15),
+        recurrence={
+            "recurrence_freq": "weekly",
+            "recurrence_calendar": "gregorian",
+        },
+    )
+    _person(app, "דני", chat="42", daily_digest_enabled=True)
+    with app.app_context():
+        from app.reminders.repository import list_people
+
+        people = {person["id"]: person for person in list_people()}
+        thursday = format_digest([THURSDAY], people)
+        friday = format_digest([FRIDAY], people)
+    assert "<b>חוג שבועי</b>" in thursday
+    assert "מזהה:" not in thursday
+    assert "חוג שבועי" not in friday
+
+
 def test_process_scheduled_runs_digest_after_reminders(app, monkeypatch):
     import app.reminders.worker as worker
 
