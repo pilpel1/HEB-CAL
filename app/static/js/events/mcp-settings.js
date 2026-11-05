@@ -105,7 +105,7 @@ function renderMcpKeys(keys) {
                 <td data-label="משתמש">${escapeHtml(key.user_name || '')}</td>
                 <td data-label="הרשאה">${escapeHtml(mcpPermissionLabel(key.permission))}</td>
                 <td data-label="שימוש אחרון">${escapeHtml(formatMcpStamp(key.last_used_at))}</td>
-                <td data-label="תפוגה">${escapeHtml(formatMcpStamp(key.expires_at))} (${escapeHtml(mcpStatusLabel(key.status))})</td>
+                <td data-label="תפוגה">${escapeHtml(formatMcpStamp(key.effective_expires_at || key.expires_at))} (${escapeHtml(mcpStatusLabel(key.status))})</td>
                 <td data-label="">${revoke}</td>
             </tr>
         `;

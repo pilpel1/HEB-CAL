@@ -20,6 +20,30 @@ def _meta():
     }
 
 
+def test_query_string_and_trailing_slash_are_not_another_way_in(app, client):
+    user = add_user(app)
+    token = make_key(app, user)
+    message = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+    from_query = client.post(
+        f"/mcp?access_token={token}",
+        json=message,
+        headers={"Content-Type": "application/json"},
+    )
+    assert from_query.status_code == 401
+    assert token not in from_query.get_data(as_text=True)
+    assert key_row(app)[0]["last_used_at"] is None
+
+    slashed = client.post(
+        "/mcp/",
+        json=message,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    assert slashed.status_code == 404
+    assert slashed.get_json(silent=True) is None
+    assert token not in slashed.get_data(as_text=True)
+    assert key_row(app)[0]["last_used_at"] is None
+
+
 def test_only_the_exact_mcp_path_is_registered(app, client):
     rules = {
         rule.rule for rule in app.url_map.iter_rules() if rule.rule == "/mcp" or rule.rule.startswith("/mcp/")

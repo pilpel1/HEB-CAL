@@ -86,6 +86,17 @@ def _status(row, now: datetime) -> str:
     return "active"
 
 
+def _effective_expiry(row) -> str | None:
+    """המועד שבו המפתח באמת מפסיק: המוקדם מבין חלון 30 הימים ותאריך הסיום."""
+    sliding = _parse_stamp(row["expires_at"])
+    absolute = _parse_stamp(row["absolute_expires_at"])
+    if sliding is None:
+        return row["absolute_expires_at"]
+    if absolute is None or absolute >= sliding:
+        return row["expires_at"]
+    return row["absolute_expires_at"]
+
+
 def _public(row, now: datetime) -> dict:
     return {
         "id": row["id"],
@@ -98,6 +109,7 @@ def _public(row, now: datetime) -> dict:
         "last_used_at": row["last_used_at"],
         "expires_at": row["expires_at"],
         "absolute_expires_at": row["absolute_expires_at"],
+        "effective_expires_at": _effective_expiry(row),
         "revoked_at": row["revoked_at"],
         "status": _status(row, now),
     }

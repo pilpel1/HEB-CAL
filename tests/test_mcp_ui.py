@@ -50,6 +50,7 @@ def test_create_shows_the_key_once_and_revoke_confirms(live_server, app):
         expect(page.locator("#mcpKeyPermission")).to_have_value("read")
         page.locator("#mcpKeyLabel").fill("Cursor בטלפון")
         page.locator("#mcpKeyPermission").select_option("write")
+        page.locator("#mcpKeyAbsolute").fill("2026-11-20")
         page.locator("#mcpKeyCreate").click()
         dialog = page.locator("#mcpKeyModal")
         expect(dialog).to_be_visible()
@@ -69,6 +70,22 @@ def test_create_shows_the_key_once_and_revoke_confirms(live_server, app):
         expect(page.locator("#mcpKeyList")).to_contain_text(prefix)
         expect(page.locator("#mcpKeyList")).to_contain_text("קריאה וכתיבה")
         assert token not in page.locator("#mcpKeyList").inner_text()
+        expiry = page.evaluate(
+            """() => fetch('/api/mcp-keys').then((response) => response.json()).then((data) => {
+                const key = data.keys[0];
+                const cell = document.querySelector('#mcpKeyList [data-label="תפוגה"]');
+                return {
+                    effective: key.effective_expires_at,
+                    sliding: key.expires_at,
+                    cell: cell ? cell.textContent : '',
+                    effectiveLabel: formatMcpStamp(key.effective_expires_at),
+                    slidingLabel: formatMcpStamp(key.expires_at),
+                };
+            })"""
+        )
+        assert expiry["effective"] < expiry["sliding"]
+        assert expiry["effectiveLabel"] in expiry["cell"]
+        assert expiry["slidingLabel"] not in expiry["cell"]
         page.once("dialog", lambda popup: popup.accept())
         page.locator("[data-mcp-revoke]").click()
         expect(page.locator("#mcpKeyList")).to_contain_text("מבוטל")

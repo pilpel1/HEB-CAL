@@ -71,8 +71,10 @@ def test_create_response_is_no_store_and_list_never_returns_secret(app, client):
     assert keys[0]["permission"] == "write"
     assert set(keys[0]) == {
         "id", "user_id", "user_name", "label", "prefix", "permission", "created_at",
-        "last_used_at", "expires_at", "absolute_expires_at", "revoked_at", "status",
+        "last_used_at", "expires_at", "absolute_expires_at", "effective_expires_at",
+        "revoked_at", "status",
     }
+    assert keys[0]["effective_expires_at"] == keys[0]["expires_at"]
 
     revoke_token = _csrf(client)
     revoked = client.delete(f"/api/mcp-keys/{keys[0]['id']}", headers={"X-CSRF-Token": revoke_token})
@@ -245,10 +247,52 @@ def test_absolute_expiry_wins_over_activity(app, client, clock):
     token = make_key(app, user, absolute="2026-11-10")
     row = key_row(app)[0]
     assert row["absolute_expires_at"] == "2026-11-10T22:00:00Z"
+    listed = client.get("/api/mcp-keys").get_json()["keys"][0]
+    assert listed["expires_at"] == row["expires_at"]
+    assert listed["expires_at"] > listed["absolute_expires_at"]
+    assert listed["effective_expires_at"] == listed["absolute_expires_at"]
     clock["now"] = T0 + timedelta(days=5, hours=9)
     assert _list_ok(client, token)
+    after_use = client.get("/api/mcp-keys").get_json()["keys"][0]
+    assert after_use["expires_at"] > after_use["absolute_expires_at"]
+    assert after_use["effective_expires_at"] == after_use["absolute_expires_at"]
     clock["now"] = T0 + timedelta(days=5, hours=10)
     assert legacy(client, token, "tools/list").status_code == 401
+
+
+def test_forged_access_header_does_not_choose_the_key_owner(app, client):
+    """כותרת Cf-Access רק ממלאת ברירת מחדל ב-GET. היא לא בוחרת את בעל המפתח."""
+    shira = add_user(app, "שירה", google_email="shira@example.com")
+    avichay = add_user(app, "אביחי", google_email="avichay@example.com")
+    forged = {"Cf-Access-Authenticated-User-Email": "shira@example.com"}
+    csrf = client.get("/api/mcp-keys", headers=forged).get_json()["csrf_token"]
+    missing = client.post(
+        "/api/mcp-keys",
+        json={"label": "בלי בחירה"},
+        headers={**forged, "X-CSRF-Token": csrf},
+    )
+    assert missing.status_code == 400
+    assert "בחרו משתמש" in missing.get_json()["error"]
+    assert key_row(app) == []
+
+    created = client.post(
+        "/api/mcp-keys",
+        json={"user_id": avichay, "label": "מפורש"},
+        headers={**forged, "X-CSRF-Token": csrf},
+    )
+    assert created.status_code == 201
+    body = created.get_json()
+    assert body["key"]["user_id"] == avichay
+    assert body["key"]["user_id"] != shira
+    assert "secret_hash" not in body["key"]
+    assert key_row(app)[0]["user_id"] == avichay
+
+    listing = client.get(
+        "/api/mcp-keys",
+        headers={"Cf-Access-Authenticated-User-Email": "avichay@example.com"},
+    ).get_json()
+    assert listing["default_user_id"] == avichay
+    assert [row["user_id"] for row in listing["keys"]] == [avichay]
 
 
 def test_default_owner_from_access_email(app, client):
