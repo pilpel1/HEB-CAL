@@ -157,8 +157,8 @@ def _day_label(prefix: str, day: date) -> str:
     return f"{prefix} · {hebrew_day_month(day)}"
 
 
-def home_screen(chat_id, linked: list[dict], *, note: str = "") -> tuple[str, dict]:
-    """צ'אט לא מחובר: רק המזהה. מחובר: רק התפריט."""
+def home_screen(chat_id, linked: list[dict], *, note: str = "") -> tuple[str, dict | None]:
+    """צ'אט לא מחובר: רק המזהה והוראות, בלי כפתורים. מחובר: רק התפריט."""
     lines = []
     if note:
         lines.append(esc(note).rstrip())
@@ -167,7 +167,7 @@ def home_screen(chat_id, linked: list[dict], *, note: str = "") -> tuple[str, di
         from app.reminders.telegram import chat_id_reply
 
         lines.append(chat_id_reply(chat_id))
-        return "\n".join(lines), kb([[("חיבור כאן", "set:link")]])
+        return "\n".join(lines), None
     lines.append(MENU_TITLE)
     return "\n".join(lines), kb(menu_rows())
 

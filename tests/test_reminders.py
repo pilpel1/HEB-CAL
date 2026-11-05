@@ -335,7 +335,8 @@ def test_settings_page_and_start_command(client):
     assert start_chat_id({"message": {"text": "/started", "chat": {"id": 1}}}) is None
     assert chat_id_reply(42) == (
         "מזהה הצ'אט שלך: <code>42</code>\n"
-        "מעתיקים את המספר להגדרות, תחת תזכורות."
+        "שולחים /start, מעתיקים את המספר, "
+        "מדביקים בהגדרות → משתמשים בשדה מזהה צ׳אט של האדם, ושומרים."
     )
     assert "<code>-100</code>" in chat_id_reply(-100)
     assert "<code>&lt;id&gt;</code>" in chat_id_reply("<id>")
@@ -353,6 +354,8 @@ def test_settings_page_and_start_command(client):
     assert calls[1][1]["chat_id"] == 42
     assert calls[1][1]["parse_mode"] == "HTML"
     assert "<code>42</code>" in calls[1][1]["text"]
+    assert "reply_markup" not in calls[1][1]
+    assert "חיבור כאן" not in calls[1][1]["text"]
 
 
 def test_delete_person_missing_and_empty_name(client):

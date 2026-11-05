@@ -38,6 +38,22 @@ def _go(app, update, now=NOW):
         return handle_update(update, now=now)
 
 
+UNLINKED_START_HINT = (
+    "שולחים /start, מעתיקים את המספר, "
+    "מדביקים בהגדרות → משתמשים בשדה מזהה צ׳אט של האדם, ושומרים."
+)
+
+
+def _assert_unlinked_start(reply, chat_id):
+    assert reply.get("skip") is not True
+    assert reply["text"] == (
+        f"מזהה הצ'אט שלך: <code>{chat_id}</code>\n{UNLINKED_START_HINT}"
+    )
+    assert not reply.get("markup"), reply.get("markup")
+    assert "חיבור כאן" not in reply["text"]
+    assert "inline_keyboard" not in str(reply.get("markup") or {})
+
+
 def _buttons(reply):
     found = []
     for row in reply["markup"]["inline_keyboard"]:
@@ -237,18 +253,11 @@ def test_plain_adar_follows_the_hebrew_year():
 
 def test_start_unlinked_is_only_the_chat_id(app):
     reply = _go(app, _msg("/start"))
-    assert reply["text"] == (
-        "מזהה הצ'אט שלך: <code>42</code>\n"
-        "מעתיקים את המספר להגדרות, תחת תזכורות."
-    )
-    labels = [button["text"] for button in _buttons(reply)]
-    assert labels == ["חיבור כאן"]
-    for label in ("היום", "השבוע", "אירועי החודש", "משמרות", "לפי אדם", "חיפוש", "אירוע חדש", "הגדרות"):
-        assert label not in labels
+    _assert_unlinked_start(reply, 42)
     assert "מה עושים?" not in reply["text"]
-    link = _press(app, reply, "חיבור כאן")
-    assert "לחבר את הצ'אט" in link["text"]
-    _has_exit(link)
+    stale = _go(app, _cb("set:link"))
+    assert stale.get("skip") is True
+    assert not stale.get("text")
 
 
 def test_start_linked_is_only_the_menu(app):
@@ -285,20 +294,14 @@ def test_start_linked_is_only_the_menu(app):
     assert "דני" in settings["text"]
     assert "נועה" in settings["text"]
     group = _go(app, _msg("/start", chat=-100))
-    assert "<code>-100</code>" in group["text"]
-    assert [button["text"] for button in _buttons(group)] == ["חיבור כאן"]
+    _assert_unlinked_start(group, -100)
 
 
-def test_unlinked_chat_is_silent_except_start_and_linking(app):
+def test_unlinked_chat_is_silent_except_start(app):
     start = _go(app, _msg("/start", chat=99))
-    assert start["text"] == (
-        "מזהה הצ'אט שלך: <code>99</code>\n"
-        "מעתיקים את המספר להגדרות, תחת תזכורות."
-    )
-    assert [button["text"] for button in _buttons(start)] == ["חיבור כאן"]
+    _assert_unlinked_start(start, 99)
     again = _go(app, _msg("/start@HebCalBot", chat=99))
-    assert again.get("skip") is not True
-    assert "<code>99</code>" in again["text"]
+    _assert_unlinked_start(again, 99)
 
     silent = [
         _msg("שלום", chat=99),
@@ -315,25 +318,21 @@ def test_unlinked_chat_is_silent_except_start_and_linking(app):
         _cb("today", chat=99),
         _cb("add", chat=99),
         _cb("who", chat=99),
+        _cb("set:link", chat=99),
+        _cb("set:new", chat=99),
+        _cb("home", chat=99),
     ]
     for payload in silent:
         reply = _go(app, payload)
         assert reply.get("skip") is True, payload
         assert not reply.get("text"), reply
-
-    picker = _press(app, start, "חיבור כאן", chat=99)
-    assert "לחבר את הצ'אט" in picker["text"]
-    _press(app, picker, "אני לא ברשימה", chat=99)
-    created = _go(app, _msg("נועה", chat=99))
-    assert created.get("skip") is not True
-    assert "נועה" in created["text"]
-    listed = _go(app, _msg("/today", chat=99))
-    assert listed.get("skip") is not True
-    assert listed.get("text")
+        assert not reply.get("markup"), reply.get("markup")
 
     _person(app, "דני", chat=42)
     menu = _go(app, _msg("/start"))
     assert "מה להציג" in menu["text"]
+    assert menu.get("markup")
+    assert "חיבור כאן" not in [button["text"] for button in _buttons(menu)]
     hello = _go(app, _msg("שלום"))
     assert hello.get("skip") is not True
     assert "בחרו כפתור" in hello["text"]
@@ -976,16 +975,15 @@ def test_edit_time_and_replace_lonely_chat(app):
         assert get_all_events()[0]["time"] == "18:00"
 
     person = _person(app, "יחיד", chat=77)
-    start = _go(app, _msg("/start", chat=8))
-    conflict = _press(app, _press(app, start, "חיבור כאן", chat=8), "יחיד", chat=8)
-    assert "להחליף" in conflict["text"]
-    assert "<code>77</code>" in conflict["text"]
-    done = _press(app, conflict, "כן, להחליף", chat=8)
+    settings = _go(app, _msg("/settings"))
+    conflict = _press(app, _press(app, settings, "חיבור לאדם"), "יחיד")
+    assert "77" in conflict["text"]
+    done = _press(app, conflict, "חיבור בלי לנתק")
     assert "יחיד" in done["text"]
     with app.app_context():
         from app.reminders.repository import get_person
 
-        assert get_person(person["id"])["telegram_chat_id"] == "8"
+        assert get_person(person["id"])["telegram_chat_id"] == "42"
 
 
 def test_chats_do_not_share_a_draft(app):
@@ -1064,6 +1062,8 @@ def test_consume_updates_skips_unlinked_ordinary_messages(app):
     assert len(sends) == 1
     assert sends[0]["chat_id"] == 99
     assert "<code>99</code>" in sends[0]["text"]
+    assert "reply_markup" not in sends[0]
+    assert "חיבור כאן" not in sends[0]["text"]
     assert [call[0] for call in calls if call[0] == "editMessageText"] == []
 
 
@@ -1565,19 +1565,17 @@ def test_bot_unlink_turns_digest_off_after_confirm(app):
 
 def test_bot_create_person_reuses_existing_shift_worker(app):
     shira = _person(app, "שירה", works_shifts=1, receives_reminders=0)
-    start = _go(app, _msg("/start", chat=7))
-    picker = _press(app, start, "חיבור כאן", chat=7)
+    _person(app, "מחבר", chat=7)
+    settings = _go(app, _msg("/settings", chat=7))
+    picker = _press(app, settings, "חיבור לאדם", chat=7)
     fresh = _press(app, picker, "אני לא ברשימה", chat=7)
     reused = _go(app, _msg("  שירה ", chat=7))
     assert "שירה" in reused["text"]
     assert "נוצר" not in reused["text"]
     with app.app_context():
-        from app.reminders.repository import list_people
+        from app.reminders.repository import get_person
 
-        people = list_people()
-        assert len(people) == 1
-        person = people[0]
-        assert person["id"] == shira["id"]
+        person = get_person(shira["id"])
         assert person["telegram_chat_id"] == "7"
         assert person["receives_reminders"] is True
         assert person["works_shifts"] is True
@@ -1585,12 +1583,13 @@ def test_bot_create_person_reuses_existing_shift_worker(app):
 
 def test_bot_create_person_conflicts_on_other_chat(app):
     _person(app, "שירה", chat=99, works_shifts=1)
-    start = _go(app, _msg("/start", chat=7))
-    picker = _press(app, start, "חיבור כאן", chat=7)
+    _person(app, "מחבר", chat=7)
+    settings = _go(app, _msg("/settings", chat=7))
+    picker = _press(app, settings, "חיבור לאדם", chat=7)
     _press(app, picker, "אני לא ברשימה", chat=7)
     conflict = _go(app, _msg("שירה", chat=7))
     assert "צ׳אט" in conflict["text"]
     with app.app_context():
         from app.reminders.repository import list_people
 
-        assert len(list_people()) == 1
+        assert len(list_people()) == 2
