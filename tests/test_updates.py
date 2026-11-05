@@ -73,7 +73,7 @@ def _update_env(monkeypatch, tmp_path):
 def test_version_file_matches_changelog():
     version = (REPO / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert parse_version(version) == (1, 0, 28)
+    assert parse_version(version) == (1, 0, 29)
     assert f"## {version}" in changelog
     assert "## 1.0.8" in changelog
     assert "## 1.0.3" in changelog
@@ -326,6 +326,12 @@ class FakeOps:
     def run_hook(self, version):
         self._fail("run_hook", "סקריפט העדכון נכשל.", "hook")
 
+    def install_runtime_units(self):
+        self._fail("install_runtime_units", "עדכון יחידות systemd נכשל.", "units")
+
+    def restore_units(self):
+        self.calls.append(("restore_units",))
+
     def restart(self):
         if self.restart_fails:
             self.calls.append(("restart",))
@@ -357,6 +363,14 @@ def test_flow_success_and_rollback_paths():
     assert ops.payload["state"] == "success"
     assert "restore_database" not in _names(ops)
     assert _names(ops).count("pip_install") == 1
+    assert _names(ops).index("install_runtime_units") < _names(ops).index("restart")
+
+    units = FakeOps(fail_at="install_runtime_units")
+    execute_update(units, Plan("git", "v1.2.0", "1.2.0"))
+    assert units.payload["state"] == "failed"
+    assert "יחידות systemd" in units.payload["message"]
+    assert "restore_units" in _names(units)
+    assert "checkout_sha" in _names(units)
 
     dirty = FakeOps(fail_at="ensure_clean")
     execute_update(dirty, Plan("git", "v1.2.0", "1.2.0"))
@@ -370,6 +384,7 @@ def test_flow_success_and_rollback_paths():
     assert "חזרנו לגרסה הקודמת ולגיבוי" in health.payload["message"]
     order = _names(health)
     assert order.index("stop_app") < order.index("restore_database")
+    assert order.index("restore_units") < order.index("restore_database")
     assert "checkout_sha" in order
     restored_at = order.index("restore_database")
     assert "restart" in order[restored_at:]
@@ -378,6 +393,7 @@ def test_flow_success_and_rollback_paths():
     execute_update(packages, Plan("git", "v1.2.0", "1.2.0"))
     assert "מסד הנתונים לא השתנה" in packages.payload["message"]
     assert "restore_database" not in _names(packages)
+    assert "restore_units" not in _names(packages)
     assert "checkout_sha" in _names(packages)
 
     hook = FakeOps(fail_at="run_hook", restart_on=False)
@@ -621,7 +637,58 @@ def test_check_and_apply_ignore_commands_from_the_request(client, monkeypatch):
     assert args[args.index("--tag") + 1] == "v1.2.0"
     assert FakePopen.kwargs["shell"] is False
     assert FakePopen.kwargs["start_new_session"] is True
+    assert FakePopen.kwargs["env"]["HEB_CAL_UPDATE_MAY_DIE"] == "1"
     assert before == "/bin/true"
+
+
+def test_spawn_updater_uses_systemd_run_outside_web_cgroup(monkeypatch, tmp_path):
+    from app.updates.service import spawn_updater
+
+    monkeypatch.setattr("app.updates.service.systemd_user_units_installed", lambda *a, **k: True)
+    monkeypatch.setattr(
+        "app.updates.service.shutil.which",
+        lambda name: "/usr/bin/systemd-run" if name == "systemd-run" else None,
+    )
+    monkeypatch.setattr("app.updates.service.instance_name", lambda *a, **k: "gisim")
+    monkeypatch.setenv("HEB_CAL_UPDATE_MAY_DIE", "1")
+    runs = []
+    seen_env = {}
+
+    def fake_subprocess_run(argv, **kwargs):
+        runs.append(list(argv))
+        seen_env.update(kwargs.get("env") or {})
+
+        class Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Proc()
+
+    def fake_run_argv(args, **kwargs):
+        class Proc:
+            returncode = 0
+            stdout = "4242\n" if "MainPID" in args else ""
+            stderr = ""
+
+        return Proc()
+
+    monkeypatch.setattr("app.updates.service.subprocess.run", fake_subprocess_run)
+    monkeypatch.setattr("app.updates.service.run_argv", fake_run_argv)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("Popen fallback must not run after systemd-run")
+
+    monkeypatch.setattr("app.updates.service.subprocess.Popen", boom)
+    pid = spawn_updater("1.0.29", "v1.0.29", "git", tmp_path / "status.json")
+    assert pid == 4242
+    joined = " ".join(runs[0])
+    assert "systemd-run" in joined
+    assert "--user" in joined
+    assert "--unit=gisim-update-job" in joined
+    assert "app.updates.runner" in joined
+    assert "HEB_CAL_UPDATE_MAY_DIE" not in seen_env
+    assert all("rm" not in " ".join(row) for row in runs)
 
 
 def test_docker_mode_does_not_spawn(client, monkeypatch):
@@ -848,6 +915,8 @@ def test_restart_script_is_generic_and_stop_is_safe(tmp_path):
     assert "--unit=" in text
     assert "pid_is_ours" in text
     assert "systemd_queue_restart" in text
+    assert "run_web.py" in text
+    assert "SOCKET_UNIT" not in text
     assert "SECRET" not in text
     assert "TELEGRAM" not in text
     assert "ghp_" not in text

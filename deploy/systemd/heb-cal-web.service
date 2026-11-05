@@ -2,9 +2,11 @@
 # וכותב ל-~/.config/systemd/user/@INSTANCE@-web.service (systemd --user).
 # לא להעתיק כמו שהוא: השמות עם @ אינם נתיב אמיתי.
 # רץ כמשתמש @USER@. אין User= ביחידת --user.
+# הפורט הציבורי נשאר @PORT@ דרך @INSTANCE@-web.socket (LISTEN_FDS). אין פורט זמני.
 [Unit]
 Description=HEB-CAL web (@INSTANCE@)
-After=network-online.target
+After=network-online.target @INSTANCE@-web.socket
+Requires=@INSTANCE@-web.socket
 Wants=network-online.target
 
 [Service]
@@ -12,10 +14,13 @@ Type=simple
 WorkingDirectory=@INSTALL_DIR@
 Environment=FLASK_DEBUG=0
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@PYTHON@ -m flask --app app run --host @BIND_HOST@ --port @PORT@ --with-threads
+Environment=HEB_CAL_BIND_HOST=@BIND_HOST@
+Environment=HEB_CAL_PORT=@PORT@
+Environment=HEB_CAL_INSTANCE_NAME=@INSTANCE@
+ExecStart=@PYTHON@ @INSTALL_DIR@/scripts/run_web.py
 Restart=always
 RestartSec=3
-TimeoutStopSec=20
+TimeoutStopSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=@INSTANCE@-web

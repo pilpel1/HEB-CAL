@@ -234,7 +234,9 @@ python scripts/gcal_sync_worker.py
 
 ### שרת בבית עם systemd (venv, בלי Docker)
 
-יחידות **systemd --user** (לא system). רצות כמשתמש של הריפו, עולות אחרי אתחול דרך `loginctl enable-linger`, והעדכון מהממשק עושה `systemctl --user` בלי סיסמת sudo. אין כלל sudoers. הריסטארט אחרי עדכון רץ מחוץ ליחידת ה-web (`systemd-run --user --unit=<מופע>-update-restart --collect`, ואם אין — `systemctl --user --no-block restart` של web+worker בפקודה אחת). עצירה ואז הפעלה מפוצלת הייתה הורגת את תהליך העדכון לפני שה-web עלה שוב.
+יחידות **systemd --user** (לא system). רצות כמשתמש של הריפו, עולות אחרי אתחול דרך `loginctl enable-linger`, והעדכון מהממשק עושה `systemctl --user` בלי סיסמת sudo. אין כלל sudoers. המאזין הציבורי הוא `{מופע}-web.socket` על הפורט הקיים של המופע (`HEB_CAL_PORT` / `data/instance.env`) — בלי פורט TCP שני ובלי סריקה. Flask יורש את ה-fd (`LISTEN_FDS`) דרך `scripts/run_web.py`. הריסטארט אחרי עדכון מפעיל מחדש רק web+worker; ה-socket נשאר, והחיבורים החדשים ממתינים בתור במקום connection-refused. עצירה ואז הפעלה מפוצלת הייתה הורגת את תהליך העדכון לפני שה-web עלה שוב. תהליך העדכון עצמו רץ מחוץ ליחידת ה-web (`systemd-run --user --unit=<מופע>-update-job`).
+
+**שדרוג חד-פעמי ל-socket:** המעבר הראשון מגרסה בלי יחידת socket (עד 1.0.28) יכול להיות עם ניתוק קצר — Cloudflare עלול להחזיר 502 כי התהליך הישן כורך את הפורט לבד. אחרי שה-socket פעיל, עדכונים הבאים: המבקרים ממתינים בזמן הריסטארט. זרם SSE פתוח ו-POST באמצע **לא** מובטחים (התהליך נעצר אחרי כמה שניות). החיבור החדש ממתין; הבקשה הישנה עלולה להיחתך.
 
 פעם אחת, מתוך ריפו ב-clone מלא (בלי `--depth 1`; עם `.venv` ו-`.env`):
 
@@ -244,10 +246,10 @@ chmod +x scripts/install_services.sh scripts/restart.sh
 ./scripts/install_services.sh
 ```
 
-הסקריפט כותב ל-`~/.config/systemd/user/heb-cal-web.service` ו-`heb-cal-worker.service` (ברירת מחדל), מפעיל linger, עוצר תהליכי flask/reminder_worker ישנים של הריפו הזה, ומעלה את היחידות. השם והפורט נשמרים ב-`data/instance.env` (לא בגיט). אידמפוטנטי — אפשר להריץ שוב אחרי שינוי פורט או נתיב. בוט טלגרם אופציונלי: בלי `TELEGRAM_BOT_TOKEN` ה-worker נשאר למעלה (סנכרון גוגל) ולא נכנס ללולאת restart.
+הסקריפט כותב ל-`~/.config/systemd/user/` את `heb-cal-web.socket`, `heb-cal-web.service` ו-`heb-cal-worker.service` (ברירת מחדל; מופע בשם אחר — אותן סיומות). מפעיל linger, עוצר תהליכי flask/reminder_worker ישנים של הריפו הזה, ומעלה את ה-socket ואז את השירותים. השם והפורט נשמרים ב-`data/instance.env` (לא בגיט). אידמפוטנטי — אפשר להריץ שוב אחרי שינוי פורט או נתיב. בוט טלגרם אופציונלי: בלי `TELEGRAM_BOT_TOKEN` ה-worker נשאר למעלה (סנכרון גוגל) ולא נכנס ללולאת restart. העדכון מהממשק מריץ `install_services.sh --units-only` (כותב/מפעיל יחידות בלי עצירה) ואז ריסטארט של web+worker בלבד.
 
 ```bash
-systemctl --user status heb-cal-web.service heb-cal-worker.service
+systemctl --user status heb-cal-web.socket heb-cal-web.service heb-cal-worker.service
 journalctl --user -u heb-cal-web -u heb-cal-worker -f
 systemctl --user restart heb-cal-web.service heb-cal-worker.service
 ```
@@ -257,8 +259,8 @@ systemctl --user restart heb-cal-web.service heb-cal-worker.service
 חזרה להרצה ידנית:
 
 ```bash
-systemctl --user disable --now heb-cal-web.service heb-cal-worker.service
-rm -f ~/.config/systemd/user/heb-cal-web.service ~/.config/systemd/user/heb-cal-worker.service
+systemctl --user disable --now heb-cal-web.socket heb-cal-web.service heb-cal-worker.service
+rm -f ~/.config/systemd/user/heb-cal-web.socket ~/.config/systemd/user/heb-cal-web.service ~/.config/systemd/user/heb-cal-worker.service
 systemctl --user daemon-reload
 # אופציונלי: sudo loginctl disable-linger "$USER"
 ```
@@ -304,7 +306,7 @@ chmod +x scripts/install_services.sh scripts/restart.sh
 }
 ```
 
-מחליפים את האימייל ואת `10001` בפורט ש-`install_services.sh` הדפיס. בלי השורה הזו המשתמש השיתופי עלול לראות גם שירותים אחרים על אותו מחשב. המופע הראשון נשאר על היחידות `heb-cal-web` / `heb-cal-worker` ופורט 5000.
+מחליפים את האימייל ואת `10001` בפורט ש-`install_services.sh` הדפיס. בלי השורה הזו המשתמש השיתופי עלול לראות גם שירותים אחרים על אותו מחשב. המופע הראשון נשאר על היחידות `heb-cal-web.socket` / `heb-cal-web` / `heb-cal-worker` ופורט 5000. מופע בשם אחר (למשל `gisim` עם `--name gisim`) מקבל יחידות ופורט משלו; העדכון מהממשק נוגע רק בהן. לא משנים את cloudflared ואת Access.
 
 ### שרת בבית, בלי systemd (nohup)
 

@@ -86,7 +86,7 @@ def test_readme_update_command_matches_docker_mode():
     assert "gcal_sync_worker.py" in readme
     changelog = _text("CHANGELOG.md")
     version = _text("VERSION").strip()
-    assert version == "1.0.28"
+    assert version == "1.0.29"
     assert f"## {version}" in changelog
     assert "Docker" in changelog
 
@@ -160,36 +160,52 @@ def test_household_install_scripts_and_ghcr_workflow():
     assert "@DOCKER_BIN@" in unit
     assert "compose up -d" in unit
     restart = _text("scripts/restart.sh")
-    assert "--with-threads" in restart
-    assert "flask --app app run" in restart
+    assert "scripts/run_web.py" in restart
     assert "systemctl --user" in restart
+    assert 'restart "$WEB_UNIT" "$WORKER_UNIT"' in restart
+    assert "SOCKET_UNIT" not in restart
     assert "install_services.sh" in sh
     venv_install = _text("scripts/install_services.sh")
     web_unit = _text("deploy/systemd/heb-cal-web.service")
     worker_unit = _text("deploy/systemd/heb-cal-worker.service")
+    socket_unit = _text("deploy/systemd/heb-cal-web.socket")
     assert "systemctl --user" in venv_install
     assert "enable-linger" in venv_install
     assert "--name" in venv_install
     assert "--tailscale-serve" in venv_install
+    assert "--units-only" in venv_install
     assert "instance_select.py" in venv_install
     assert "Restart=always" in web_unit
     assert "Restart=always" in worker_unit
     assert "After=network-online.target" in web_unit
     assert "After=network-online.target" in worker_unit
     assert "WantedBy=default.target" in web_unit
+    assert "Requires=@INSTANCE@-web.socket" in web_unit
+    assert "run_web.py" in web_unit
+    assert "HEB_CAL_PORT=@PORT@" in web_unit
+    assert "TimeoutStopSec=5" in web_unit
+    assert "ListenStream=@LISTEN_STREAM@" in socket_unit
+    assert "Accept=no" in socket_unit
+    assert "BindsTo=" not in socket_unit
     assert "RestartPreventExitStatus=75" in worker_unit
     assert "@INSTALL_DIR@" in web_unit
     assert "@PYTHON@" in web_unit
     assert "@INSTANCE@" in web_unit
     assert "@INSTANCE@" in worker_unit
+    assert "@INSTANCE@" in socket_unit
     assert "TELEGRAM_BOT_TOKEN" not in web_unit
     assert "TELEGRAM_BOT_TOKEN" not in worker_unit
+    assert "TELEGRAM_BOT_TOKEN" not in socket_unit
     assert "SECRET_KEY" not in web_unit
     assert "SECRET_KEY" not in worker_unit
+    assert "SECRET_KEY" not in socket_unit
     assert "ghp_" not in web_unit
     assert "ghp_" not in worker_unit
+    assert "ghp_" not in socket_unit
     assert "journalctl --user" in readme
     assert "install_services.sh" in readme
+    assert "heb-cal-web.socket" in readme
+    assert "שדרוג חד-פעמי" in readme
     assert "מופע נוסף למשפחה אחרת" in readme
     assert "data/instance.env" in readme
     assert '"ip": ["10001"]' in readme

@@ -4,6 +4,7 @@
 # שם המופע: HEB_CAL_INSTANCE_NAME או data/instance.env, ברירת מחדל heb-cal.
 # אחרת nohup, אחרי הריגת התהליכים הישנים של הריפו הזה (pidfile + pgrep לפי נתיב).
 # כתובת ופורט: HEB_CAL_BIND_HOST / HEB_CAL_PORT (ברירת מחדל 127.0.0.1:5000).
+# יחידת socket (@INSTANCE@-web.socket) לא מרוסטארטת — המאזין הציבורי נשאר.
 # הסקריפט חייב לצאת אחרי שהתהליכים עלו. הוא לא נשאר בחזית.
 # HEB_CAL_UPDATE_ACTION=stop  — רק עוצר (העדכון משתמש בזה לפני שחזור גיבוי).
 set -eu
@@ -140,7 +141,7 @@ pid_is_ours() {
             ;;
     esac
     case "$cmd" in
-        *flask*"--app"*app*run*|*scripts/reminder_worker.py*|*reminder_worker.py*|*app/main.py*) return 0 ;;
+        *flask*"--app"*app*run*|*scripts/run_web.py*|*run_web.py*|*scripts/reminder_worker.py*|*reminder_worker.py*|*app/main.py*) return 0 ;;
     esac
     return 1
 }
@@ -243,7 +244,9 @@ fi
 
 # FLASK_DEBUG כבוי: רילודר של פיתוח מתבלבל בזמן עדכון קבצים.
 export FLASK_DEBUG=0
-nohup "$PYTHON" -m flask --app app run --host "$HOST" --port "$PORT" --with-threads >> logs/flask.log 2>&1 &
+export HEB_CAL_BIND_HOST="$HOST"
+export HEB_CAL_PORT="$PORT"
+nohup "$PYTHON" "$ROOT/scripts/run_web.py" >> logs/flask.log 2>&1 &
 echo $! > data/flask.pid
 nohup "$PYTHON" scripts/reminder_worker.py >> logs/worker.log 2>&1 &
 echo $! > data/worker.pid
