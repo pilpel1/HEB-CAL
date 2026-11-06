@@ -35,6 +35,15 @@ def test_settings_mcp_card_is_present(client):
     assert '<option value="read" selected>קריאה בלבד</option>' in html
     assert "בחרו את האדם ושם למכשיר" in html
     assert GUIDE_URL in html
+    platforms = html.split('id="mcpPlatforms"', 1)[1].split('id="mcpKeyForm"', 1)[0]
+    assert "אילו עוזרים מתחברים" in platforms
+    assert "עובד:" in platforms and "Cursor" in platforms
+    assert "mcp-remote" in platforms and "Node" in platforms and "Tailscale" in platforms
+    assert "Bearer" in platforms and "Grok" in platforms and "Bypass" in platforms
+    assert "עדיין לא נתמך:" in platforms and "Gemini" in platforms and "ChatGPT" in platforms
+    assert "OAuth" in platforms
+    assert GUIDE_URL in platforms
+    assert html.index('id="mcpPlatforms"') < html.index('id="mcpKeyForm"')
     assert 'id="mcpKeyNoUsers"' in html
     assert 'href="#settings-reminders"' in html
     assert "ב-README" not in html
@@ -89,7 +98,20 @@ def test_mobile_user_select_lists_household_users(live_server, app):
         expect(page.locator("#mcpKeyUser option:checked")).to_have_text("שירה")
         page.locator("#mcpKeyUser").select_option(label="אביחי")
         expect(page.locator("#mcpKeyUser option:checked")).to_have_text("אביחי")
-        guide = page.locator(f'#settings-mcp a[href="{GUIDE_URL}"]')
+        platforms = page.locator("#mcpPlatforms")
+        expect(platforms).to_be_visible()
+        expect(platforms).to_contain_text("עדיין לא נתמך")
+        expect(platforms).to_contain_text("Gemini")
+        expect(platforms).to_contain_text("ChatGPT")
+        place = page.evaluate(
+            """() => {
+                const box = document.getElementById('mcpPlatforms').getBoundingClientRect();
+                const form = document.getElementById('mcpKeyForm').getBoundingClientRect();
+                return { boxTop: box.top, formTop: form.top };
+            }"""
+        )
+        assert place["boxTop"] < place["formTop"]
+        guide = page.locator(f'#mcpPlatforms a[href="{GUIDE_URL}"]')
         expect(guide).to_be_visible()
         browser.close()
 
@@ -103,6 +125,8 @@ def test_mobile_without_users_links_to_the_users_section(live_server):
         page = browser.new_page(viewport={"width": 390, "height": 844})
         page.goto(live_server + "/settings", wait_until="load")
         page.locator("#settings-mcp .settings-section-toggle").click()
+        expect(page.locator("#mcpPlatforms")).to_be_visible()
+        expect(page.locator("#mcpPlatforms")).to_contain_text("עדיין לא נתמך")
         note = page.locator("#mcpKeyNoUsers")
         expect(note).to_be_visible()
         expect(note).to_contain_text("עדיין אין משתמשים")

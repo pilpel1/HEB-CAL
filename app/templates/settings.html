@@ -379,6 +379,15 @@
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settings-mcp-body">
+            <div class="mcp-platforms" id="mcpPlatforms">
+                <p class="mcp-platforms-title">אילו עוזרים מתחברים</p>
+                <ul>
+                    <li><strong>עובד:</strong> Cursor (מהמחשב שבו שמים את קובץ ההגדרות). Claude Desktop דרך <span dir="ltr">mcp-remote</span> — צריך Node על המחשב, ואם הלוח חשוף רק ב-Tailscale אז ממכשיר שמחובר אליו.</li>
+                    <li><strong>רק אם הלוח ציבורי:</strong> עוזר מרוחק ששולח את המפתח בכותרת Bearer, למשל מחבר מותאם של Grok או מחבר הענן של Claude. רק כשהכתובת נגישה דרך Cloudflare ויש Bypass לנתיב <span dir="ltr">/mcp</span>. מופע שחשוף רק ב-Tailscale לא מגיע אליהם.</li>
+                    <li><strong>עדיין לא נתמך:</strong> Gemini (צריך OAuth). ChatGPT ולקוחות אחרים שדורשים OAuth.</li>
+                </ul>
+                <p class="mb-0"><a href="https://github.com/pilpel1/HEB-CAL/blob/main/README.md#mcp" target="_blank" rel="noopener noreferrer">ההסבר המלא: מפתחות, Cursor, Claude ו-Cloudflare</a></p>
+            </div>
             <p>מפתח אישי לכל אדם ולכל מכשיר. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע, ושימוש מחדש את הספירה.</p>
             <ol class="mcp-steps">
                 <li>בחרו את האדם ושם למכשיר או לתוכנה, ולחצו «יצירת מפתח». המפתח מוצג פעם אחת — העתיקו אותו מיד.</li>
