@@ -1,8 +1,11 @@
 """כרטיס «חיבור לעוזר AI (MCP)» בהגדרות: יצירה חד-פעמית וביטול."""
 from __future__ import annotations
 
+import base64
+import json
 import re
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
 
 import pytest
 
@@ -72,8 +75,18 @@ def test_settings_mcp_card_is_present(client):
         "https://support.google.com/gemini/answer/17209137",
         "https://developers.google.com/connected-apps/mcp/oauth",
         "https://developers.openai.com/api/docs/guides/custom-mcp-server",
+        "https://dash.cloudflare.com/?to=/:account/one/access-controls/apps",
+        "https://cursor.com/docs/mcp/install-links",
+        "https://code.visualstudio.com/api/extension-guides/ai/mcp",
     ):
         assert url in mcp_docs
+    assert "one.dash.cloudflare.com" in mcp_docs
+    assert 'id="mcpCursorInstall"' in html
+    assert 'id="mcpVsCodeInstall"' in html
+    assert "cursor://" not in html
+    assert "vscode:mcp" not in html
+    assert "הוספה ל-Cursor" in html
+    assert "התקנה ב-VS Code" in html
     assert "בלי אימות" in mcp_docs
     assert "כל אירועי הבית" in mcp_docs
     assert 'id="mcpKeyNoUsers"' in html
@@ -183,6 +196,8 @@ def test_create_shows_the_key_once_and_revoke_confirms(live_server, app):
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 390, "height": 844})
         page.on("pageerror", lambda error: errors.append(str(error)))
+        requested = []
+        page.on("request", lambda request: requested.append(request.url))
         page.goto(live_server + "/settings", wait_until="load")
         page.locator("#settings-mcp .settings-section-toggle").click()
         expect(page.locator("#mcpKeyUser")).to_be_visible()
@@ -196,16 +211,50 @@ def test_create_shows_the_key_once_and_revoke_confirms(live_server, app):
         expect(dialog).to_be_visible()
         token = page.locator("#mcpKeyToken").inner_text()
         assert re.fullmatch(r"hcal_[0-9a-f]{8}_[A-Za-z0-9_-]{43}", token)
-        cursor = page.locator("#mcpCursorConfig").inner_text()
+        cursor = page.locator("#mcpCursorConfig").text_content()
         assert "${env:HEB_CAL_MCP_KEY}" in cursor
         assert live_server + "/mcp" in cursor
         assert token not in cursor
-        claude = page.locator("#mcpClaudeConfig").inner_text()
+        claude = page.locator("#mcpClaudeConfig").text_content()
         assert "mcp-remote@0.16.0" in claude
         assert "Authorization:${HEB_CAL_AUTH}" in claude
         assert token in claude
+        cursor_href = page.locator("#mcpCursorInstall").get_attribute("href")
+        cursor_query = parse_qs(urlparse(cursor_href).query)
+        assert cursor_href.startswith("cursor://anysphere.cursor-deeplink/mcp/install?")
+        assert cursor_query["name"] == ["heb-cal"]
+        cursor_config = json.loads(base64.b64decode(cursor_query["config"][0]))
+        assert cursor_config == {
+            "url": live_server + "/mcp",
+            "headers": {"Authorization": f"Bearer {token}"},
+        }
+        expect(page.locator("#mcpCursorInstall")).to_be_visible()
+        fits = page.evaluate(
+            """() => {
+                const box = document.querySelector('#mcpKeyModal .modal-content').getBoundingClientRect();
+                return box.left >= -1 && box.right <= window.innerWidth + 1;
+            }"""
+        )
+        assert fits is True
+        page.locator("#mcpTabVsCode").click()
+        expect(page.locator("#mcpVsCodeInstall")).to_be_visible()
+        vscode_href = page.locator("#mcpVsCodeInstall").get_attribute("href")
+        assert vscode_href.startswith("vscode:mcp/install?")
+        vscode_config = json.loads(unquote(vscode_href.split("?", 1)[1]))
+        assert vscode_config == {
+            "name": "heb-cal",
+            "type": "http",
+            "url": live_server + "/mcp",
+            "headers": {"Authorization": f"Bearer {token}"},
+        }
+        assert token not in page.url
+        assert all(token not in url for url in requested)
         page.locator("#mcpKeyModal .btn-close").click()
         expect(dialog).to_be_hidden()
+        page.wait_for_function(
+            "() => !document.getElementById('mcpCursorInstall').getAttribute('href')"
+        )
+        assert token not in (page.locator("#mcpKeyModal").text_content() or "")
         prefix = "hcal_" + token.split("_")[1]
         expect(page.locator("#mcpKeyList")).to_contain_text(prefix)
         expect(page.locator("#mcpKeyList")).to_contain_text("קריאה וכתיבה")

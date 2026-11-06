@@ -209,11 +209,20 @@ python scripts/gcal_sync_worker.py
 
 השרת הוא `POST /mcp` על אותה כתובת של הלוח. אין תהליך נוסף ואין פורט נוסף. המפתח תקף רק בנתיב הזה, לא בשאר ה-API. אירוע שהגיע מגוגל, ומשמרת, נשארים לקריאה בלבד גם עם מפתח כתיבה.
 
-**פעם אחת, ידנית, ב-Cloudflare Access** — האפליקציה לא משנה את זה: אפליקציית Access נפרדת לנתיב המדויק `/mcp` (לא לכל האתר), עם מדיניות Bypass‏ (Include: Everyone). נתיב מדויק יותר גובר על האפליקציה הראשית. בלי זה לקוח ה-AI נעצר במסך ההתחברות של Access, כי הוא לא דפדפן.
+**פעם אחת, ידנית, ב-Cloudflare Access.** האפליקציה לא משנה את זה. `one.dash.cloudflare.com` מפנה אל `https://dash.cloudflare.com/one/` וזורק את `?to=`, ולכן הקישור שעדיין פותח את רשימת האפליקציות אחרי בחירת החשבון הוא:
 
-הנתיב הזה ציבורי. ההגנה היא המפתח עצמו (אקראי וארוך). מומלץ גם כלל rate limiting של Cloudflare על `/mcp`. בקשות Bypass לא נרשמות בלוג של Access. אין לשים את המפתח בכתובת — הוא דולף ללוגים. שאר האתר נשאר מאחורי Access כמו קודם.
+[אפליקציות Access](https://dash.cloudflare.com/?to=/:account/one/access-controls/apps)
 
-בחלון המפתח יש קטע מוכן לשניים. ב-[Cursor](https://cursor.com/docs/mcp) המפתח נשאר במשתנה הסביבה `HEB_CAL_MCP_KEY`, לא בקובץ `~/.cursor/mcp.json`. ב-Claude Desktop הקטע הוא ל-`claude_desktop_config.json` דרך [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (צריך Node), והמפתח נשמר בתוך הקובץ.
+1. פתחו את הקישור ובחרו את החשבון.
+2. **Create new application**.
+3. **Self-hosted and private**, ואז **Add public hostname**.
+4. אותו מארח של הלוח. בשדה Path כתבו `mcp` בלבד: בלי `*`, בלי סלאש נוסף, ובלי `/mcp/`. נתיב מדויק גובר על האפליקציה של כל האתר.
+5. מדיניות חדשה: **Action** = Bypass, **Include** = Everyone.
+6. **Create**. שאר האתר נשאר באפליקציה הקיימת, בלי Bypass.
+
+בלי זה לקוח מהענן נעצר במסך ההתחברות של Access, כי הוא לא דפדפן. הנתיב ציבורי, וההגנה היא המפתח עצמו (אקראי וארוך). מומלץ גם כלל rate limiting של Cloudflare על `/mcp`. בקשות Bypass לא נרשמות בלוג של Access. אין לשים את המפתח בכתובת — הוא דולף ללוגים.
+
+בחלון המפתח יש לשונית לכל תוכנה. [Cursor](https://cursor.com/docs/mcp/install-links) ו-[VS Code](https://code.visualstudio.com/api/extension-guides/ai/mcp) מקבלים כפתור התקנה; המפתח נמצא רק בקישור של הכפתור, בדפדפן, ולא בכתובת של הלוח. ההעתקה שלהם משאירה את המפתח במשתנה `HEB_CAL_MCP_KEY`. ב-Claude Desktop אין כפתור כזה: הקטע הוא ל-`claude_desktop_config.json` דרך [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (צריך Node), והמפתח נשמר בתוך הקובץ.
 
 **מהמחשב.** עובד גם כשהלוח חשוף רק ב-Tailscale, אם המכשיר באותה רשת:
 

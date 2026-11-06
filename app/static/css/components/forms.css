@@ -1531,6 +1531,23 @@
     margin-bottom: 0.75rem;
 }
 
+.mcp-client-tabs {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    padding-bottom: 0.15rem;
+}
+
+.mcp-client-tabs .btn {
+    flex: 0 0 auto;
+    min-height: 40px;
+}
+
+.mcp-install-actions {
+    margin-bottom: 0.35rem;
+}
+
 .mcp-config {
     direction: ltr;
     text-align: left;

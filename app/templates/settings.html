@@ -382,16 +382,16 @@
             <div class="mcp-platforms" id="mcpPlatforms">
                 <p class="mcp-platforms-title">אילו עוזרים מתחברים</p>
                 <ul>
-                    <li><strong>מהמחשב, גם דרך Tailscale אם המכשיר באותה רשת:</strong> Cursor, Claude Desktop דרך <span dir="ltr">mcp-remote</span>, Claude Code, VS Code / GitHub Copilot, Gemini CLI, Cline, Windsurf, LM Studio.</li>
-                    <li><strong>מהענן, רק אם הלוח ציבורי ב-Cloudflare עם Bypass לנתיב <span dir="ltr">/mcp</span>:</strong> Grok (מחבר ב-<span dir="ltr">grok.com</span> או ה-API), Microsoft Copilot Studio, מחבר הענן של Claude. כותרת קבועה אצל Claude היא בטא ולא זמינה לכל חשבון. מופע שחשוף רק ב-Tailscale לא מגיע אליהם.</li>
+                    <li><strong>מהמחשב, גם דרך Tailscale אם המכשיר באותה רשת:</strong> <a href="https://cursor.com/docs/mcp/install-links" target="_blank" rel="noopener noreferrer">Cursor</a>, <a href="https://claude.com/docs/third-party/claude-desktop/configuration" target="_blank" rel="noopener noreferrer">Claude Desktop</a> דרך <span dir="ltr">mcp-remote</span>, <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener noreferrer">Claude Code</a>, <a href="https://code.visualstudio.com/api/extension-guides/ai/mcp" target="_blank" rel="noopener noreferrer">VS Code / GitHub Copilot</a>, <a href="https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md" target="_blank" rel="noopener noreferrer">Gemini CLI</a>, <a href="https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx" target="_blank" rel="noopener noreferrer">Cline</a>, <a href="https://docs.devin.ai/windsurf/plugins/cascade/mcp" target="_blank" rel="noopener noreferrer">Windsurf</a>, <a href="https://lmstudio.ai/docs/app/mcp" target="_blank" rel="noopener noreferrer">LM Studio</a>.</li>
+                    <li><strong>מהענן, רק אם הלוח ציבורי ב-Cloudflare עם Bypass לנתיב <span dir="ltr">/mcp</span>:</strong> <a href="https://grok.com/connectors" target="_blank" rel="noopener noreferrer">Grok</a> (מחבר ב-<span dir="ltr">grok.com</span> או ה-API), <a href="https://copilotstudio.microsoft.com/" target="_blank" rel="noopener noreferrer">Microsoft Copilot Studio</a>, <a href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">מחבר הענן של Claude</a>. כותרת קבועה אצל Claude היא בטא ולא זמינה לכל חשבון. מופע שחשוף רק ב-Tailscale לא מגיע אליהם.</li>
                     <li><strong>לא נתמך:</strong> אפליקציית Gemini (דורשת OAuth 2.1). ChatGPT (האפשרויות הרשמיות הן OAuth, או בלי אימות).</li>
                 </ul>
             </div>
             <p>מפתח אישי לכל אדם ולכל מכשיר, כדי לנהל אותו: מי הבעלים, מתי השתמשו, וביטול. העוזר רואה ועורך את כל אירועי הבית, לא רק של האדם הזה. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע. כל בקשת פרוטוקול שהשרת קיבל מחדשת את הספירה, גם אם הכלי החזיר שגיאה.</p>
             <ol class="mcp-steps">
-                <li>בחרו את האדם ושם למכשיר או לתוכנה, ולחצו «יצירת מפתח». המפתח מוצג פעם אחת — העתיקו אותו מיד.</li>
-                <li>ב-Cursor הדביקו את הקטע לקובץ ההגדרות, ואת המפתח עצמו שימו במשתנה <span dir="ltr">HEB_CAL_MCP_KEY</span>, לא בקובץ. ב-Claude Desktop הקטע נשמר בקובץ ההגדרות יחד עם המפתח, וצריך Node.</li>
-                <li>אם הלוח מאחורי Cloudflare Access, פעם אחת יש לפתוח רק את הנתיב <span dir="ltr">/mcp</span> (Bypass). שאר האתר נשאר סגור.</li>
+                <li>בחרו את האדם ושם למכשיר או לתוכנה, ולחצו «יצירת מפתח».</li>
+                <li>בחלון שנפתח לחצו «הוספה ל-Cursor» או «התקנה ב-VS Code». לכל תוכנה אחרת יש לשונית עם קישור להגדרות שלה, והעתקה אם אין כפתור התקנה.</li>
+                <li>אם הלוח מאחורי Cloudflare Access, <a href="https://dash.cloudflare.com/?to=/:account/one/access-controls/apps" target="_blank" rel="noopener noreferrer">פתחו את אפליקציות Access</a> והוסיפו Bypass רק לנתיב <span dir="ltr">/mcp</span>. שאר האתר נשאר סגור.</li>
             </ol>
             <p><a href="https://github.com/pilpel1/HEB-CAL/blob/main/README.md#mcp" target="_blank" rel="noopener noreferrer">ההסבר המלא: מפתחות, Cursor, Claude ו-Cloudflare</a></p>
             <p id="mcpKeyNoUsers" class="mcp-no-users" hidden>עדיין אין משתמשים בבית. <a href="#settings-reminders">הוסיפו אדם במסך המשתמשים</a>, ואז חזרו לכאן ליצירת מפתח.</p>
@@ -432,17 +432,87 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="סגירה"></button>
                 </div>
                 <div class="modal-body">
-                    <p>העתיקו עכשיו. אחרי סגירה אי אפשר להציג את המפתח שוב — רק לבטל וליצור חדש.</p>
-                    <pre class="mcp-config" id="mcpKeyToken" dir="ltr"></pre>
-                    <button type="button" class="btn btn-outline-primary btn-sm" data-mcp-copy="mcpKeyToken">העתקת המפתח</button>
-                    <h4 class="h6 mt-3">Cursor</h4>
-                    <p class="text-muted small mb-1">בקובץ <span dir="ltr">~/.cursor/mcp.json</span>. את הערך שמים במשתנה הסביבה <span dir="ltr">HEB_CAL_MCP_KEY</span>, לא בקובץ.</p>
-                    <pre class="mcp-config" id="mcpCursorConfig" dir="ltr"></pre>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpCursorConfig">העתקה</button>
-                    <h4 class="h6 mt-3">Claude Desktop</h4>
-                    <p class="text-muted small mb-1">בקובץ <span dir="ltr">claude_desktop_config.json</span>. צריך Node. המפתח נשמר בתוך הקובץ הזה, לא במשתנה סביבה.</p>
-                    <pre class="mcp-config" id="mcpClaudeConfig" dir="ltr"></pre>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpClaudeConfig">העתקה</button>
+                    <p>לחצו על הכפתור של התוכנה. אחרי סגירה אי אפשר להציג את המפתח שוב — רק לבטל וליצור חדש.</p>
+                    <div class="mcp-client-tabs" role="tablist" aria-label="תוכנות">
+                        <button type="button" class="btn btn-sm btn-primary" role="tab" id="mcpTabCursor" data-mcp-tab="cursor" aria-selected="true" aria-controls="mcpPanelCursor">Cursor</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" id="mcpTabVsCode" data-mcp-tab="vscode" aria-selected="false" aria-controls="mcpPanelVsCode" tabindex="-1">VS Code</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="claude-desktop" aria-selected="false" aria-controls="mcpPanelClaudeDesktop" tabindex="-1">Claude Desktop</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="claude-code" aria-selected="false" aria-controls="mcpPanelClaudeCode" tabindex="-1">Claude Code</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="gemini-cli" aria-selected="false" aria-controls="mcpPanelGeminiCli" tabindex="-1">Gemini CLI</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="cline" aria-selected="false" aria-controls="mcpPanelCline" tabindex="-1">Cline</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="windsurf" aria-selected="false" aria-controls="mcpPanelWindsurf" tabindex="-1">Windsurf</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="lmstudio" aria-selected="false" aria-controls="mcpPanelLmStudio" tabindex="-1">LM Studio</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="grok" aria-selected="false" aria-controls="mcpPanelGrok" tabindex="-1">Grok</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="copilot" aria-selected="false" aria-controls="mcpPanelCopilot" tabindex="-1">Copilot Studio</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" data-mcp-tab="claude-cloud" aria-selected="false" aria-controls="mcpPanelClaudeCloud" tabindex="-1">Claude בענן</button>
+                    </div>
+                    <div id="mcpPanelCursor" data-mcp-panel="cursor" role="tabpanel" aria-labelledby="mcpTabCursor">
+                        <p class="mcp-install-actions"><a class="btn btn-primary" id="mcpCursorInstall">הוספה ל-Cursor</a></p>
+                        <p class="text-muted small">Cursor מבקש אישור לפני ההתקנה. המפתח נמצא רק בכפתור הזה.</p>
+                        <details>
+                            <summary>העתקה בלי לשמור את המפתח בקובץ</summary>
+                            <p class="text-muted small mb-1">את הערך שמים במשתנה <span dir="ltr">HEB_CAL_MCP_KEY</span>, לא בקובץ.</p>
+                            <pre class="mcp-config" id="mcpCursorConfig" dir="ltr"></pre>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpCursorConfig">העתקה</button>
+                        </details>
+                        <p class="mb-0 mt-2"><a href="https://cursor.com/docs/mcp/install-links" target="_blank" rel="noopener noreferrer">ההסבר של Cursor</a></p>
+                    </div>
+                    <div id="mcpPanelVsCode" data-mcp-panel="vscode" role="tabpanel" aria-labelledby="mcpTabVsCode" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" id="mcpVsCodeInstall">התקנה ב-VS Code</a></p>
+                        <p class="text-muted small">VS Code פותח את פרטי השרת לאישור. המפתח נמצא רק בכפתור הזה.</p>
+                        <details>
+                            <summary>העתקה בלי לשמור את המפתח בקובץ</summary>
+                            <p class="text-muted small mb-1">את הערך שמים במשתנה <span dir="ltr">HEB_CAL_MCP_KEY</span>.</p>
+                            <pre class="mcp-config" id="mcpVsCodeConfig" dir="ltr"></pre>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpVsCodeConfig">העתקה</button>
+                        </details>
+                        <p class="mb-0 mt-2"><a href="https://code.visualstudio.com/api/extension-guides/ai/mcp" target="_blank" rel="noopener noreferrer">ההסבר של VS Code</a></p>
+                    </div>
+                    <div id="mcpPanelClaudeDesktop" data-mcp-panel="claude-desktop" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://claude.com/docs/third-party/claude-desktop/configuration" target="_blank" rel="noopener noreferrer">פתיחת ההסבר של Claude Desktop</a></p>
+                        <p class="text-muted small">אין כפתור התקנה. הקטע נשמר בקובץ ההגדרות יחד עם המפתח, וצריך Node.</p>
+                        <pre class="mcp-config" id="mcpClaudeConfig" dir="ltr"></pre>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpClaudeConfig">העתקת ההגדרה</button>
+                    </div>
+                    <div id="mcpPanelClaudeCode" data-mcp-panel="claude-code" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener noreferrer">פתיחת ההסבר של Claude Code</a></p>
+                        <pre class="mcp-config" id="mcpClaudeCodeCommand" dir="ltr"></pre>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpClaudeCodeCommand">העתקת הפקודה</button>
+                    </div>
+                    <div id="mcpPanelGeminiCli" data-mcp-panel="gemini-cli" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md" target="_blank" rel="noopener noreferrer">פתיחת ההסבר של Gemini CLI</a></p>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpServerUrl">העתקת הכתובת</button>
+                    </div>
+                    <div id="mcpPanelCline" data-mcp-panel="cline" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx" target="_blank" rel="noopener noreferrer">פתיחת ההסבר של Cline</a></p>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpServerUrl">העתקת הכתובת</button>
+                    </div>
+                    <div id="mcpPanelWindsurf" data-mcp-panel="windsurf" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://docs.devin.ai/windsurf/plugins/cascade/mcp" target="_blank" rel="noopener noreferrer">פתיחת ההסבר של Windsurf</a></p>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpServerUrl">העתקת הכתובת</button>
+                    </div>
+                    <div id="mcpPanelLmStudio" data-mcp-panel="lmstudio" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://lmstudio.ai/docs/app/mcp" target="_blank" rel="noopener noreferrer">פתיחת ההסבר של LM Studio</a></p>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpServerUrl">העתקת הכתובת</button>
+                    </div>
+                    <div id="mcpPanelGrok" data-mcp-panel="grok" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://grok.com/connectors" target="_blank" rel="noopener noreferrer">פתיחת המחברים ב-Grok</a></p>
+                        <p class="text-muted small">רק אם הלוח ציבורי ויש Bypass ל-<span dir="ltr">/mcp</span>.</p>
+                        <p class="mb-0"><a href="https://docs.x.ai/grok/connectors" target="_blank" rel="noopener noreferrer">ההסבר של Grok</a></p>
+                    </div>
+                    <div id="mcpPanelCopilot" data-mcp-panel="copilot" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://copilotstudio.microsoft.com/" target="_blank" rel="noopener noreferrer">פתיחת Copilot Studio</a></p>
+                        <p class="text-muted small">רק אם הלוח ציבורי ויש Bypass ל-<span dir="ltr">/mcp</span>.</p>
+                        <p class="mb-0"><a href="https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent" target="_blank" rel="noopener noreferrer">ההסבר של Microsoft</a></p>
+                    </div>
+                    <div id="mcpPanelClaudeCloud" data-mcp-panel="claude-cloud" role="tabpanel" hidden>
+                        <p class="mcp-install-actions"><a class="btn btn-primary" href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">פתיחת המחברים ב-Claude</a></p>
+                        <p class="text-muted small">רק אם הלוח ציבורי ויש Bypass ל-<span dir="ltr">/mcp</span>. כותרת קבועה היא בטא ולא זמינה לכל חשבון.</p>
+                        <p class="mb-0"><a href="https://claude.com/docs/connectors/custom/remote-mcp" target="_blank" rel="noopener noreferrer">ההסבר של Claude</a></p>
+                    </div>
+                    <pre class="mcp-config" id="mcpKeyToken" dir="ltr" hidden></pre>
+                    <pre class="mcp-config" id="mcpServerUrl" dir="ltr" hidden></pre>
+                    <p class="mt-3 mb-1"><button type="button" class="btn btn-outline-primary btn-sm" data-mcp-copy="mcpKeyToken">העתקת המפתח</button></p>
                     <p id="mcpCopyStatus" class="person-saved-flag mt-2" hidden>הועתק</p>
                 </div>
             </div>
