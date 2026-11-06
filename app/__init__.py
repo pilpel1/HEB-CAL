@@ -34,6 +34,11 @@ app.teardown_appcontext(close_db)
 from app.api import api
 app.register_blueprint(api, url_prefix='/api')
 
+# נתיב ציבורי יחיד (Access Bypass רק ל-/mcp). מפתח MCP לא תקף בשום נתיב אחר.
+# השם מקוצר: ``import mcp`` כאן היה דורס את חבילת app.mcp.
+from app.mcp.transport import mcp as mcp_blueprint
+app.register_blueprint(mcp_blueprint)
+
 @app.route('/')
 def index():
     return render_template('index.html')

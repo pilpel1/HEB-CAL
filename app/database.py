@@ -224,9 +224,11 @@ def init_db():
     _migrate_hebrew_years_to_letters(db)
     from app.bot.session import ensure_bot_schema
     from app.live_sync import ensure_live_sync_schema
+    from app.mcp.keys import ensure_mcp_keys_schema
 
     ensure_bot_schema(db)
     ensure_live_sync_schema(db)
+    ensure_mcp_keys_schema(db)
     from app.reminders.repository import (
         disable_digest_without_telegram,
         ensure_unique_people_names,

@@ -1496,6 +1496,55 @@
     color: var(--bs-danger);
 }
 
+.mcp-config {
+    direction: ltr;
+    text-align: left;
+    margin: 0.35rem 0 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--bs-tertiary-bg, #f3f4f6);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.mcp-keys-table td {
+    vertical-align: middle;
+}
+
+@media (max-width: 576px) {
+    .mcp-keys-table thead {
+        display: none;
+    }
+
+    .mcp-keys-table,
+    .mcp-keys-table tbody,
+    .mcp-keys-table tr,
+    .mcp-keys-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .mcp-keys-table tr {
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        margin-bottom: 0.75rem;
+        padding: 0.35rem 0.6rem;
+    }
+
+    .mcp-keys-table td {
+        border: 0;
+        padding: 0.2rem 0;
+    }
+
+    .mcp-keys-table td::before {
+        content: attr(data-label);
+        display: block;
+        font-weight: 600;
+    }
+}
+
 .update-command {
     direction: ltr;
     text-align: left;

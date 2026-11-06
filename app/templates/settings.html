@@ -371,6 +371,70 @@
         </div>
     </section>
 
+    <section class="card mb-3 settings-section" id="settings-mcp" data-settings-section="settings-mcp" aria-labelledby="settings-mcp-title">
+        <h2 class="h5 settings-section-title" id="settings-mcp-title">
+            <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="settings-mcp-body">
+                <span class="settings-section-label">חיבור לעוזר AI (MCP)</span>
+                <span class="settings-section-chevron" aria-hidden="true"></span>
+            </button>
+        </h2>
+        <div class="card-body settings-section-body" id="settings-mcp-body">
+            <p>מפתח אישי לכל אדם ולכל מכשיר. הוא מוצג פעם אחת, נשמר אצלכם, ומאפשר לעוזר (Cursor, Claude Desktop) לקרוא ולערוך את היומן. ברירת המחדל היא קריאה בלבד. המפתח פוקע אחרי 30 יום בלי שימוש, וכל שימוש מוצלח מחדש את הספירה.</p>
+            <p class="text-muted small">החיבור הוא לכתובת <span dir="ltr">/mcp</span> של הלוח הזה. אם הלוח מאחורי Cloudflare Access, צריך פעם אחת לאפשר את הנתיב הזה בלבד (Bypass). ההסבר המלא ב-README.</p>
+            <form id="mcpKeyForm" class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label for="mcpKeyUser" class="form-label">משתמש</label>
+                    <select id="mcpKeyUser" class="form-select" required></select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label for="mcpKeyLabel" class="form-label">שם המכשיר או התוכנה</label>
+                    <input type="text" class="form-control" id="mcpKeyLabel" maxlength="60" required placeholder="למשל לפטופ / Cursor">
+                </div>
+                <div class="col-12 col-md-4">
+                    <label for="mcpKeyPermission" class="form-label">הרשאה</label>
+                    <select id="mcpKeyPermission" class="form-select">
+                        <option value="read" selected>קריאה בלבד</option>
+                        <option value="write">קריאה וכתיבה</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label for="mcpKeyAbsolute" class="form-label">תפוגה סופית (לא חובה)</label>
+                    <input type="date" class="form-control" id="mcpKeyAbsolute" dir="ltr">
+                </div>
+                <div class="col-12 col-md-4">
+                    <button type="submit" class="btn btn-primary" id="mcpKeyCreate">יצירת מפתח</button>
+                </div>
+            </form>
+            <p id="mcpKeyError" class="reminder-form-error mt-2" hidden></p>
+            <div id="mcpKeyList" class="mt-3"></div>
+        </div>
+    </section>
+
+    <div class="modal fade" id="mcpKeyModal" tabindex="-1" aria-labelledby="mcpKeyModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title h5" id="mcpKeyModalTitle">המפתח מוצג פעם אחת</h3>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="סגירה"></button>
+                </div>
+                <div class="modal-body">
+                    <p>העתיקו עכשיו. אחרי סגירה אי אפשר להציג את המפתח שוב — רק לבטל וליצור חדש.</p>
+                    <pre class="mcp-config" id="mcpKeyToken" dir="ltr"></pre>
+                    <button type="button" class="btn btn-outline-primary btn-sm" data-mcp-copy="mcpKeyToken">העתקת המפתח</button>
+                    <h4 class="h6 mt-3">Cursor</h4>
+                    <p class="text-muted small mb-1">בקובץ <span dir="ltr">~/.cursor/mcp.json</span>. את הערך שמים במשתנה הסביבה <span dir="ltr">HEB_CAL_MCP_KEY</span>, לא בקובץ.</p>
+                    <pre class="mcp-config" id="mcpCursorConfig" dir="ltr"></pre>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpCursorConfig">העתקה</button>
+                    <h4 class="h6 mt-3">Claude Desktop</h4>
+                    <p class="text-muted small mb-1">בקובץ <span dir="ltr">claude_desktop_config.json</span>. צריך Node. המפתח נמצא בתוך הקטע שהעתקתם.</p>
+                    <pre class="mcp-config" id="mcpClaudeConfig" dir="ltr"></pre>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpClaudeConfig">העתקה</button>
+                    <p id="mcpCopyStatus" class="person-saved-flag mt-2" hidden>הועתק</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <section class="card settings-section" id="settings-notify" data-settings-section="settings-notify" aria-labelledby="settings-notify-title">
         <h2 class="h5 settings-section-title" id="settings-notify-title">
             <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="settings-notify-body">

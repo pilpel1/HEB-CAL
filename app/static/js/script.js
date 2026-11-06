@@ -31,6 +31,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof initGcalSettings === 'function') {
         initGcalSettings();
     }
+    if (typeof initMcpSettings === 'function') {
+        initMcpSettings();
+    }
     if (typeof initShiftEntry === 'function') {
         initShiftEntry();
     }

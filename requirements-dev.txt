@@ -1,5 +1,7 @@
 -r requirements.txt
 pytest>=8.0,<9
+# Official MCP SDK client, for the interop handshake test against /mcp (dev only).
+mcp==2.3.0
 # scripts/smoke_ui.py and scripts/verify_infinite_scroll.py.
 # The Chromium binary is not a pip package:
 #   python -m playwright install chromium

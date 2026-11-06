@@ -93,7 +93,7 @@ def test_settings_section_open_map_defaults_and_hash():
 
 def test_settings_markup_has_independent_sections(client):
     html = client.get("/settings").get_data(as_text=True)
-    assert html.count("data-settings-section=") == 9
+    assert html.count("data-settings-section=") == 10
     assert 'data-settings-section="settings-reminders"' in html
     assert 'settings-section-label">משתמשים</span>' in html
     assert 'data-settings-section="settingsUpdate"' in html
@@ -105,7 +105,7 @@ def test_settings_markup_has_independent_sections(client):
     assert "heb-cal-settings-sections" in js
     assert "toggleSettingsSection" in js
     page = SETTINGS.read_text(encoding="utf-8")
-    assert page.count("class=\"settings-section-toggle\"") == 9
+    assert page.count("class=\"settings-section-toggle\"") == 10
 
 
 def test_settings_page_loads_section_script(client):

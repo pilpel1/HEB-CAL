@@ -87,6 +87,7 @@ from . import reminders  # noqa: E402,F401
 from . import shifts  # noqa: E402,F401
 from . import updates  # noqa: E402,F401
 from . import gcal  # noqa: E402,F401
+from . import mcp_keys  # noqa: E402,F401
 
 @api.route('/calendar/<int:year>/<int:month>')
 def get_calendar(year, month):
