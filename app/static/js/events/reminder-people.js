@@ -340,6 +340,9 @@ async function loadReminderPeople() {
         fillShiftPersonSource(list);
     }
     suggestSimilarReminderPerson();
+    if (typeof loadMcpKeys === 'function') {
+        loadMcpKeys();
+    }
 }
 
 function cleanChatId(value) {

@@ -379,12 +379,18 @@
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settings-mcp-body">
-            <p>מפתח אישי לכל אדם ולכל מכשיר. הוא מוצג פעם אחת, נשמר אצלכם, ומאפשר לעוזר (Cursor, Claude Desktop) לקרוא ולערוך את היומן. ברירת המחדל היא קריאה בלבד. המפתח פוקע אחרי 30 יום בלי שימוש, וכל שימוש מוצלח מחדש את הספירה.</p>
-            <p class="text-muted small">החיבור הוא לכתובת <span dir="ltr">/mcp</span> של הלוח הזה. אם הלוח מאחורי Cloudflare Access, צריך פעם אחת לאפשר את הנתיב הזה בלבד (Bypass). ההסבר המלא ב-README.</p>
+            <p>מפתח אישי לכל אדם ולכל מכשיר. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע, ושימוש מחדש את הספירה.</p>
+            <ol class="mcp-steps">
+                <li>בחרו את האדם ושם למכשיר או לתוכנה, ולחצו «יצירת מפתח». המפתח מוצג פעם אחת — העתיקו אותו מיד.</li>
+                <li>ב-Cursor הדביקו את הקטע לקובץ ההגדרות, ואת המפתח עצמו שימו במשתנה <span dir="ltr">HEB_CAL_MCP_KEY</span>, לא בקובץ.</li>
+                <li>אם הלוח מאחורי Cloudflare Access, פעם אחת יש לפתוח רק את הנתיב <span dir="ltr">/mcp</span> (Bypass). שאר האתר נשאר סגור.</li>
+            </ol>
+            <p><a href="https://github.com/pilpel1/HEB-CAL/blob/main/README.md#mcp" target="_blank" rel="noopener noreferrer">ההסבר המלא: מפתחות, Cursor, Claude ו-Cloudflare</a></p>
+            <p id="mcpKeyNoUsers" class="mcp-no-users" hidden>עדיין אין משתמשים בבית. <a href="#settings-reminders">הוסיפו אדם במסך המשתמשים</a>, ואז חזרו לכאן ליצירת מפתח.</p>
             <form id="mcpKeyForm" class="row g-2 align-items-end">
                 <div class="col-12 col-md-4">
                     <label for="mcpKeyUser" class="form-label">משתמש</label>
-                    <select id="mcpKeyUser" class="form-select" required></select>
+                    <select id="mcpKeyUser" class="form-select"></select>
                 </div>
                 <div class="col-12 col-md-4">
                     <label for="mcpKeyLabel" class="form-label">שם המכשיר או התוכנה</label>
@@ -402,7 +408,7 @@
                     <input type="date" class="form-control" id="mcpKeyAbsolute" dir="ltr">
                 </div>
                 <div class="col-12 col-md-4">
-                    <button type="submit" class="btn btn-primary" id="mcpKeyCreate">יצירת מפתח</button>
+                    <button type="submit" class="btn btn-primary" id="mcpKeyCreate" disabled>יצירת מפתח</button>
                 </div>
             </form>
             <p id="mcpKeyError" class="reminder-form-error mt-2" hidden></p>

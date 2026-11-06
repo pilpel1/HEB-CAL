@@ -1496,6 +1496,19 @@
     color: var(--bs-danger);
 }
 
+.mcp-steps {
+    margin: 0 0 0.75rem;
+    padding-inline-start: 1.25rem;
+}
+
+.mcp-steps li + li {
+    margin-top: 0.35rem;
+}
+
+.mcp-no-users {
+    margin-bottom: 0.75rem;
+}
+
 .mcp-config {
     direction: ltr;
     text-align: left;

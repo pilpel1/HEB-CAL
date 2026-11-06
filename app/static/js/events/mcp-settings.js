@@ -1,5 +1,7 @@
 // עמוד ההגדרות: מפתחות MCP. הטוקן המלא מוצג פעם אחת, בחלון שנפתח אחרי היצירה.
 
+let mcpUserPayload = null;
+
 function initMcpSettings() {
     const form = document.getElementById('mcpKeyForm');
     if (!form) {
@@ -8,7 +10,23 @@ function initMcpSettings() {
     form.addEventListener('submit', createMcpKey);
     document.getElementById('mcpKeyList')?.addEventListener('click', onMcpKeyListClick);
     document.getElementById('mcpKeyModal')?.addEventListener('click', onMcpCopyClick);
+    document.getElementById('settings-mcp')?.addEventListener('settings-section-toggle', (event) => {
+        if (!event.detail || !event.detail.open) {
+            return;
+        }
+        // הגוף היה display:none. בדפדפן של טלפון רשימה שמתמלאת כשהאב מוסתר
+        // נשארת ריקה בבורר, והטופס אומר «יש לבחור פריט מהרשימה». בונים מחדש
+        // אחרי שהכרטיס באמת מוצג.
+        window.requestAnimationFrame(() => {
+            paintMcpUsers(true);
+            loadMcpKeys();
+        });
+    });
     loadMcpKeys();
+}
+
+function mcpSectionIsOpen() {
+    return Boolean(document.getElementById('settings-mcp')?.classList.contains('is-open'));
 }
 
 function mcpError(message) {
@@ -68,20 +86,67 @@ async function loadMcpKeys() {
     if (form) {
         form.dataset.csrf = data.csrf_token || '';
     }
-    const previous = select.value;
-    const users = data.users || [];
-    if (!users.length) {
-        select.innerHTML = '<option value="">קודם מוסיפים משתמש</option>';
-    } else {
-        select.innerHTML = users.map((user) => (
-            `<option value="${Number(user.id)}">${escapeHtml(user.name || '')}</option>`
-        )).join('');
-        const preferred = previous || (data.default_user_id ? String(data.default_user_id) : '');
-        if (preferred && select.querySelector(`option[value="${preferred}"]`)) {
-            select.value = preferred;
-        }
-    }
+    mcpUserPayload = data;
+    paintMcpUsers(mcpSectionIsOpen());
     renderMcpKeys(data.keys || []);
+}
+
+function paintMcpUsers(remount) {
+    const select = document.getElementById('mcpKeyUser');
+    const empty = document.getElementById('mcpKeyNoUsers');
+    const form = document.getElementById('mcpKeyForm');
+    if (!select || !mcpUserPayload) {
+        return;
+    }
+    const users = mcpUserPayload.users || [];
+    if (!users.length) {
+        select.required = false;
+        select.disabled = true;
+        select.innerHTML = '';
+        select.removeAttribute('data-mcp-mounted');
+        if (form) {
+            form.hidden = true;
+        }
+        if (empty) {
+            empty.hidden = false;
+        }
+        const create = document.getElementById('mcpKeyCreate');
+        if (create) {
+            create.disabled = true;
+        }
+        return;
+    }
+    if (form) {
+        form.hidden = false;
+    }
+    if (empty) {
+        empty.hidden = true;
+    }
+    const create = document.getElementById('mcpKeyCreate');
+    if (create) {
+        create.disabled = false;
+    }
+    const previous = select.value;
+    const options = users.map((user) => (
+        `<option value="${Number(user.id)}">${escapeHtml(user.name || '')}</option>`
+    )).join('');
+    let target = select;
+    if (remount) {
+        const fresh = select.cloneNode(false);
+        fresh.removeAttribute('data-mcp-mounted');
+        select.replaceWith(fresh);
+        target = fresh;
+    }
+    target.disabled = false;
+    target.required = true;
+    target.innerHTML = options;
+    const preferred = previous || (mcpUserPayload.default_user_id ? String(mcpUserPayload.default_user_id) : '');
+    if (preferred && target.querySelector(`option[value="${preferred}"]`)) {
+        target.value = preferred;
+    } else {
+        target.selectedIndex = 0;
+    }
+    target.dataset.mcpMounted = mcpSectionIsOpen() ? 'visible' : 'hidden';
 }
 
 function renderMcpKeys(keys) {

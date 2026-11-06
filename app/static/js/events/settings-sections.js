@@ -69,12 +69,7 @@ function applySettingsSectionState(root, hash) {
     const map = settingsSectionOpenMap(readSettingsSectionStore(), ids, firstId, hashId);
     sections.forEach((section) => {
         const id = section.getAttribute('data-settings-section');
-        const open = Boolean(map[id]);
-        section.classList.toggle('is-open', open);
-        const toggle = section.querySelector('.settings-section-toggle');
-        if (toggle) {
-            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        }
+        setSettingsSectionOpen(section, Boolean(map[id]));
     });
     return map;
 }
@@ -91,11 +86,16 @@ function setSettingsSectionOpen(section, open) {
     if (!section) {
         return;
     }
-    section.classList.toggle('is-open', Boolean(open));
+    const isOpen = Boolean(open);
+    section.classList.toggle('is-open', isOpen);
     const toggle = section.querySelector('.settings-section-toggle');
     if (toggle) {
-        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     }
+    section.dispatchEvent(new CustomEvent('settings-section-toggle', {
+        bubbles: true,
+        detail: { open: isOpen },
+    }));
 }
 
 function toggleSettingsSection(section) {
