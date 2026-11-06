@@ -34,16 +34,48 @@ def test_settings_mcp_card_is_present(client):
     assert 'id="mcpKeyPermission"' in html
     assert '<option value="read" selected>קריאה בלבד</option>' in html
     assert "בחרו את האדם ושם למכשיר" in html
-    assert GUIDE_URL in html
-    platforms = html.split('id="mcpPlatforms"', 1)[1].split('id="mcpKeyForm"', 1)[0]
+    assert html.count(GUIDE_URL) == 1
+    assert "כל אירועי הבית" in html
+    assert "כל בקשת פרוטוקול שהשרת קיבל" in html
+    assert "גם אם הכלי החזיר שגיאה" in html
+    assert "HEB_CAL_MCP_KEY" in html
+    assert "נשמר בקובץ ההגדרות יחד עם המפתח" in html
+    platforms = html.split('id="mcpPlatforms"', 1)[1].split("</div>", 1)[0]
     assert "אילו עוזרים מתחברים" in platforms
-    assert "עובד:" in platforms and "Cursor" in platforms
-    assert "mcp-remote" in platforms and "Node" in platforms and "Tailscale" in platforms
-    assert "Bearer" in platforms and "Grok" in platforms and "Bypass" in platforms
-    assert "עדיין לא נתמך:" in platforms and "Gemini" in platforms and "ChatGPT" in platforms
-    assert "OAuth" in platforms
-    assert GUIDE_URL in platforms
+    assert "מהמחשב, גם דרך Tailscale" in platforms
+    for name in (
+        "Cursor", "Claude Desktop", "mcp-remote", "Claude Code", "GitHub Copilot",
+        "Gemini CLI", "Cline", "Windsurf", "LM Studio",
+    ):
+        assert name in platforms
+    assert "Grok" in platforms and "grok.com" in platforms and "Copilot Studio" in platforms
+    assert "בטא" in platforms and "Bypass" in platforms
+    assert "לא נתמך:" in platforms and "OAuth 2.1" in platforms
+    assert "ChatGPT" in platforms and "בלי אימות" in platforms
+    assert GUIDE_URL not in platforms
     assert html.index('id="mcpPlatforms"') < html.index('id="mcpKeyForm"')
+    readme = README.read_text(encoding="utf-8")
+    mcp_docs = readme.split('<a id="mcp"></a>', 1)[1].split("### התראות", 1)[0]
+    for url in (
+        "https://cursor.com/docs/mcp",
+        "https://www.npmjs.com/package/mcp-remote",
+        "https://code.claude.com/docs/en/mcp",
+        "https://code.visualstudio.com/docs/copilot/chat/mcp-servers",
+        "https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md",
+        "https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx",
+        "https://docs.devin.ai/windsurf/plugins/cascade/mcp",
+        "https://lmstudio.ai/docs/app/mcp",
+        "https://docs.x.ai/grok/connectors",
+        "https://docs.x.ai/developers/tools/remote-mcp",
+        "https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent",
+        "https://claude.com/docs/connectors/custom/remote-mcp",
+        "https://support.google.com/gemini/answer/17209137",
+        "https://developers.google.com/connected-apps/mcp/oauth",
+        "https://developers.openai.com/api/docs/guides/custom-mcp-server",
+    ):
+        assert url in mcp_docs
+    assert "בלי אימות" in mcp_docs
+    assert "כל אירועי הבית" in mcp_docs
     assert 'id="mcpKeyNoUsers"' in html
     assert 'href="#settings-reminders"' in html
     assert "ב-README" not in html
@@ -100,9 +132,11 @@ def test_mobile_user_select_lists_household_users(live_server, app):
         expect(page.locator("#mcpKeyUser option:checked")).to_have_text("אביחי")
         platforms = page.locator("#mcpPlatforms")
         expect(platforms).to_be_visible()
-        expect(platforms).to_contain_text("עדיין לא נתמך")
-        expect(platforms).to_contain_text("Gemini")
+        expect(platforms).to_contain_text("לא נתמך")
+        expect(platforms).to_contain_text("OAuth 2.1")
         expect(platforms).to_contain_text("ChatGPT")
+        expect(platforms).to_contain_text("Copilot Studio")
+        expect(page.locator("#settings-mcp")).to_contain_text("כל אירועי הבית")
         place = page.evaluate(
             """() => {
                 const box = document.getElementById('mcpPlatforms').getBoundingClientRect();
@@ -111,7 +145,8 @@ def test_mobile_user_select_lists_household_users(live_server, app):
             }"""
         )
         assert place["boxTop"] < place["formTop"]
-        guide = page.locator(f'#mcpPlatforms a[href="{GUIDE_URL}"]')
+        guide = page.locator(f'#settings-mcp a[href="{GUIDE_URL}"]')
+        expect(guide).to_have_count(1)
         expect(guide).to_be_visible()
         browser.close()
 
@@ -126,7 +161,7 @@ def test_mobile_without_users_links_to_the_users_section(live_server):
         page.goto(live_server + "/settings", wait_until="load")
         page.locator("#settings-mcp .settings-section-toggle").click()
         expect(page.locator("#mcpPlatforms")).to_be_visible()
-        expect(page.locator("#mcpPlatforms")).to_contain_text("עדיין לא נתמך")
+        expect(page.locator("#mcpPlatforms")).to_contain_text("לא נתמך")
         note = page.locator("#mcpKeyNoUsers")
         expect(note).to_be_visible()
         expect(note).to_contain_text("עדיין אין משתמשים")

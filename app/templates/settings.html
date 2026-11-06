@@ -382,16 +382,15 @@
             <div class="mcp-platforms" id="mcpPlatforms">
                 <p class="mcp-platforms-title">אילו עוזרים מתחברים</p>
                 <ul>
-                    <li><strong>עובד:</strong> Cursor (מהמחשב שבו שמים את קובץ ההגדרות). Claude Desktop דרך <span dir="ltr">mcp-remote</span> — צריך Node על המחשב, ואם הלוח חשוף רק ב-Tailscale אז ממכשיר שמחובר אליו.</li>
-                    <li><strong>רק אם הלוח ציבורי:</strong> עוזר מרוחק ששולח את המפתח בכותרת Bearer, למשל מחבר מותאם של Grok או מחבר הענן של Claude. רק כשהכתובת נגישה דרך Cloudflare ויש Bypass לנתיב <span dir="ltr">/mcp</span>. מופע שחשוף רק ב-Tailscale לא מגיע אליהם.</li>
-                    <li><strong>עדיין לא נתמך:</strong> Gemini (צריך OAuth). ChatGPT ולקוחות אחרים שדורשים OAuth.</li>
+                    <li><strong>מהמחשב, גם דרך Tailscale אם המכשיר באותה רשת:</strong> Cursor, Claude Desktop דרך <span dir="ltr">mcp-remote</span>, Claude Code, VS Code / GitHub Copilot, Gemini CLI, Cline, Windsurf, LM Studio.</li>
+                    <li><strong>מהענן, רק אם הלוח ציבורי ב-Cloudflare עם Bypass לנתיב <span dir="ltr">/mcp</span>:</strong> Grok (מחבר ב-<span dir="ltr">grok.com</span> או ה-API), Microsoft Copilot Studio, מחבר הענן של Claude. כותרת קבועה אצל Claude היא בטא ולא זמינה לכל חשבון. מופע שחשוף רק ב-Tailscale לא מגיע אליהם.</li>
+                    <li><strong>לא נתמך:</strong> אפליקציית Gemini (דורשת OAuth 2.1). ChatGPT (האפשרויות הרשמיות הן OAuth, או בלי אימות).</li>
                 </ul>
-                <p class="mb-0"><a href="https://github.com/pilpel1/HEB-CAL/blob/main/README.md#mcp" target="_blank" rel="noopener noreferrer">ההסבר המלא: מפתחות, Cursor, Claude ו-Cloudflare</a></p>
             </div>
-            <p>מפתח אישי לכל אדם ולכל מכשיר. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע, ושימוש מחדש את הספירה.</p>
+            <p>מפתח אישי לכל אדם ולכל מכשיר, כדי לנהל אותו: מי הבעלים, מתי השתמשו, וביטול. העוזר רואה ועורך את כל אירועי הבית, לא רק של האדם הזה. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע. כל בקשת פרוטוקול שהשרת קיבל מחדשת את הספירה, גם אם הכלי החזיר שגיאה.</p>
             <ol class="mcp-steps">
                 <li>בחרו את האדם ושם למכשיר או לתוכנה, ולחצו «יצירת מפתח». המפתח מוצג פעם אחת — העתיקו אותו מיד.</li>
-                <li>ב-Cursor הדביקו את הקטע לקובץ ההגדרות, ואת המפתח עצמו שימו במשתנה <span dir="ltr">HEB_CAL_MCP_KEY</span>, לא בקובץ.</li>
+                <li>ב-Cursor הדביקו את הקטע לקובץ ההגדרות, ואת המפתח עצמו שימו במשתנה <span dir="ltr">HEB_CAL_MCP_KEY</span>, לא בקובץ. ב-Claude Desktop הקטע נשמר בקובץ ההגדרות יחד עם המפתח, וצריך Node.</li>
                 <li>אם הלוח מאחורי Cloudflare Access, פעם אחת יש לפתוח רק את הנתיב <span dir="ltr">/mcp</span> (Bypass). שאר האתר נשאר סגור.</li>
             </ol>
             <p><a href="https://github.com/pilpel1/HEB-CAL/blob/main/README.md#mcp" target="_blank" rel="noopener noreferrer">ההסבר המלא: מפתחות, Cursor, Claude ו-Cloudflare</a></p>
@@ -441,7 +440,7 @@
                     <pre class="mcp-config" id="mcpCursorConfig" dir="ltr"></pre>
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpCursorConfig">העתקה</button>
                     <h4 class="h6 mt-3">Claude Desktop</h4>
-                    <p class="text-muted small mb-1">בקובץ <span dir="ltr">claude_desktop_config.json</span>. צריך Node. המפתח נמצא בתוך הקטע שהעתקתם.</p>
+                    <p class="text-muted small mb-1">בקובץ <span dir="ltr">claude_desktop_config.json</span>. צריך Node. המפתח נשמר בתוך הקובץ הזה, לא במשתנה סביבה.</p>
                     <pre class="mcp-config" id="mcpClaudeConfig" dir="ltr"></pre>
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpClaudeConfig">העתקה</button>
                     <p id="mcpCopyStatus" class="person-saved-flag mt-2" hidden>הועתק</p>

@@ -6,7 +6,8 @@
 
 - ב«חיבור לעוזר AI» רשימת המשתמשים נבנית מחדש כשהכרטיס נפתח. בטלפון בחירה שהתמלאה כשהכרטיס היה סגור נשארה ריקה, והדפדפן אמר «יש לבחור פריט מהרשימה». בלי משתמשים מוצגת הודעה עם קישור למסך המשתמשים
 - בכרטיס יש שלבים קצרים וקישור למדריך המלא
-- בראש הכרטיס: אילו עוזרים מתחברים. Cursor ו-Claude Desktop (דרך mcp-remote, עם Node, ומ-Tailscale רק ממכשיר מחובר). עוזר מרוחק עם Bearer, כמו Grok או מחבר הענן של Claude, רק אם הלוח ציבורי ב-Cloudflare עם Bypass ל-`/mcp`. Gemini ו-ChatGPT שדורשים OAuth עדיין לא
+- בראש הכרטיס: אילו עוזרים מתחברים. מהמחשב (גם ב-Tailscale, אם המכשיר באותה רשת): Cursor, Claude Desktop דרך mcp-remote, Claude Code, VS Code / GitHub Copilot, Gemini CLI, Cline, Windsurf, LM Studio. מהענן, רק עם Cloudflare ו-Bypass ל-`/mcp`: Grok (grok.com או ה-API), Microsoft Copilot Studio, ומחבר הענן של Claude (כותרת קבועה בטא ולא לכל חשבון). לא נתמך: אפליקציית Gemini (OAuth 2.1) ו-ChatGPT (OAuth או בלי אימות)
+- המפתח משויך לאדם לניהול, והעוזר רואה ועורך את כל אירועי הבית. כל בקשת פרוטוקול שהשרת קיבל מחדשת 30 יום, גם אם הכלי החזיר שגיאה. ב-Cursor המפתח במשתנה סביבה; ב-Claude Desktop הוא נשמר בקובץ. קישור אחד למדריך המלא
 
 ## 1.0.30
 
