@@ -1496,6 +1496,58 @@
     color: var(--bs-danger);
 }
 
+.mcp-platforms {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.15));
+    border-radius: 0.5rem;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+.mcp-platforms-title {
+    margin: 0 0 0.45rem;
+    font-weight: 700;
+}
+
+.mcp-platforms ul {
+    margin: 0 0 0.6rem;
+    padding-inline-start: 1.15rem;
+}
+
+.mcp-platforms li + li {
+    margin-top: 0.4rem;
+}
+
+.mcp-steps {
+    margin: 0 0 0.75rem;
+    padding-inline-start: 1.25rem;
+}
+
+.mcp-steps li + li {
+    margin-top: 0.35rem;
+}
+
+.mcp-no-users {
+    margin-bottom: 0.75rem;
+}
+
+.mcp-client-tabs {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    padding-bottom: 0.15rem;
+}
+
+.mcp-client-tabs .btn {
+    flex: 0 0 auto;
+    min-height: 40px;
+}
+
+.mcp-install-actions {
+    margin-bottom: 0.35rem;
+}
+
 .mcp-config {
     direction: ltr;
     text-align: left;

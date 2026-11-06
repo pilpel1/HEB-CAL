@@ -201,19 +201,50 @@ python scripts/gcal_sync_worker.py
 
 החלון הוא בערך חצי שנה אחורה וקצת יותר משנה קדימה (`GCAL_SYNC_PAST_DAYS` / `GCAL_SYNC_FUTURE_DAYS`). אירוע ישן יותר שנמשך בעבר נשאר. סנכרון דו-כיווני (מכאן אל גוגל) לא כלול — הוא דורש OAuth.
 
+<a id="mcp"></a>
+
 ### עוזר AI (MCP)
 
-בהגדרות, «חיבור לעוזר AI (MCP)»: מפתח אישי לכל אדם ולכל מכשיר. הוא מוצג פעם אחת בלבד, ובמסד נשמר רק ה-hash שלו. ברירת המחדל היא קריאה בלבד; כתיבה בוחרים במפורש. המפתח פוקע אחרי 30 יום בלי שימוש, וכל קריאה מוצלחת (כולל פתיחת החיבור ורשימת הכלים) מחדשת את הספירה. אפשר גם תאריך סופי. ביטול מהטבלה, ומחיקת המשתמש מבטלת את המפתחות שלו. עד 10 מפתחות פעילים לאדם.
+בהגדרות, «חיבור לעוזר AI (MCP)»: מפתח אישי לכל אדם ולכל מכשיר. הוא מוצג פעם אחת בלבד, ובמסד נשמר רק ה-hash שלו. המפתח משויך לאדם כדי לנהל אותו (בעלים, שימוש אחרון, ביטול). העוזר רואה ועורך את כל אירועי הבית, לא רק של האדם הזה. ברירת המחדל היא קריאה בלבד; כתיבה בוחרים במפורש. המפתח פוקע אחרי 30 יום בלי שימוש. כל בקשת פרוטוקול שהשרת קיבל מחדשת את הספירה, גם אם הכלי החזיר שגיאה (למשל מפתח לקריאה שניסה לכתוב). בקשה שנדחתה — מפתח לא תקף, או שגיאת פרוטוקול — לא מחדשת. אפשר גם תאריך סופי. ביטול מהטבלה, ומחיקת המשתמש מבטלת את המפתחות שלו. עד 10 מפתחות פעילים לאדם.
 
 השרת הוא `POST /mcp` על אותה כתובת של הלוח. אין תהליך נוסף ואין פורט נוסף. המפתח תקף רק בנתיב הזה, לא בשאר ה-API. אירוע שהגיע מגוגל, ומשמרת, נשארים לקריאה בלבד גם עם מפתח כתיבה.
 
-**פעם אחת, ידנית, ב-Cloudflare Access** — האפליקציה לא משנה את זה: אפליקציית Access נפרדת לנתיב המדויק `/mcp` (לא לכל האתר), עם מדיניות Bypass‏ (Include: Everyone). נתיב מדויק יותר גובר על האפליקציה הראשית. בלי זה לקוח ה-AI נעצר במסך ההתחברות של Access, כי הוא לא דפדפן.
+**פעם אחת, ידנית, ב-Cloudflare Access.** האפליקציה לא משנה את זה. `one.dash.cloudflare.com` מפנה אל `https://dash.cloudflare.com/one/` וזורק את `?to=`, ולכן הקישור שעדיין פותח את רשימת האפליקציות אחרי בחירת החשבון הוא:
 
-הנתיב הזה ציבורי. ההגנה היא המפתח עצמו (אקראי וארוך). מומלץ גם כלל rate limiting של Cloudflare על `/mcp`. בקשות Bypass לא נרשמות בלוג של Access. אין לשים את המפתח בכתובת — הוא דולף ללוגים. שאר האתר נשאר מאחורי Access כמו קודם.
+[אפליקציות Access](https://dash.cloudflare.com/?to=/:account/one/access-controls/apps)
 
-ב-Cursor מדביקים את הקטע מהחלון ל-`~/.cursor/mcp.json`, ואת המפתח שמים במשתנה הסביבה `HEB_CAL_MCP_KEY`. ב-Claude Desktop הקטע הוא ל-`claude_desktop_config.json` ורץ דרך `npx mcp-remote` (צריך Node על המחשב). חיבור מרוחק של Claude יוצא מהענן של Anthropic ולא מהמכשיר, ולכן מופע שחשוף רק דרך Tailscale עובד עם `mcp-remote` מהמכשיר שמחובר ל-tailnet, לא עם connector בענן.
+1. פתחו את הקישור ובחרו את החשבון.
+2. **Create new application**.
+3. **Self-hosted and private**, ואז **Add public hostname**.
+4. אותו מארח של הלוח. בשדה Path כתבו `mcp` בלבד: בלי `*`, בלי סלאש נוסף, ובלי `/mcp/`. נתיב מדויק גובר על האפליקציה של כל האתר.
+5. מדיניות חדשה: **Action** = Bypass, **Include** = Everyone.
+6. **Create**. שאר האתר נשאר באפליקציה הקיימת, בלי Bypass.
 
-OAuth לא כלול בגרסה הזו. לפי העזרה הרשמית של Gemini, MCP מותאם שם דורש OAuth (רישום דינמי או לקוח שנרשם מראש) ואין זרימת מפתח אישי — זה שלב נפרד, והגרסה הזו לא מבטיחה ש-Gemini יתחבר. Grok תומך ב-MCP מרוחק מותאם; אין כאן הגדרה נפרדת אליו.
+בלי זה לקוח מהענן נעצר במסך ההתחברות של Access, כי הוא לא דפדפן. הנתיב ציבורי, וההגנה היא המפתח עצמו (אקראי וארוך). מומלץ גם כלל rate limiting של Cloudflare על `/mcp`. בקשות Bypass לא נרשמות בלוג של Access. אין לשים את המפתח בכתובת — הוא דולף ללוגים.
+
+בחלון המפתח יש לשונית לכל תוכנה. [Cursor](https://cursor.com/docs/mcp/install-links) ו-[VS Code](https://code.visualstudio.com/api/extension-guides/ai/mcp) מקבלים כפתור התקנה; המפתח נמצא רק בקישור של הכפתור, בדפדפן, ולא בכתובת של הלוח. ההעתקה שלהם משאירה את המפתח במשתנה `HEB_CAL_MCP_KEY`. ב-Claude Desktop אין כפתור כזה: הקטע הוא ל-`claude_desktop_config.json` דרך [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (צריך Node), והמפתח נשמר בתוך הקובץ.
+
+**מהמחשב.** עובד גם כשהלוח חשוף רק ב-Tailscale, אם המכשיר באותה רשת:
+
+- [Cursor](https://cursor.com/docs/mcp)
+- [Claude Desktop](https://claude.com/docs/third-party/claude-desktop/configuration) דרך [mcp-remote](https://www.npmjs.com/package/mcp-remote)
+- [Claude Code](https://code.claude.com/docs/en/mcp)
+- [VS Code / GitHub Copilot](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md)
+- [Cline](https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx)
+- [Windsurf](https://docs.devin.ai/windsurf/plugins/cascade/mcp)
+- [LM Studio](https://lmstudio.ai/docs/app/mcp)
+
+**מהענן.** רק אם הלוח ציבורי דרך Cloudflare ויש Bypass לנתיב `/mcp`. מופע שחשוף רק ב-Tailscale לא מגיע אליהם:
+
+- [Grok](https://docs.x.ai/grok/connectors) (מחבר ב-grok.com) ו[ה-API](https://docs.x.ai/developers/tools/remote-mcp)
+- [Microsoft Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent)
+- [מחבר הענן של Claude](https://claude.com/docs/connectors/custom/remote-mcp). כותרת קבועה היא [בטא](https://claude.com/docs/connectors/building/authentication) ולא זמינה לכל חשבון
+
+**לא נתמך.** אין כאן OAuth.
+
+- [אפליקציית Gemini](https://support.google.com/gemini/answer/17209137) דורשת [OAuth 2.1](https://developers.google.com/connected-apps/mcp/oauth) (רישום דינמי או לקוח שנרשם מראש). אין זרימת מפתח אישי.
+- [ChatGPT](https://developers.openai.com/api/docs/guides/custom-mcp-server): האפשרויות הרשמיות הן OAuth, או בלי אימות. אין מפתח אישי.
 
 ### התראות בדפדפן
 

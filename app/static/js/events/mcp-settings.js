@@ -1,5 +1,7 @@
 // עמוד ההגדרות: מפתחות MCP. הטוקן המלא מוצג פעם אחת, בחלון שנפתח אחרי היצירה.
 
+let mcpUserPayload = null;
+
 function initMcpSettings() {
     const form = document.getElementById('mcpKeyForm');
     if (!form) {
@@ -7,8 +9,28 @@ function initMcpSettings() {
     }
     form.addEventListener('submit', createMcpKey);
     document.getElementById('mcpKeyList')?.addEventListener('click', onMcpKeyListClick);
-    document.getElementById('mcpKeyModal')?.addEventListener('click', onMcpCopyClick);
+    const modal = document.getElementById('mcpKeyModal');
+    modal?.addEventListener('click', onMcpCopyClick);
+    modal?.querySelector('.mcp-client-tabs')?.addEventListener('click', onMcpTabClick);
+    modal?.addEventListener('hide.bs.modal', clearMcpSecrets);
+    modal?.addEventListener('hidden.bs.modal', clearMcpSecrets);
+    document.getElementById('settings-mcp')?.addEventListener('settings-section-toggle', (event) => {
+        if (!event.detail || !event.detail.open) {
+            return;
+        }
+        // הגוף היה display:none. בדפדפן של טלפון רשימה שמתמלאת כשהאב מוסתר
+        // נשארת ריקה בבורר, והטופס אומר «יש לבחור פריט מהרשימה». בונים מחדש
+        // אחרי שהכרטיס באמת מוצג.
+        window.requestAnimationFrame(() => {
+            paintMcpUsers(true);
+            loadMcpKeys();
+        });
+    });
     loadMcpKeys();
+}
+
+function mcpSectionIsOpen() {
+    return Boolean(document.getElementById('settings-mcp')?.classList.contains('is-open'));
 }
 
 function mcpError(message) {
@@ -68,20 +90,67 @@ async function loadMcpKeys() {
     if (form) {
         form.dataset.csrf = data.csrf_token || '';
     }
-    const previous = select.value;
-    const users = data.users || [];
-    if (!users.length) {
-        select.innerHTML = '<option value="">קודם מוסיפים משתמש</option>';
-    } else {
-        select.innerHTML = users.map((user) => (
-            `<option value="${Number(user.id)}">${escapeHtml(user.name || '')}</option>`
-        )).join('');
-        const preferred = previous || (data.default_user_id ? String(data.default_user_id) : '');
-        if (preferred && select.querySelector(`option[value="${preferred}"]`)) {
-            select.value = preferred;
-        }
-    }
+    mcpUserPayload = data;
+    paintMcpUsers(mcpSectionIsOpen());
     renderMcpKeys(data.keys || []);
+}
+
+function paintMcpUsers(remount) {
+    const select = document.getElementById('mcpKeyUser');
+    const empty = document.getElementById('mcpKeyNoUsers');
+    const form = document.getElementById('mcpKeyForm');
+    if (!select || !mcpUserPayload) {
+        return;
+    }
+    const users = mcpUserPayload.users || [];
+    if (!users.length) {
+        select.required = false;
+        select.disabled = true;
+        select.innerHTML = '';
+        select.removeAttribute('data-mcp-mounted');
+        if (form) {
+            form.hidden = true;
+        }
+        if (empty) {
+            empty.hidden = false;
+        }
+        const create = document.getElementById('mcpKeyCreate');
+        if (create) {
+            create.disabled = true;
+        }
+        return;
+    }
+    if (form) {
+        form.hidden = false;
+    }
+    if (empty) {
+        empty.hidden = true;
+    }
+    const create = document.getElementById('mcpKeyCreate');
+    if (create) {
+        create.disabled = false;
+    }
+    const previous = select.value;
+    const options = users.map((user) => (
+        `<option value="${Number(user.id)}">${escapeHtml(user.name || '')}</option>`
+    )).join('');
+    let target = select;
+    if (remount) {
+        const fresh = select.cloneNode(false);
+        fresh.removeAttribute('data-mcp-mounted');
+        select.replaceWith(fresh);
+        target = fresh;
+    }
+    target.disabled = false;
+    target.required = true;
+    target.innerHTML = options;
+    const preferred = previous || (mcpUserPayload.default_user_id ? String(mcpUserPayload.default_user_id) : '');
+    if (preferred && target.querySelector(`option[value="${preferred}"]`)) {
+        target.value = preferred;
+    } else {
+        target.selectedIndex = 0;
+    }
+    target.dataset.mcpMounted = mcpSectionIsOpen() ? 'visible' : 'hidden';
 }
 
 function renderMcpKeys(keys) {
@@ -128,6 +197,38 @@ function renderMcpKeys(keys) {
     `;
 }
 
+function mcpBase64(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+}
+
+// הפורמט של Cursor עצמם: name בפרמטר, ו-config הוא base64 של אובייקט השרת
+// (בלי עטיפת השם). + ב-base64 חייב להיות מקודד, אחרת Cursor שובר את ה-JSON.
+// https://cursor.com/docs/mcp/install-links
+function mcpCursorInstallHref(origin, token) {
+    const config = JSON.stringify({
+        url: `${origin}/mcp`,
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    return `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent('heb-cal')}&config=${encodeURIComponent(mcpBase64(config))}`;
+}
+
+// https://code.visualstudio.com/api/extension-guides/ai/mcp
+// vscode:mcp/install? ואז JSON.stringify + encodeURIComponent. לא vscode://.
+function mcpVsCodeInstallHref(origin, token) {
+    const config = {
+        name: 'heb-cal',
+        type: 'http',
+        url: `${origin}/mcp`,
+        headers: { Authorization: `Bearer ${token}` },
+    };
+    return `vscode:mcp/install?${encodeURIComponent(JSON.stringify(config))}`;
+}
+
 function mcpCursorConfig(origin) {
     return JSON.stringify({
         mcpServers: {
@@ -137,6 +238,22 @@ function mcpCursorConfig(origin) {
             },
         },
     }, null, 2);
+}
+
+function mcpVsCodeConfig(origin) {
+    return JSON.stringify({
+        servers: {
+            'heb-cal': {
+                type: 'http',
+                url: `${origin}/mcp`,
+                headers: { Authorization: 'Bearer ${env:HEB_CAL_MCP_KEY}' },
+            },
+        },
+    }, null, 2);
+}
+
+function mcpClaudeCodeCommand(origin, token) {
+    return `claude mcp add --transport http heb-cal ${origin}/mcp --header "Authorization: Bearer ${token}"`;
 }
 
 function mcpClaudeConfig(origin, token) {
@@ -151,11 +268,65 @@ function mcpClaudeConfig(origin, token) {
     }, null, 2);
 }
 
+function showMcpClient(name) {
+    document.querySelectorAll('[data-mcp-tab]').forEach((button) => {
+        const on = button.getAttribute('data-mcp-tab') === name;
+        button.setAttribute('aria-selected', on ? 'true' : 'false');
+        button.classList.toggle('btn-primary', on);
+        button.classList.toggle('btn-outline-secondary', !on);
+        if (on) {
+            button.removeAttribute('tabindex');
+        } else {
+            button.tabIndex = -1;
+        }
+    });
+    document.querySelectorAll('[data-mcp-panel]').forEach((panel) => {
+        panel.hidden = panel.getAttribute('data-mcp-panel') !== name;
+    });
+}
+
+function onMcpTabClick(event) {
+    const tab = event.target.closest('[data-mcp-tab]');
+    if (!tab) {
+        return;
+    }
+    showMcpClient(tab.getAttribute('data-mcp-tab'));
+}
+
+function setInstallHref(id, href) {
+    const link = document.getElementById(id);
+    if (!link) {
+        return;
+    }
+    if (href) {
+        link.href = href;
+    } else {
+        link.removeAttribute('href');
+    }
+}
+
+function clearMcpSecrets() {
+    ['mcpKeyToken', 'mcpCursorConfig', 'mcpVsCodeConfig', 'mcpClaudeConfig', 'mcpClaudeCodeCommand', 'mcpServerUrl'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = '';
+        }
+    });
+    setInstallHref('mcpCursorInstall', '');
+    setInstallHref('mcpVsCodeInstall', '');
+}
+
 function showMcpKeyOnce(token) {
     const origin = window.location.origin;
     document.getElementById('mcpKeyToken').textContent = token;
+    document.getElementById('mcpServerUrl').textContent = `${origin}/mcp`;
     document.getElementById('mcpCursorConfig').textContent = mcpCursorConfig(origin);
+    document.getElementById('mcpVsCodeConfig').textContent = mcpVsCodeConfig(origin);
     document.getElementById('mcpClaudeConfig').textContent = mcpClaudeConfig(origin, token);
+    document.getElementById('mcpClaudeCodeCommand').textContent = mcpClaudeCodeCommand(origin, token);
+    setInstallHref('mcpCursorInstall', mcpCursorInstallHref(origin, token));
+    setInstallHref('mcpVsCodeInstall', mcpVsCodeInstallHref(origin, token));
+    showMcpClient('cursor');
     const status = document.getElementById('mcpCopyStatus');
     if (status) {
         status.hidden = true;
