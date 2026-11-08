@@ -49,7 +49,7 @@ def test_only_the_exact_mcp_path_is_registered(app, client):
         rule.rule for rule in app.url_map.iter_rules() if rule.rule == "/mcp" or rule.rule.startswith("/mcp/")
     }
     assert rules == {"/mcp"}
-    for path in ("/mcp/extra", "/mcpfoo", "/mcp/keys", "/.well-known/oauth-protected-resource"):
+    for path in ("/mcp/extra", "/mcpfoo", "/mcp/keys"):
         assert client.get(path).status_code == 404
         assert client.post(path, data=b"{}", headers={"Content-Type": "application/json"}).status_code == 404
 

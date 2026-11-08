@@ -209,6 +209,10 @@ python scripts/gcal_sync_worker.py
 
 השרת הוא `POST /mcp` על אותה כתובת של הלוח. אין תהליך נוסף ואין פורט נוסף. המפתח תקף רק בנתיב הזה, לא בשאר ה-API. אירוע שהגיע מגוגל, ומשמרת, נשארים לקריאה בלבד גם עם מפתח כתיבה.
 
+OAuth 2.1 בתוך אותה אפליקציה (אין שירות נפרד). מקור ציבורי: `HEB_CAL_PUBLIC_ORIGIN=https://hebcal.corcos.app` (HTTPS, בלי נתיב; http רק ל-localhost). לא נלקח מ-Host ולא מ-X-Forwarded. מופע אחר (`naom-naama.corcos.app`) חייב ערך אחר ומסד נתונים משלו — טוקן/קוד/refresh של האחד נדחים בשני. מפתחות `hcal_…` ממשיכים לעבוד.
+
+גילוי: `GET /.well-known/oauth-protected-resource`, `…/mcp`, `GET /.well-known/oauth-authorization-server`. אישור משתמש: `GET/POST /oauth/authorize` (נשאר מאחורי Access). טוקן/ביטול: `POST /oauth/token`, `POST /oauth/revoke`. PKCE S256 חובה. אין רישום לקוח דינמי פתוח — יוצרים לקוח בהגדרות.
+
 **פעם אחת, ידנית, ב-Cloudflare Access.** האפליקציה לא משנה את זה. `one.dash.cloudflare.com` מפנה אל `https://dash.cloudflare.com/one/` וזורק את `?to=`, ולכן הקישור שעדיין פותח את רשימת האפליקציות אחרי בחירת החשבון הוא:
 
 [אפליקציות Access](https://dash.cloudflare.com/?to=/:account/one/access-controls/apps)
@@ -216,11 +220,22 @@ python scripts/gcal_sync_worker.py
 1. פתחו את הקישור ובחרו את החשבון.
 2. **Create new application**.
 3. **Self-hosted and private**, ואז **Add public hostname**.
-4. אותו מארח של הלוח. בשדה Path כתבו `mcp` בלבד: בלי `*`, בלי סלאש נוסף, ובלי `/mcp/`. נתיב מדויק גובר על האפליקציה של כל האתר.
+4. אותו מארח של הלוח. בשדה Path כתבו נתיב מדויק אחד לכל אפליקציה (בלי `*`, בלי סלאש נוסף). נתיב מדויק גובר על האפליקציה של כל האתר.
 5. מדיניות חדשה: **Action** = Bypass, **Include** = Everyone.
 6. **Create**. שאר האתר נשאר באפליקציה הקיימת, בלי Bypass.
 
-בלי זה לקוח מהענן נעצר במסך ההתחברות של Access, כי הוא לא דפדפן. הנתיב ציבורי, וההגנה היא המפתח עצמו (אקראי וארוך). מומלץ גם כלל rate limiting של Cloudflare על `/mcp`. בקשות Bypass לא נרשמות בלוג של Access. אין לשים את המפתח בכתובת — הוא דולף ללוגים.
+נתיבים שצריכים Bypass **בעתיד** (האפליקציה לא משנה Access חיה):
+
+- `mcp` — `POST /mcp`
+- `.well-known/oauth-protected-resource`
+- `.well-known/oauth-protected-resource/mcp`
+- `.well-known/oauth-authorization-server`
+- `oauth/token`
+- `oauth/revoke`
+
+**לא** Bypass ל-`oauth/authorize`. מסך האישור נשאר מאחורי Access, עם JWT חתום (`Cf-Access-Jwt-Assertion`) שממופה ל-`users.google_email` במופע הזה. ב-.env: `CF_ACCESS_ISSUER` (למשל `https://your-team.cloudflareaccess.com`) ו-`CF_ACCESS_AUD`.
+
+בלי Bypass ל-`/mcp` לקוח מהענן נעצר במסך ההתחברות. הנתיב ציבורי אחרי Bypass, וההגנה היא המפתח או טוקן OAuth. מומלץ rate limiting על הנתיבים האלה. בקשות Bypass לא נרשמות בלוג של Access. אין לשים מפתח או סוד בכתובת.
 
 בחלון המפתח יש לשונית לכל תוכנה. [Cursor](https://cursor.com/docs/mcp/install-links) ו-[VS Code](https://code.visualstudio.com/api/extension-guides/ai/mcp) מקבלים כפתור התקנה; המפתח נמצא רק בקישור של הכפתור, בדפדפן, ולא בכתובת של הלוח. ההעתקה שלהם משאירה את המפתח במשתנה `HEB_CAL_MCP_KEY`. ב-Claude Desktop אין כפתור כזה: הקטע הוא ל-`claude_desktop_config.json` דרך [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (צריך Node), והמפתח נשמר בתוך הקובץ.
 
@@ -241,10 +256,10 @@ python scripts/gcal_sync_worker.py
 - [Microsoft Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent)
 - [מחבר הענן של Claude](https://claude.com/docs/connectors/custom/remote-mcp). כותרת קבועה היא [בטא](https://claude.com/docs/connectors/building/authentication) ולא זמינה לכל חשבון
 
-**לא נתמך.** אין כאן OAuth.
+**אפליקציית Gemini** (gemini.google.com, לא Gemini CLI): אין כפתור חיבור ישיר ואין deep link רשמי לשרת בית. ב-Connected Apps מזינים את כתובת `/mcp`. בלי DCR פתוח אצלנו: Advanced → Client ID ו-Secret שנוצרו בהגדרות, ו-Redirect URI **מדויק** שגוגל מציגים. דרישות מצד גוגל: חשבון Google אישי (לא עבודה/בית ספר), גיל 18+, ארה״ב, Keep Activity, וממשק באנגלית. [מדריך משתמש](https://support.google.com/gemini/answer/17209137), [OAuth 2.1 של Connected Apps](https://developers.google.com/connected-apps/mcp/oauth).
 
-- [אפליקציית Gemini](https://support.google.com/gemini/answer/17209137) דורשת [OAuth 2.1](https://developers.google.com/connected-apps/mcp/oauth) (רישום דינמי או לקוח שנרשם מראש). אין זרימת מפתח אישי.
-- [ChatGPT](https://developers.openai.com/api/docs/guides/custom-mcp-server): האפשרויות הרשמיות הן OAuth, או בלי אימות. אין מפתח אישי.
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md) נשאר עם מפתח אישי.
+- [ChatGPT](https://developers.openai.com/api/docs/guides/custom-mcp-server): האפשרויות הרשמיות הן OAuth, או בלי אימות. אין מפתח אישי, ואין כאן לקוח רשום ל-ChatGPT.
 
 ### התראות בדפדפן
 

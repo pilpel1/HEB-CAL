@@ -2,6 +2,13 @@
 
 הקובץ הזה מתאר בקצרה מה נכנס בכל גרסה. במסך «עדכון גרסה» מוצגים עיקרי השינויים מתוך ה-release ב-GitHub — זה המקור, לא הקובץ המקומי.
 
+## 1.0.32
+
+- גילוי משאב מוגן (RFC 9728) ושרת הרשאות בתוך האפליקציה (RFC 8414): `/.well-known/oauth-protected-resource`, `…/mcp`, `/.well-known/oauth-authorization-server`. כתובות רק מ-`HEB_CAL_PUBLIC_ORIGIN`, לא מ-Host/X-Forwarded. ערך שבור (כולל `https://[broken`) לא מפיל 500
+- `POST /mcp`: 401 עם `resource_metadata` כשהמקור מוגדר. מפתחות `hcal_…` לא השתנו. טוקן OAuth עם `hebcal:read` / `hebcal:write` מפעיל את אותם כלים
+- Authorization Code + PKCE S256, קוד חד-פעמי, טוקן גישה ~15 דקות, refresh מסתובב עם חלון 30 יום. אין DCR פתוח. לקוחות נרשמים בהגדרות. מסך אישור עברי ב-`/oauth/authorize` מאחורי Cloudflare Access עם אימות חתימת `Cf-Access-Jwt-Assertion` (issuer/audience/expiry) ומיפוי ל-`users.google_email` במופע הזה
+- מענק של `hebcal.corcos.app` נדחה ב-`naom-naama.corcos.app` גם לאותו משתמש. ניהול חיבורים ולקוחות בהגדרות. אין כפתור חיבור ישיר ל-Gemini — גוגל דורשים URL+OAuth במסך Connected Apps, ולעיתים זכאות חשבון (ארה״ב, חשבון אישי)
+
 ## 1.0.31
 
 - ב«חיבור לעוזר AI» רשימת המשתמשים נבנית מחדש כשהכרטיס נפתח. בטלפון בחירה שהתמלאה כשהכרטיס היה סגור נשארה ריקה, והדפדפן אמר «יש לבחור פריט מהרשימה». בלי משתמשים מוצגת הודעה עם קישור למסך המשתמשים

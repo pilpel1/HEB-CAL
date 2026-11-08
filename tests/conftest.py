@@ -60,6 +60,12 @@ def _empty_events_table(app):
             db.execute("DELETE FROM bot_sessions")
         if "mcp_keys" in tables:
             db.execute("DELETE FROM mcp_keys")
+        if "oauth_codes" in tables:
+            db.execute("DELETE FROM oauth_codes")
+        if "oauth_grants" in tables:
+            db.execute("DELETE FROM oauth_grants")
+        if "oauth_clients" in tables:
+            db.execute("DELETE FROM oauth_clients")
         db.execute(
             "DELETE FROM event_colors WHERE lower(color_code) NOT IN ('cyan', 'yellow', 'orange', 'green')"
         )

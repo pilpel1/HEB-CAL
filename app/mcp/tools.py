@@ -602,7 +602,7 @@ def call_tool(name, arguments, permission: str) -> dict:
     if tool is None:
         raise UnknownTool(name)
     if tool.write and permission != "write":
-        return _error_result("forbidden", "המפתח הזה לקריאה בלבד. צרו מפתח עם הרשאת כתיבה בהגדרות")
+        return _error_result("forbidden", "ההרשאה הזו לקריאה בלבד")
     try:
         return _result(tool.handler(_validate(arguments, tool.input_schema)))
     except ToolError as exc:

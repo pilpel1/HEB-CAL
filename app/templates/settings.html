@@ -384,7 +384,7 @@
                 <ul>
                     <li><strong>מהמחשב, גם דרך Tailscale אם המכשיר באותה רשת:</strong> <a href="https://cursor.com/docs/mcp/install-links" target="_blank" rel="noopener noreferrer">Cursor</a>, <a href="https://claude.com/docs/third-party/claude-desktop/configuration" target="_blank" rel="noopener noreferrer">Claude Desktop</a> דרך <span dir="ltr">mcp-remote</span>, <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener noreferrer">Claude Code</a>, <a href="https://code.visualstudio.com/api/extension-guides/ai/mcp" target="_blank" rel="noopener noreferrer">VS Code / GitHub Copilot</a>, <a href="https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md" target="_blank" rel="noopener noreferrer">Gemini CLI</a>, <a href="https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx" target="_blank" rel="noopener noreferrer">Cline</a>, <a href="https://docs.devin.ai/windsurf/plugins/cascade/mcp" target="_blank" rel="noopener noreferrer">Windsurf</a>, <a href="https://lmstudio.ai/docs/app/mcp" target="_blank" rel="noopener noreferrer">LM Studio</a>.</li>
                     <li><strong>מהענן, רק אם הלוח ציבורי ב-Cloudflare עם Bypass לנתיב <span dir="ltr">/mcp</span>:</strong> <a href="https://grok.com/connectors" target="_blank" rel="noopener noreferrer">Grok</a> (מחבר ב-<span dir="ltr">grok.com</span> או ה-API), <a href="https://copilotstudio.microsoft.com/" target="_blank" rel="noopener noreferrer">Microsoft Copilot Studio</a>, <a href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">מחבר הענן של Claude</a>. כותרת קבועה אצל Claude היא בטא ולא זמינה לכל חשבון. מופע שחשוף רק ב-Tailscale לא מגיע אליהם.</li>
-                    <li><strong>לא נתמך:</strong> אפליקציית Gemini (דורשת OAuth 2.1). ChatGPT (האפשרויות הרשמיות הן OAuth, או בלי אימות).</li>
+                    <li><strong>אפליקציית Gemini:</strong> OAuth 2.1 דרך Connected Apps, בלי כפתור חיבור ישיר. פירוט בכרטיס «חיבור OAuth». <strong>לא נתמך:</strong> ChatGPT (האפשרויות הרשמיות הן OAuth, או בלי אימות).</li>
                 </ul>
             </div>
             <p>מפתח אישי לכל אדם ולכל מכשיר, כדי לנהל אותו: מי הבעלים, מתי השתמשו, וביטול. העוזר רואה ועורך את כל אירועי הבית, לא רק של האדם הזה. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע. כל בקשת פרוטוקול שהשרת קיבל מחדשת את הספירה, גם אם הכלי החזיר שגיאה.</p>
@@ -421,6 +421,49 @@
             </form>
             <p id="mcpKeyError" class="reminder-form-error mt-2" hidden></p>
             <div id="mcpKeyList" class="mt-3"></div>
+        </div>
+    </section>
+
+    <section class="card mb-3 settings-section" id="settings-oauth" data-settings-section="settings-oauth" aria-labelledby="settings-oauth-title">
+        <h2 class="h5 settings-section-title" id="settings-oauth-title">
+            <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="settings-oauth-body">
+                <span class="settings-section-label">חיבור OAuth לעוזר AI</span>
+                <span class="settings-section-chevron" aria-hidden="true"></span>
+            </button>
+        </h2>
+        <div class="card-body settings-section-body" id="settings-oauth-body">
+            <p>חיבור בלי להעתיק מפתח <span dir="ltr">hcal_</span>. הלקוח עובר מסך אישור בעברית. המסך הזה נשאר מאחורי Cloudflare Access; רק אחרי אישור מתקבל טוקן קצר.</p>
+            <p id="oauthOriginMissing" class="reminder-form-error" hidden>חסר <span dir="ltr">HEB_CAL_PUBLIC_ORIGIN</span> בשרת. בלי זה אין גילוי ואין טוקנים.</p>
+            <p>כתובת ה-MCP: <code id="oauthMcpUrl" dir="ltr"></code>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="oauthCopyMcpUrl">העתקה</button>
+            </p>
+            <h3 class="h6 mt-3">אפליקציית Gemini</h3>
+            <p class="small">אין כפתור חיבור רשמי מגוגל לשרת שלכם, ואין כאן deep link. ב-<a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> → הגדרות → Connected Apps → Custom apps מזינים את כתובת <span dir="ltr">/mcp</span>. אם אין רישום דינמי: Advanced → Client ID ו-Secret שנוצרים כאן, ו-Redirect URI המדויק שגוגל מציגים (בלי כוכביות). דרישות מצד גוגל (לא בידינו): חשבון אישי, גיל 18+, ארה״ב, Keep Activity, וממשק באנגלית.</p>
+            <p class="small text-muted mb-2">Gemini CLI ממשיך עם מפתח אישי. זה לא אפליקציית Gemini.</p>
+            <h3 class="h6 mt-3">לקוח רשום מראש</h3>
+            <form id="oauthClientForm" class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label for="oauthClientName" class="form-label">שם הלקוח</label>
+                    <input type="text" class="form-control" id="oauthClientName" maxlength="80" required placeholder="למשל Gemini">
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="oauthClientRedirects" class="form-label">כתובות הפניה (שורה לכל אחת)</label>
+                    <textarea class="form-control" id="oauthClientRedirects" rows="2" required dir="ltr" placeholder="https://oauth-redirect.googleusercontent.com/r/…"></textarea>
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" class="btn btn-primary" id="oauthClientCreate">יצירת לקוח</button>
+                </div>
+            </form>
+            <p id="oauthAdminError" class="reminder-form-error mt-2" hidden></p>
+            <div id="oauthClientOnce" class="mt-2" hidden>
+                <p>הסוד מוצג פעם אחת:</p>
+                <p>Client ID: <code id="oauthOnceId" dir="ltr"></code></p>
+                <p>Client secret: <code id="oauthOnceSecret" dir="ltr"></code></p>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="oauthCopySecret">העתקת הסוד</button>
+            </div>
+            <div id="oauthClientList" class="mt-3"></div>
+            <h3 class="h6 mt-3">חיבורים פעילים</h3>
+            <div id="oauthConnectionList"></div>
         </div>
     </section>
 

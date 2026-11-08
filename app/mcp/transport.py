@@ -19,6 +19,7 @@ from flask import Blueprint, Response, request
 
 from app.mcp import keys as mcp_keys
 from app.mcp.tools import UnknownTool, call_tool, visible_tools
+from app.oauth.resource import mcp_www_authenticate
 
 mcp = Blueprint("mcp", __name__)
 
@@ -96,11 +97,30 @@ def _origin_ok() -> bool:
     return f"{parts.scheme}://{parts.netloc}".lower() in _allowed_origins()
 
 
+def _authenticate(token: str | None):
+    key = mcp_keys.authenticate(token)
+    if key is not None:
+        key["kind"] = "key"
+        return key
+    from app.oauth.tokens import authenticate_access
+
+    return authenticate_access(token)
+
+
+def _touch(principal: dict) -> None:
+    if principal.get("kind") == "oauth":
+        from app.oauth.tokens import touch_grant
+
+        touch_grant(principal)
+        return
+    mcp_keys.touch(principal)
+
+
 def _unauthorized() -> Response:
     return _json(
         {"error": "invalid_token", "error_description": "מפתח חסר, לא תקף, בוטל או פג תוקף"},
         401,
-        {"WWW-Authenticate": 'Bearer realm="heb-cal", error="invalid_token"'},
+        {"WWW-Authenticate": mcp_www_authenticate()},
     )
 
 
@@ -220,7 +240,7 @@ def mcp_endpoint():
     if not _origin_ok():
         return _rpc_error(INVALID_REQUEST, "Origin not allowed", status=403)
 
-    key = mcp_keys.authenticate(_bearer_token())
+    key = _authenticate(_bearer_token())
     if key is None:
         return _unauthorized()
 
@@ -250,12 +270,12 @@ def mcp_endpoint():
     modern_version = meta.get(META_VERSION) if isinstance(meta, dict) else None
 
     if "id" not in message:
-        mcp_keys.touch(key)
+        _touch(key)
         return Response(status=202)
 
     if method == "initialize":
         response = _initialize(message)
-        mcp_keys.touch(key)
+        _touch(key)
         return response
 
     if modern_version is not None:
@@ -283,5 +303,5 @@ def mcp_endpoint():
             )
         response, ok = _dispatch(message, key, modern=False)
     if ok:
-        mcp_keys.touch(key)
+        _touch(key)
     return response
