@@ -157,15 +157,6 @@ function shouldHardReloadAfterUpdate(opts) {
         show(byId('updateApplyBtn'), !!(info && info.can_apply));
     }
 
-    function showDockerCommand(info) {
-        var command = byId('updateDockerCommand');
-        if (!command) {
-            return;
-        }
-        command.textContent = (info && info.docker_command) || '';
-        show(command, !!(info && info.docker_command));
-    }
-
     function renderProgress(status) {
         var state = (status && status.state) || 'idle';
         var active = state === 'running' || state === 'failed' || state === 'success';
@@ -268,15 +259,15 @@ function shouldHardReloadAfterUpdate(opts) {
             csrf = info.csrf_token;
         }
         setText('updateCurrentVersion', info.current || '');
-        setText('updateModeHint', info.instructions || info.hint || '');
         var state = stateFromCache(info.cached);
-        if (info.block) {
-            setText('updateState', info.block);
-        } else {
+        if (info.can_apply) {
+            setText('updateModeHint', '');
             setText('updateState', state);
+        } else {
+            setText('updateModeHint', '');
+            setText('updateState', '');
         }
         show(byId('updateCheckBtn'), true);
-        showDockerCommand(info);
         renderOffer(info.cached, info);
         var status = info.status || {};
         renderProgress(status);

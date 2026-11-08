@@ -447,6 +447,9 @@ def test_settings_and_gear_markup(client):
     assert "updateLoginForm" not in settings
     assert f">{installed_version()}<" in settings
     assert "עדיין לא נבדק" in settings
+    assert "פנו למנהל הלוח" in settings
+    assert 'id="updateDockerCommand"' not in settings
+    assert "docker compose pull" not in settings
     page = client.get("/").get_data(as_text=True)
     assert 'id="updateNavBadge"' in page
     assert 'href="/settings#settingsUpdate"' in page
@@ -457,6 +460,9 @@ def test_settings_and_gear_markup(client):
     assert "checked_label" in script
     assert "stateFromCache" in script
     assert "ADMIN_PASSWORD" not in script
+    assert "docker_command" not in script
+    assert "setText('updateState', info.block)" not in script
+    assert "HEB_CAL_RESTART_COMMAND" not in settings
     assert "/api/updates/login" not in script
     failed_branch = script.split("state === 'failed'", 1)[1][:700]
     assert "disabled = false" in failed_branch

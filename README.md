@@ -167,7 +167,7 @@ python app/main.py
 
 הגדרת הבוט עצמו (פעם אחת, למי שמתקין את היומן בבית) מתוארת ב«Worker» למטה. זה לא חלק מהחיבור היומיומי.
 
-אימייל גוגל על משתמש הוא אופציונלי. במסך ההגדרות הוא נחוץ לחיבור עוזר בלי מפתח. אם מגיעה כותרת `Cf-Access-Authenticated-User-Email` (Cloudflare Access), האפליקציה יודעת למפות אותה למשתמש עם אותו אימייל. בלי הכותרת אין שינוי, ואין מסך התחברות — זה רק הכנה, לא נעילה. פירוט Access למנהל: בסעיף MCP למטה.
+אימייל גוגל על משתמש הוא אופציונלי. במסך ההגדרות הוא נחוץ לחיבור עם אישור גישה. אם מגיעה כותרת `Cf-Access-Authenticated-User-Email` (Cloudflare Access), האפליקציה יודעת למפות אותה למשתמש עם אותו אימייל. בלי הכותרת אין שינוי, ואין מסך התחברות — זה רק הכנה, לא נעילה. פירוט Access למנהל: בסעיף MCP למטה.
 
 אירוע בלי שעה נחשב כ־`REMINDER_DEFAULT_TIME` (ברירת מחדל 09:00) באזור `REMINDER_TIMEZONE` (ברירת מחדל `Asia/Jerusalem`). אין עדיין חזרות: התזכורת חלה על תאריך האירוע. כשיתווסף מודל חזרה, נקודת ההרחבה היא `occurrence_start` ב־`app/reminders/schedule.py`.
 
@@ -205,7 +205,7 @@ python scripts/gcal_sync_worker.py
 
 ### עוזר AI (MCP)
 
-בהגדרות יש שני כרטיסים למשתמש הקצה: «חיבור לעוזר AI» (מפתח אישי) ו«חיבור בלי מפתח». במסך מופיעות רק הפעולות הקצרות. Cloudflare Access, Bypass, Tailscale, פורטים, JWT, DCR, CIMD ומשתני סביבה — כאן, למנהל הלוח. אם חיבור נכשל אצל משתמש קצה, שיפנה למנהל ולא יחפש שמות משתנים בהגדרות.
+בהגדרות יש שני כרטיסים למשתמש הקצה: «חיבור לעוזר AI» (מפתח אישי) ו«חיבור עם אישור גישה». במסך מופיעות רק הפעולות הקצרות. Cloudflare Access, Bypass, Tailscale, פורטים, JWT, DCR, CIMD, פקודות Docker/hook ומשתני סביבה — כאן, למנהל הלוח. אם חיבור נכשל אצל משתמש קצה, שיפנה למנהל ולא יחפש שמות משתנים בהגדרות.
 
 #### מפתחות אישיים
 
@@ -266,7 +266,7 @@ OAuth 2.1 בתוך אותה אפליקציה (אין שירות נפרד). מק�
 - [Microsoft Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent)
 - [מחבר הענן של Claude](https://claude.com/docs/connectors/custom/remote-mcp). כותרת קבועה היא [בטא](https://claude.com/docs/connectors/building/authentication) ולא זמינה לכל חשבון
 
-**אפליקציית Gemini** (gemini.google.com, לא Gemini CLI): אין כפתור חיבור ישיר ואין deep link רשמי לשרת בית. ב-Connected Apps מזינים את כתובת `/mcp`. בלי DCR פתוח אצלנו: Advanced → Client ID ו-Secret שנוצרו בהגדרות, ו-Redirect URI **מדויק** שגוגל מציגים. האפליקציה עדיין לא מאומתת אצל גוגל; החיבור תלוי בחשבון ובזמינות אצלם. דרישות שגוגל מפרסמים כיום: חשבון Google אישי (לא עבודה/בית ספר), גיל 18+, ארה״ב, Keep Activity, וממשק באנגלית — לא להניח שזה זמין לכל בית. [מדריך משתמש](https://support.google.com/gemini/answer/17209137), [OAuth 2.1 של Connected Apps](https://developers.google.com/connected-apps/mcp/oauth).
+**אפליקציית Gemini** (gemini.google.com, לא Gemini CLI): אין כפתור חיבור ישיר ואין deep link רשמי לשרת בית. ב-Connected Apps מזינים את כתובת `/mcp`. בלי DCR פתוח אצלנו: Advanced → Client ID ו-Secret שנוצרו בהגדרות, ו-Redirect URI **מדויק** שגוגל מציגים. החיבור לא נבדק עדיין מול Gemini; הזמינות תלויה בחשבון גוגל. דרישות שגוגל מפרסמים כיום: חשבון Google אישי (לא עבודה/בית ספר), גיל 18+, ארה״ב, Keep Activity, וממשק באנגלית — לא להניח שזה זמין לכל בית. אין כאן תהליך אימות אפליקציה אצל גוגל. [מדריך משתמש](https://support.google.com/gemini/answer/17209137), [OAuth 2.1 של Connected Apps](https://developers.google.com/connected-apps/mcp/oauth).
 
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md) נשאר עם מפתח אישי.
 - [ChatGPT](https://developers.openai.com/api/docs/guides/custom-mcp-server): האפשרויות הרשמיות הן OAuth, או בלי אימות. אין מפתח אישי, ואין כאן לקוח רשום ל-ChatGPT. לקוחות OAuth אחרים (Cursor, Claude, Grok, Copilot) לא דורשים את אותו מסלול Gemini; אל תניחו שהם «מאומתים» או חסומים בגלל סטטוס Gemini.
@@ -474,7 +474,7 @@ docker compose start
 
 ### עדכון
 
-בקונטיינר המצב הוא `HEB_CAL_UPDATE_MODE=docker`. המסך לא מושך git ולא קורא ל-`HEB_CAL_RESTART_COMMAND`. כשיש גרסה חדשה הוא מראה את הפקודה הזו, ומריצים אותה בתיקייה של `docker-compose.yml`:
+בקונטיינר המצב הוא `HEB_CAL_UPDATE_MODE=docker`. המסך לא מושך git ולא קורא ל-`HEB_CAL_RESTART_COMMAND`. בהגדרות מופיע רק «פנו למנהל הלוח» — בלי פקודת שרת. מנהל הלוח מריץ בתיקייה של `docker-compose.yml`:
 
 ```bash
 docker compose pull && docker compose up -d
