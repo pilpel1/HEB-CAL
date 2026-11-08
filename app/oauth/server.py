@@ -181,7 +181,11 @@ def authorize():
         or consent.get("redirect_uri") != params["redirect_uri"]
         or consent.get("challenge") != params["challenge"]
         or consent.get("resource") != params["resource"]
+        or consent.get("issuer") != params["issuer"]
+        or consent.get("state") != params["state"]
+        or consent.get("scopes") != params["scopes"]
         or consent.get("user_id") != person["id"]
+        or consent.get("email") != email
     ):
         return _html_error("הבקשה נחסמה. רעננו את העמוד ונסו שוב.", 403)
 
@@ -189,17 +193,17 @@ def authorize():
     session.pop("oauth_consent", None)
     session.pop(_FORM_CSRF, None)
     if decision != "allow":
-        return _redirect_error(params["redirect_uri"], "access_denied", params["state"])
+        return _redirect_error(consent["redirect_uri"], "access_denied", consent.get("state"))
     code = issue_code(
-        client_id=params["client_id"],
+        client_id=consent["client_id"],
         user_id=person["id"],
-        resource=params["resource"],
-        issuer=params["issuer"],
-        redirect_uri=params["redirect_uri"],
-        scopes=scope_string(params["scopes"]),
-        code_challenge=params["challenge"],
+        resource=consent["resource"],
+        issuer=consent["issuer"],
+        redirect_uri=consent["redirect_uri"],
+        scopes=scope_string(consent["scopes"]),
+        code_challenge=consent["challenge"],
     )
-    return _secure(redirect(_add_query(params["redirect_uri"], {"code": code, "state": params["state"]})))
+    return _secure(redirect(_add_query(consent["redirect_uri"], {"code": code, "state": consent.get("state")})))
 
 
 def _csrf_ok(sent: str, expected: str) -> bool:
@@ -226,13 +230,18 @@ def token():
             client_id=client["client_id"],
             redirect_uri=request.form.get("redirect_uri") or "",
             code_verifier=request.form.get("code_verifier") or "",
+            resource=(request.form.get("resource") or "").strip() or None,
         )
         if issued is None:
             return _token_error("invalid_grant")
         return _secure(jsonify(issued))
 
     if grant_type == "refresh_token":
-        issued = refresh_grant(request.form.get("refresh_token") or "", client["client_id"])
+        issued = refresh_grant(
+            request.form.get("refresh_token") or "",
+            client["client_id"],
+            resource=(request.form.get("resource") or "").strip() or None,
+        )
         if issued is None:
             return _token_error("invalid_grant")
         return _secure(jsonify(issued))
@@ -270,7 +279,6 @@ def authorization_server_metadata() -> dict | None:
         "token_endpoint_auth_methods_supported": [
             "client_secret_basic",
             "client_secret_post",
-            "none",
         ],
         "scopes_supported": ["hebcal:read", "hebcal:write"],
         "authorization_response_iss_parameter_supported": False,

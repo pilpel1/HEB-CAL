@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 import secrets
+from contextlib import contextmanager
 from datetime import timedelta
 
-from app.database import get_db
+from app.database import SCHEMA_BUSY_TIMEOUT_MS, get_db
 from app.oauth.crypto import (
     ACCESS_PREFIX,
     CODE_PREFIX,
     REFRESH_PREFIX,
     hash_secret,
-    hashed_equals,
     new_token,
 )
 from app.oauth.origin import public_origin
@@ -76,125 +76,154 @@ def issue_code(
     return code
 
 
+@contextmanager
+def _immediate(db):
+    db.execute(f"PRAGMA busy_timeout = {SCHEMA_BUSY_TIMEOUT_MS}")
+    if not db.in_transaction:
+        db.execute("BEGIN IMMEDIATE")
+    try:
+        yield
+        db.commit()
+    except BaseException:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise
+
+
 def exchange_code(
     *,
     code: str,
     client_id: str,
     redirect_uri: str,
     code_verifier: str,
+    resource: str | None = None,
 ) -> dict | None:
     now = utc_now()
+    digest = hash_secret(code)
     db = get_db()
-    row = db.execute(
-        "SELECT * FROM oauth_codes WHERE code_hash = ?",
-        (hash_secret(code),),
-    ).fetchone()
-    dummy = hash_secret("missing-oauth-code")
-    hashed_equals(row["code_hash"] if row else dummy, code if row else "x")
-    if row is None:
-        return None
-    if row["consumed_at"]:
-        _revoke_family(db, row["grant_family"], stamp(now))
-        db.commit()
-        return None
-    expires = parse_stamp(row["expires_at"])
-    if expires is None or now >= expires:
-        return None
-    if row["client_id"] != client_id or row["redirect_uri"] != redirect_uri:
-        return None
-    if not bound_to_this_instance(row["issuer"], row["resource"]):
-        return None
-    if not verify_s256(code_verifier, row["code_challenge"]):
-        return None
+    with _immediate(db):
+        row = db.execute(
+            "SELECT * FROM oauth_codes WHERE code_hash = ?",
+            (digest,),
+        ).fetchone()
+        if row is None:
+            return None
+        if row["consumed_at"]:
+            _revoke_family(db, row["grant_family"], stamp(now))
+            return None
+        expires = parse_stamp(row["expires_at"])
+        if expires is None or now >= expires:
+            return None
+        if row["client_id"] != client_id or row["redirect_uri"] != redirect_uri:
+            return None
+        if resource and resource != row["resource"]:
+            return None
+        if not bound_to_this_instance(row["issuer"], row["resource"]):
+            return None
+        if not verify_s256(code_verifier, row["code_challenge"]):
+            return None
 
-    family = secrets.token_urlsafe(18)
-    access, refresh, access_exp, refresh_exp = _mint_pair(now)
-    db.execute(
-        """
-        INSERT INTO oauth_grants (
-            family_id, client_id, user_id, resource, issuer, scopes,
-            access_hash, refresh_hash, access_expires_at, refresh_expires_at,
-            created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            family,
-            row["client_id"],
-            row["user_id"],
-            row["resource"],
-            row["issuer"],
-            row["scopes"],
-            hash_secret(access),
-            hash_secret(refresh),
-            stamp(access_exp),
-            stamp(refresh_exp),
-            stamp(now),
-        ),
-    )
-    db.execute(
-        "UPDATE oauth_codes SET consumed_at = ?, grant_family = ? WHERE id = ?",
-        (stamp(now), family, row["id"]),
-    )
-    db.commit()
-    return {
-        "access_token": access,
-        "refresh_token": refresh,
-        "token_type": "Bearer",
-        "expires_in": ACCESS_SECONDS,
-        "scope": row["scopes"],
-        "resource": row["resource"],
-    }
+        family = secrets.token_urlsafe(18)
+        access, refresh, access_exp, refresh_exp = _mint_pair(now)
+        cursor = db.execute(
+            """
+            UPDATE oauth_codes SET consumed_at = ?, grant_family = ?
+            WHERE id = ? AND consumed_at IS NULL
+            """,
+            (stamp(now), family, row["id"]),
+        )
+        if cursor.rowcount != 1:
+            _revoke_family(db, family, stamp(now))
+            _revoke_family(db, row["grant_family"], stamp(now))
+            return None
+        db.execute(
+            """
+            INSERT INTO oauth_grants (
+                family_id, client_id, user_id, resource, issuer, scopes,
+                access_hash, refresh_hash, access_expires_at, refresh_expires_at,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                family,
+                row["client_id"],
+                row["user_id"],
+                row["resource"],
+                row["issuer"],
+                row["scopes"],
+                hash_secret(access),
+                hash_secret(refresh),
+                stamp(access_exp),
+                stamp(refresh_exp),
+                stamp(now),
+            ),
+        )
+        return {
+            "access_token": access,
+            "refresh_token": refresh,
+            "token_type": "Bearer",
+            "expires_in": ACCESS_SECONDS,
+            "scope": row["scopes"],
+            "resource": row["resource"],
+        }
 
 
-def refresh_grant(refresh_token: str, client_id: str) -> dict | None:
+def refresh_grant(refresh_token: str, client_id: str, resource: str | None = None) -> dict | None:
     now = utc_now()
-    db = get_db()
     digest = hash_secret(refresh_token)
-    row = db.execute(
-        "SELECT * FROM oauth_grants WHERE refresh_hash = ? OR previous_refresh_hash = ?",
-        (digest, digest),
-    ).fetchone()
-    if row is None:
-        return None
-    if row["revoked_at"] or row["previous_refresh_hash"] == digest:
-        _revoke_family(db, row["family_id"], stamp(now))
-        db.commit()
-        return None
-    if row["client_id"] != client_id:
-        return None
-    if not bound_to_this_instance(row["issuer"], row["resource"]):
-        return None
-    refresh_exp = parse_stamp(row["refresh_expires_at"])
-    if refresh_exp is None or now >= refresh_exp:
-        return None
+    db = get_db()
+    with _immediate(db):
+        row = db.execute(
+            "SELECT * FROM oauth_grants WHERE refresh_hash = ? OR previous_refresh_hash = ?",
+            (digest, digest),
+        ).fetchone()
+        if row is None:
+            return None
+        if row["revoked_at"] or row["previous_refresh_hash"] == digest:
+            _revoke_family(db, row["family_id"], stamp(now))
+            return None
+        if row["client_id"] != client_id:
+            return None
+        if resource and resource != row["resource"]:
+            return None
+        if not bound_to_this_instance(row["issuer"], row["resource"]):
+            return None
+        refresh_exp = parse_stamp(row["refresh_expires_at"])
+        if refresh_exp is None or now >= refresh_exp:
+            return None
 
-    access, new_refresh, access_exp, new_refresh_exp = _mint_pair(now)
-    db.execute(
-        """
-        UPDATE oauth_grants
-        SET access_hash = ?, refresh_hash = ?, previous_refresh_hash = ?,
-            access_expires_at = ?, refresh_expires_at = ?, last_used_at = ?
-        WHERE id = ?
-        """,
-        (
-            hash_secret(access),
-            hash_secret(new_refresh),
-            digest,
-            stamp(access_exp),
-            stamp(new_refresh_exp),
-            stamp(now),
-            row["id"],
-        ),
-    )
-    db.commit()
-    return {
-        "access_token": access,
-        "refresh_token": new_refresh,
-        "token_type": "Bearer",
-        "expires_in": ACCESS_SECONDS,
-        "scope": row["scopes"],
-        "resource": row["resource"],
-    }
+        access, new_refresh, access_exp, new_refresh_exp = _mint_pair(now)
+        cursor = db.execute(
+            """
+            UPDATE oauth_grants
+            SET access_hash = ?, refresh_hash = ?, previous_refresh_hash = ?,
+                access_expires_at = ?, refresh_expires_at = ?, last_used_at = ?
+            WHERE id = ? AND revoked_at IS NULL AND refresh_hash = ?
+            """,
+            (
+                hash_secret(access),
+                hash_secret(new_refresh),
+                digest,
+                stamp(access_exp),
+                stamp(new_refresh_exp),
+                stamp(now),
+                row["id"],
+                digest,
+            ),
+        )
+        if cursor.rowcount != 1:
+            _revoke_family(db, row["family_id"], stamp(now))
+            return None
+        return {
+            "access_token": access,
+            "refresh_token": new_refresh,
+            "token_type": "Bearer",
+            "expires_in": ACCESS_SECONDS,
+            "scope": row["scopes"],
+            "resource": row["resource"],
+        }
 
 
 def authenticate_access(token: str | None) -> dict | None:
@@ -272,7 +301,8 @@ def revoke_grant_id(grant_id: int) -> bool:
 
 def revoke_client_grants(db, client_id: str, now_stamp: str) -> None:
     db.execute(
-        "UPDATE oauth_grants SET revoked_at = ?, access_hash = NULL, refresh_hash = NULL "
+        "UPDATE oauth_grants SET revoked_at = ?, access_hash = NULL, refresh_hash = NULL, "
+        "previous_refresh_hash = NULL "
         "WHERE client_id = ? AND revoked_at IS NULL",
         (now_stamp, client_id),
     )
@@ -284,7 +314,8 @@ def revoke_grants_for_user(db, user_id: int) -> None:
     ).fetchone():
         return
     db.execute(
-        "UPDATE oauth_grants SET revoked_at = ?, access_hash = NULL, refresh_hash = NULL "
+        "UPDATE oauth_grants SET revoked_at = ?, access_hash = NULL, refresh_hash = NULL, "
+        "previous_refresh_hash = NULL "
         "WHERE user_id = ? AND revoked_at IS NULL",
         (stamp(utc_now()), user_id),
     )
@@ -352,7 +383,8 @@ def _revoke_family(db, family_id: str | None, now_stamp: str) -> None:
     if not family_id:
         return
     db.execute(
-        "UPDATE oauth_grants SET revoked_at = ?, access_hash = NULL, refresh_hash = NULL "
+        "UPDATE oauth_grants SET revoked_at = ?, access_hash = NULL, refresh_hash = NULL, "
+        "previous_refresh_hash = NULL "
         "WHERE family_id = ? AND revoked_at IS NULL",
         (now_stamp, family_id),
     )

@@ -438,7 +438,7 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="oauthCopyMcpUrl">העתקה</button>
             </p>
             <h3 class="h6 mt-3">אפליקציית Gemini</h3>
-            <p class="small">אין כפתור חיבור רשמי מגוגל לשרת שלכם, ואין כאן deep link. ב-<a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> → הגדרות → Connected Apps → Custom apps מזינים את כתובת <span dir="ltr">/mcp</span>. אם אין רישום דינמי: Advanced → Client ID ו-Secret שנוצרים כאן, ו-Redirect URI המדויק שגוגל מציגים (בלי כוכביות). דרישות מצד גוגל (לא בידינו): חשבון אישי, גיל 18+, ארה״ב, Keep Activity, וממשק באנגלית.</p>
+            <p class="small">אין כפתור חיבור רשמי מגוגל לשרת שלכם, ואין כאן deep link. ב-<a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> → הגדרות → Connected Apps → Custom apps מזינים את כתובת <span dir="ltr">/mcp</span>. אם אין רישום דינמי: Advanced → Client ID ו-Secret שנוצרים כאן. כתובת ההפניה חייבת להיות <strong>מדויקת</strong> כפי שמופיעה אצל גוגל בזרימת האישור (למשל <span dir="ltr">https://oauth-redirect.googleusercontent.com/r/…</span>) — לא כוכבית. מדריך הפלטפורמה מציין קידומות עם <span dir="ltr">*</span> ל-allowlist; כאן נשמר רק URI מלא.</p>
             <p class="small text-muted mb-2">Gemini CLI ממשיך עם מפתח אישי. זה לא אפליקציית Gemini.</p>
             <h3 class="h6 mt-3">לקוח רשום מראש</h3>
             <form id="oauthClientForm" class="row g-2 align-items-end">

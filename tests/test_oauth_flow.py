@@ -298,3 +298,76 @@ def test_no_open_dcr(client, access_env):
     assert client.post("/oauth/register", json={"redirect_uris": ["https://x.example/cb"]}).status_code == 404
     meta = client.get("/.well-known/oauth-authorization-server").get_json()
     assert "registration_endpoint" not in meta
+    assert "none" not in meta["token_endpoint_auth_methods_supported"]
+
+
+def test_consent_post_requires_jwt_and_blocks_scope_escalation(app, client, access_env):
+    add_user(app, "אביחי", EMAIL)
+    client_id, secret, _row = make_client(app)
+    verifier, challenge = pkce_pair()
+    headers = jwt_headers(access_jwt_token(access_env[0]))
+    read_url = authorize_url(client_id, challenge, scope="hebcal:read")
+    shown = client.get(read_url, headers=headers)
+    csrf = shown.get_data(as_text=True).split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+    no_jwt = client.post(read_url, data={"csrf_token": csrf, "decision": "allow"})
+    assert no_jwt.status_code == 403
+    assert "code=" not in (no_jwt.headers.get("Location") or "")
+    write_url = authorize_url(client_id, challenge, scope="hebcal:write")
+    escalated = client.post(write_url, headers=headers, data={"csrf_token": csrf, "decision": "allow"})
+    assert escalated.status_code == 403
+    assert "code=" not in (escalated.headers.get("Location") or "")
+
+
+def test_confidential_client_requires_secret_and_resource_binding(app, client, access_env):
+    add_user(app, "אביחי", EMAIL)
+    tokens, cid, sec = complete_code_flow(client, app, access_env[0], scope="hebcal:read")
+    missing = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": tokens["refresh_token"],
+            "client_id": cid,
+        },
+    )
+    assert missing.status_code == 401
+    wrong_resource = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": tokens["refresh_token"],
+            "client_id": cid,
+            "client_secret": sec,
+            "resource": "https://naom-naama.corcos.app/mcp",
+        },
+    )
+    assert wrong_resource.status_code == 400
+    ping = post(client, tokens["access_token"], {"jsonrpc": "2.0", "id": 1, "method": "ping"})
+    assert ping.status_code == 200
+
+
+def test_initialize_and_tools_list_follow_oauth_scope(app, client, access_env):
+    add_user(app, "אביחי", EMAIL)
+    read_tokens, _cid, _sec = complete_code_flow(client, app, access_env[0], scope="hebcal:read")
+    init = post(
+        client,
+        read_tokens["access_token"],
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}},
+    )
+    assert init.status_code == 200
+    listed = legacy(client, read_tokens["access_token"], "tools/list")
+    names = {tool["name"] for tool in listed.get_json()["result"]["tools"]}
+    assert "list_events" in names
+    assert "create_event" not in names
+
+
+def test_inline_jwks_ignored_outside_tests(app, client, monkeypatch, keys):
+    configure_access(monkeypatch, keys[1])
+    monkeypatch.setitem(app.config, "TESTING", False)
+    add_user(app, "אביחי", EMAIL)
+    client_id, _secret, _row = make_client(app)
+    _verifier, challenge = pkce_pair()
+    response = client.get(
+        authorize_url(client_id, challenge),
+        headers=jwt_headers(access_jwt_token(keys[0])),
+    )
+    assert response.status_code == 403

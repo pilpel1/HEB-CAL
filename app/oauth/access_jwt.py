@@ -75,12 +75,12 @@ def verify_access_jwt(token: str | None) -> dict:
     for item in jwks.get("keys") or []:
         if not isinstance(item, dict):
             continue
-        if kid and item.get("kid") not in (None, kid):
-            continue
+        if kid:
+            if item.get("kid") != kid:
+                continue
         try:
             key = PyJWK.from_dict(item).key
-            if kid is None or item.get("kid") == kid:
-                break
+            break
         except (ValueError, TypeError, AttributeError):
             continue
     if key is None:
@@ -110,9 +110,25 @@ def email_from_claims(claims: dict) -> str | None:
         return None
 
 
+def _inline_jwks_allowed() -> bool:
+    try:
+        from flask import current_app, has_app_context
+
+        return has_app_context() and bool(current_app.config.get("TESTING"))
+    except Exception:
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise AccessJwtError("jwks")
+
+
 def _jwks(issuer: str) -> dict:
     inline = (os.getenv("HEB_CAL_ACCESS_JWKS") or "").strip()
     if inline:
+        if not _inline_jwks_allowed():
+            raise AccessJwtError("jwks")
         data = json.loads(inline)
         if not isinstance(data, dict) or not isinstance(data.get("keys"), list):
             raise AccessJwtError("jwks")
@@ -124,8 +140,11 @@ def _jwks(issuer: str) -> dict:
         return cached["value"]
     try:
         request = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(request, timeout=JWKS_TIMEOUT) as response:
+        opener = urllib.request.build_opener(_NoRedirect)
+        with opener.open(request, timeout=JWKS_TIMEOUT) as response:
             raw = response.read(JWKS_MAX_BYTES + 1)
+    except AccessJwtError:
+        raise
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
         raise AccessJwtError("jwks") from exc
     if len(raw) > JWKS_MAX_BYTES:
