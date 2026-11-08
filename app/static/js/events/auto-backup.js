@@ -195,7 +195,7 @@
         renderLastRun();
         if (!result || result.skipped) return;
         if (result.needsFolder) {
-            setStatus('בחרו תיקייה. אם הדפדפן מסרב להורדות עצמן, צרו בחלון הבחירה תיקייה בשם «' + hebCalAutoBackup.FOLDER_NAME + '».');
+            setStatus('בחרו תיקייה. אם צריך, צרו בחלון «' + hebCalAutoBackup.FOLDER_NAME + '» ובחרו אותה.');
             return;
         }
         if (result.needsPermission) {

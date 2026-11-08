@@ -69,6 +69,17 @@ function paintOauthClients(clients) {
     root.innerHTML = `<table class="table table-sm"><thead><tr><th>שם</th><th>Client ID</th><th>מצב</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+function oauthScopeLabel(scopes) {
+    const parts = String(scopes || '').split(/\s+/).filter(Boolean);
+    if (parts.includes('hebcal:write')) {
+        return 'קריאה וכתיבה';
+    }
+    if (parts.includes('hebcal:read')) {
+        return 'קריאה';
+    }
+    return scopes || '';
+}
+
 function paintOauthConnections(items) {
     const root = document.getElementById('oauthConnectionList');
     if (!root) {
@@ -80,7 +91,7 @@ function paintOauthConnections(items) {
         return;
     }
     const rows = active.map((item) => {
-        return `<tr><td>${escapeOauth(item.user_name)}</td><td>${escapeOauth(item.client_name)}</td><td dir="ltr">${escapeOauth(item.scopes)}</td><td><button type="button" class="btn btn-sm btn-outline-danger" data-oauth-revoke-grant="${item.id}">ניתוק</button></td></tr>`;
+        return `<tr><td>${escapeOauth(item.user_name)}</td><td>${escapeOauth(item.client_name)}</td><td>${escapeOauth(oauthScopeLabel(item.scopes))}</td><td><button type="button" class="btn btn-sm btn-outline-danger" data-oauth-revoke-grant="${item.id}">ניתוק</button></td></tr>`;
     }).join('');
     root.innerHTML = `<table class="table table-sm"><thead><tr><th>משתמש</th><th>לקוח</th><th>הרשאות</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }

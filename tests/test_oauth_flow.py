@@ -36,9 +36,14 @@ def access_env(monkeypatch, keys):
 def test_settings_oauth_card_and_no_gemini_deep_link(client):
     html = client.get("/settings").get_data(as_text=True)
     assert 'data-settings-section="settings-oauth"' in html
-    assert "חיבור OAuth לעוזר AI" in html
+    assert "חיבור בלי מפתח" in html
     assert "אין כפתור חיבור רשמי" in html
     assert "gemini.google.com" in html
+    assert "עדיין לא מאומתת" in html
+    assert "פנו למנהל הלוח" in html
+    assert "HEB_CAL_PUBLIC_ORIGIN" not in html
+    assert "Cloudflare Access" not in html
+    assert "deep link" not in html
     assert "cursor://gemini" not in html
     assert "oauth-settings.js" in client.get("/").get_data(as_text=True)
 
