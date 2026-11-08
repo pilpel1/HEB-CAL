@@ -43,6 +43,13 @@ from app.oauth.discovery import oauth_discovery
 app.register_blueprint(oauth_discovery)
 from app.oauth.server import oauth_server
 app.register_blueprint(oauth_server)
+from app.settings_flags import ai_settings_ui_enabled
+
+
+@app.context_processor
+def inject_settings_ui_flags():
+    return {"ai_settings_ui": ai_settings_ui_enabled()}
+
 
 @app.route('/')
 def index():

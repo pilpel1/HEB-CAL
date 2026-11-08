@@ -31,6 +31,11 @@ def client(app):
     return app.test_client()
 
 
+@pytest.fixture
+def ai_settings_ui(monkeypatch):
+    monkeypatch.setenv("HEB_CAL_AI_SETTINGS_UI", "1")
+
+
 @pytest.fixture(autouse=True)
 def _empty_events_table(app):
     """מבודד בדיקות API — מנקה אירועים בין מקרי בדיקה."""

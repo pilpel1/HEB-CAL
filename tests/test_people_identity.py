@@ -229,6 +229,8 @@ def test_version_seven_leaves_conflicting_chat_duplicates(tmp_path):
 def test_people_ui_lists_everyone_and_warns_about_chat(client):
     settings = client.get("/settings").get_data(as_text=True)
     assert "אנשי הבית: תזכורות, משמרות וטלגרם" in settings
+    assert "לחיבור עם אישור גישה" not in settings
+    assert 'id="reminderPersonEmail"' in settings
     assert 'id="reminderPersonSuggest"' in settings
     assert 'id="reminderPersonReassign"' in settings
     people_js = client.get("/static/js/events/reminder-people.js").get_data(as_text=True)

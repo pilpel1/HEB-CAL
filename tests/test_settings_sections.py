@@ -93,10 +93,12 @@ def test_settings_section_open_map_defaults_and_hash():
 
 def test_settings_markup_has_independent_sections(client):
     html = client.get("/settings").get_data(as_text=True)
-    assert html.count("data-settings-section=") == 11
+    assert html.count("data-settings-section=") == 9
     assert 'data-settings-section="settings-reminders"' in html
     assert 'settings-section-label">משתמשים</span>' in html
     assert 'data-settings-section="settingsUpdate"' in html
+    assert 'data-settings-section="settings-mcp"' not in html
+    assert 'data-settings-section="settings-oauth"' not in html
     assert "settings-section is-open" in html
     assert html.count("settings-section is-open") == 1
     css = FORMS.read_text(encoding="utf-8")
@@ -106,6 +108,14 @@ def test_settings_markup_has_independent_sections(client):
     assert "toggleSettingsSection" in js
     page = SETTINGS.read_text(encoding="utf-8")
     assert page.count("class=\"settings-section-toggle\"") == 11
+    assert 'data-settings-section="settings-oauth"' in page
+    assert 'data-settings-section="settings-mcp"' in page
+
+
+def test_settings_markup_shows_ai_sections_when_enabled(client, ai_settings_ui):
+    html = client.get("/settings").get_data(as_text=True)
+    assert html.count("data-settings-section=") == 11
+    assert 'data-settings-section="settings-mcp"' in html
     assert 'data-settings-section="settings-oauth"' in html
 
 
@@ -134,4 +144,42 @@ def test_settings_sections_toggle_independently_and_persist(live_server):
         page.reload(wait_until="load")
         expect(page.locator("#settings-reminders")).to_have_class(re.compile(r"\bis-open\b"))
         expect(page.locator("#settingsUpdate")).to_have_class(re.compile(r"\bis-open\b"))
+        browser.close()
+
+
+def test_hidden_ai_panels_skip_management_fetches_and_ignore_stale_state(live_server):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        requested = []
+        page.on("request", lambda request: requested.append(request.url))
+        page.goto(live_server + "/settings", wait_until="load")
+        expect(page.locator("#settings-mcp")).to_have_count(0)
+        expect(page.locator("#settings-oauth")).to_have_count(0)
+        expect(page.locator("#mcpKeyModal")).to_have_count(0)
+        expect(page.locator("#mcpKeyForm")).to_have_count(0)
+        expect(page.locator("#oauthClientForm")).to_have_count(0)
+        expect(page.locator("#reminderPersonEmail")).to_have_count(1)
+        assert "חיבור לעוזר AI" not in page.content()
+        assert "חיבור עם אישור גישה" not in page.content()
+        joined = " ".join(requested)
+        assert "/api/mcp-keys" not in joined
+        assert "/api/oauth/overview" not in joined
+        page.evaluate(
+            """() => localStorage.setItem('heb-cal-settings-sections', JSON.stringify({
+                'settings-mcp': true,
+                'settings-oauth': true,
+                settingsUpdate: false
+            }))"""
+        )
+        page.goto(live_server + "/settings#settings-mcp", wait_until="load")
+        expect(page.locator("#settings-mcp")).to_have_count(0)
+        expect(page.locator("#settings-oauth")).to_have_count(0)
+        page.locator("#settings-reminders .settings-section-toggle").click()
+        expect(page.locator("#settings-reminders")).to_have_class(re.compile(r"\bis-open\b"))
+        expect(page.locator("#reminderPersonName")).to_be_visible()
+        expect(page.locator("#reminderPersonEmail")).to_be_visible()
         browser.close()
