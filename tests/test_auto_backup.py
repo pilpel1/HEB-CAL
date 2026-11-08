@@ -31,7 +31,9 @@ def test_settings_auto_backup_markup(client):
     assert 'id="autoBackupNow"' in settings
     assert 'id="autoBackupApiNote"' in settings
     assert "heb-cal-backup" in settings
-    assert "Safari" in settings
+    assert "בדפדפן הזה אי אפשר" in settings
+    assert "גיבוי יומן" in settings
+    assert "Safari" not in settings
     assert "/static/js/events/auto-backup-logic.js" in settings
     assert "/static/js/events/auto-backup.js" in settings
     assert 'id="exportEventsBtn"' in settings

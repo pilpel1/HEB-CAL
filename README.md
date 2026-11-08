@@ -167,7 +167,7 @@ python app/main.py
 
 הגדרת הבוט עצמו (פעם אחת, למי שמתקין את היומן בבית) מתוארת ב«Worker» למטה. זה לא חלק מהחיבור היומיומי.
 
-אימייל גוגל על משתמש הוא אופציונלי. אם מגיעה כותרת `Cf-Access-Authenticated-User-Email` (Cloudflare Access), האפליקציה יודעת למפות אותה למשתמש עם אותו אימייל. בלי הכותרת אין שינוי, ואין מסך התחברות — זה רק הכנה, לא נעילה.
+אימייל גוגל על משתמש הוא אופציונלי. במסך ההגדרות הוא נחוץ לחיבור עם אישור גישה. אם מגיעה כותרת `Cf-Access-Authenticated-User-Email` (Cloudflare Access), האפליקציה יודעת למפות אותה למשתמש עם אותו אימייל. בלי הכותרת אין שינוי, ואין מסך התחברות — זה רק הכנה, לא נעילה. פירוט Access למנהל: בסעיף MCP למטה.
 
 אירוע בלי שעה נחשב כ־`REMINDER_DEFAULT_TIME` (ברירת מחדל 09:00) באזור `REMINDER_TIMEZONE` (ברירת מחדל `Asia/Jerusalem`). אין עדיין חזרות: התזכורת חלה על תאריך האירוע. כשיתווסף מודל חזרה, נקודת ההרחבה היא `occurrence_start` ב־`app/reminders/schedule.py`.
 
@@ -205,13 +205,23 @@ python scripts/gcal_sync_worker.py
 
 ### עוזר AI (MCP)
 
-בהגדרות, «חיבור לעוזר AI (MCP)»: מפתח אישי לכל אדם ולכל מכשיר. הוא מוצג פעם אחת בלבד, ובמסד נשמר רק ה-hash שלו. המפתח משויך לאדם כדי לנהל אותו (בעלים, שימוש אחרון, ביטול). העוזר רואה ועורך את כל אירועי הבית, לא רק של האדם הזה. ברירת המחדל היא קריאה בלבד; כתיבה בוחרים במפורש. המפתח פוקע אחרי 30 יום בלי שימוש. כל בקשת פרוטוקול שהשרת קיבל מחדשת את הספירה, גם אם הכלי החזיר שגיאה (למשל מפתח לקריאה שניסה לכתוב). בקשה שנדחתה — מפתח לא תקף, או שגיאת פרוטוקול — לא מחדשת. אפשר גם תאריך סופי. ביטול מהטבלה, ומחיקת המשתמש מבטלת את המפתחות שלו. עד 10 מפתחות פעילים לאדם.
+בהגדרות יש שני כרטיסים למשתמש הקצה: «חיבור לעוזר AI» (מפתח אישי) ו«חיבור עם אישור גישה». במסך מופיעות רק הפעולות הקצרות. Cloudflare Access, Bypass, Tailscale, פורטים, JWT, DCR, CIMD, פקודות Docker/hook ומשתני סביבה — כאן, למנהל הלוח. אם חיבור נכשל אצל משתמש קצה, שיפנה למנהל ולא יחפש שמות משתנים בהגדרות.
+
+#### מפתחות אישיים
+
+בהגדרות, «חיבור לעוזר AI»: מפתח אישי לכל אדם ולכל מכשיר. הוא מוצג פעם אחת בלבד, ובמסד נשמר רק ה-hash שלו. המפתח משויך לאדם כדי לנהל אותו (בעלים, שימוש אחרון, ביטול). העוזר רואה ועורך את כל אירועי הבית, לא רק של האדם הזה. ברירת המחדל היא קריאה בלבד; כתיבה בוחרים במפורש. המפתח פוקע אחרי 30 יום בלי שימוש. כל בקשת פרוטוקול שהשרת קיבל מחדשת את הספירה, גם אם הכלי החזיר שגיאה (למשל מפתח לקריאה שניסה לכתוב). בקשה שנדחתה — מפתח לא תקף, או שגיאת פרוטוקול — לא מחדשת. אפשר גם תאריך סופי. ביטול מהטבלה, ומחיקת המשתמש מבטלת את המפתחות שלו. עד 10 מפתחות פעילים לאדם.
 
 השרת הוא `POST /mcp` על אותה כתובת של הלוח. אין תהליך נוסף ואין פורט נוסף. המפתח תקף רק בנתיב הזה, לא בשאר ה-API. אירוע שהגיע מגוגל, ומשמרת, נשארים לקריאה בלבד גם עם מפתח כתיבה.
 
+בחלון המפתח יש לשונית לכל תוכנה. [Cursor](https://cursor.com/docs/mcp/install-links) ו-[VS Code](https://code.visualstudio.com/api/extension-guides/ai/mcp) מקבלים כפתור התקנה; המפתח נמצא רק בקישור של הכפתור, בדפדפן, ולא בכתובת של הלוח. ההעתקה שלהם משאירה את המפתח במשתנה `HEB_CAL_MCP_KEY`. ב-Claude Desktop אין כפתור כזה: הקטע הוא ל-`claude_desktop_config.json` דרך [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (צריך Node), והמפתח נשמר בתוך הקובץ.
+
+#### OAuth 2.1 (למנהל הלוח)
+
 OAuth 2.1 בתוך אותה אפליקציה (אין שירות נפרד). מקור ציבורי: `HEB_CAL_PUBLIC_ORIGIN=https://hebcal.corcos.app` (HTTPS, בלי נתיב; http רק ל-localhost). לא נלקח מ-Host ולא מ-X-Forwarded. מופע אחר (`naom-naama.corcos.app`) חייב ערך אחר ומסד נתונים משלו — טוקן/קוד/refresh של האחד נדחים בשני. מפתחות `hcal_…` ממשיכים לעבוד.
 
-גילוי: `GET /.well-known/oauth-protected-resource`, `…/mcp`, `GET /.well-known/oauth-authorization-server`. אישור משתמש: `GET/POST /oauth/authorize` (נשאר מאחורי Access). טוקן/ביטול: `POST /oauth/token`, `POST /oauth/revoke`. PKCE S256 חובה. אין רישום לקוח דינמי פתוח — יוצרים לקוח בהגדרות.
+גילוי: `GET /.well-known/oauth-protected-resource`, `…/mcp`, `GET /.well-known/oauth-authorization-server`. אישור משתמש: `GET/POST /oauth/authorize` (נשאר מאחורי Access). טוקן/ביטול: `POST /oauth/token`, `POST /oauth/revoke`. PKCE S256 חובה. אין רישום לקוח דינמי פתוח (אין DCR/CIMD) — יוצרים לקוח בהגדרות. בלי `HEB_CAL_PUBLIC_ORIGIN` תקין אין גילוי ואין טוקנים; במסך מופיע «פנו למנהל הלוח», לא שם המשתנה.
+
+#### Cloudflare Access ו-Bypass (למנהל הלוח)
 
 **פעם אחת, ידנית, ב-Cloudflare Access.** האפליקציה לא משנה את זה. `one.dash.cloudflare.com` מפנה אל `https://dash.cloudflare.com/one/` וזורק את `?to=`, ולכן הקישור שעדיין פותח את רשימת האפליקציות אחרי בחירת החשבון הוא:
 
@@ -237,7 +247,7 @@ OAuth 2.1 בתוך אותה אפליקציה (אין שירות נפרד). מק�
 
 בלי Bypass ל-`/mcp` לקוח מהענן נעצר במסך ההתחברות. הנתיב ציבורי אחרי Bypass, וההגנה היא המפתח או טוקן OAuth. מומלץ rate limiting על הנתיבים האלה. בקשות Bypass לא נרשמות בלוג של Access. אין לשים מפתח או סוד בכתובת.
 
-בחלון המפתח יש לשונית לכל תוכנה. [Cursor](https://cursor.com/docs/mcp/install-links) ו-[VS Code](https://code.visualstudio.com/api/extension-guides/ai/mcp) מקבלים כפתור התקנה; המפתח נמצא רק בקישור של הכפתור, בדפדפן, ולא בכתובת של הלוח. ההעתקה שלהם משאירה את המפתח במשתנה `HEB_CAL_MCP_KEY`. ב-Claude Desktop אין כפתור כזה: הקטע הוא ל-`claude_desktop_config.json` דרך [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (צריך Node), והמפתח נשמר בתוך הקובץ.
+#### אילו עוזרים מתחברים
 
 **מהמחשב.** עובד גם כשהלוח חשוף רק ב-Tailscale, אם המכשיר באותה רשת:
 
@@ -256,10 +266,10 @@ OAuth 2.1 בתוך אותה אפליקציה (אין שירות נפרד). מק�
 - [Microsoft Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent)
 - [מחבר הענן של Claude](https://claude.com/docs/connectors/custom/remote-mcp). כותרת קבועה היא [בטא](https://claude.com/docs/connectors/building/authentication) ולא זמינה לכל חשבון
 
-**אפליקציית Gemini** (gemini.google.com, לא Gemini CLI): אין כפתור חיבור ישיר ואין deep link רשמי לשרת בית. ב-Connected Apps מזינים את כתובת `/mcp`. בלי DCR פתוח אצלנו: Advanced → Client ID ו-Secret שנוצרו בהגדרות, ו-Redirect URI **מדויק** שגוגל מציגים. דרישות מצד גוגל: חשבון Google אישי (לא עבודה/בית ספר), גיל 18+, ארה״ב, Keep Activity, וממשק באנגלית. [מדריך משתמש](https://support.google.com/gemini/answer/17209137), [OAuth 2.1 של Connected Apps](https://developers.google.com/connected-apps/mcp/oauth).
+**אפליקציית Gemini** (gemini.google.com, לא Gemini CLI): אין כפתור חיבור ישיר ואין deep link רשמי לשרת בית. ב-Connected Apps מזינים את כתובת `/mcp`. בלי DCR פתוח אצלנו: Advanced → Client ID ו-Secret שנוצרו בהגדרות, ו-Redirect URI **מדויק** שגוגל מציגים. החיבור לא נבדק עדיין מול Gemini; הזמינות תלויה בחשבון גוגל. דרישות שגוגל מפרסמים כיום: חשבון Google אישי (לא עבודה/בית ספר), גיל 18+, ארה״ב, Keep Activity, וממשק באנגלית — לא להניח שזה זמין לכל בית. אין כאן תהליך אימות אפליקציה אצל גוגל. [מדריך משתמש](https://support.google.com/gemini/answer/17209137), [OAuth 2.1 של Connected Apps](https://developers.google.com/connected-apps/mcp/oauth).
 
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md) נשאר עם מפתח אישי.
-- [ChatGPT](https://developers.openai.com/api/docs/guides/custom-mcp-server): האפשרויות הרשמיות הן OAuth, או בלי אימות. אין מפתח אישי, ואין כאן לקוח רשום ל-ChatGPT.
+- [ChatGPT](https://developers.openai.com/api/docs/guides/custom-mcp-server): האפשרויות הרשמיות הן OAuth, או בלי אימות. אין מפתח אישי, ואין כאן לקוח רשום ל-ChatGPT. לקוחות OAuth אחרים (Cursor, Claude, Grok, Copilot) לא דורשים את אותו מסלול Gemini; אל תניחו שהם «מאומתים» או חסומים בגלל סטטוס Gemini.
 
 ### התראות בדפדפן
 
@@ -464,7 +474,7 @@ docker compose start
 
 ### עדכון
 
-בקונטיינר המצב הוא `HEB_CAL_UPDATE_MODE=docker`. המסך לא מושך git ולא קורא ל-`HEB_CAL_RESTART_COMMAND`. כשיש גרסה חדשה הוא מראה את הפקודה הזו, ומריצים אותה בתיקייה של `docker-compose.yml`:
+בקונטיינר המצב הוא `HEB_CAL_UPDATE_MODE=docker`. המסך לא מושך git ולא קורא ל-`HEB_CAL_RESTART_COMMAND`. בהגדרות מופיע רק «פנו למנהל הלוח» — בלי פקודת שרת. מנהל הלוח מריץ בתיקייה של `docker-compose.yml`:
 
 ```bash
 docker compose pull && docker compose up -d

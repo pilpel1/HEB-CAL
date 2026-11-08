@@ -1,4 +1,4 @@
-"""כרטיס «חיבור לעוזר AI (MCP)» בהגדרות: יצירה חד-פעמית וביטול."""
+"""כרטיס «חיבור לעוזר AI» בהגדרות: יצירה חד-פעמית וביטול."""
 from __future__ import annotations
 
 import base64
@@ -33,29 +33,40 @@ def live_server(app):
 def test_settings_mcp_card_is_present(client):
     html = client.get("/settings").get_data(as_text=True)
     assert 'data-settings-section="settings-mcp"' in html
-    assert "חיבור לעוזר AI (MCP)" in html
+    assert "חיבור לעוזר AI" in html
+    assert "חיבור לעוזר AI (MCP)" not in html
     assert 'id="mcpKeyPermission"' in html
     assert '<option value="read" selected>קריאה בלבד</option>' in html
     assert "בחרו את האדם ושם למכשיר" in html
-    assert html.count(GUIDE_URL) == 1
+    assert html.count(GUIDE_URL) == 0
     assert "כל אירועי הבית" in html
-    assert "כל בקשת פרוטוקול שהשרת קיבל" in html
-    assert "גם אם הכלי החזיר שגיאה" in html
+    assert "ביטול מפסיק מיד" in html
+    assert "כל בקשת פרוטוקול שהשרת קיבל" not in html
     assert "HEB_CAL_MCP_KEY" in html
     assert "נשמר בקובץ ההגדרות יחד עם המפתח" in html
+    assert "צריך Node במחשב" in html
     platforms = html.split('id="mcpPlatforms"', 1)[1].split("</div>", 1)[0]
-    assert "אילו עוזרים מתחברים" in platforms
-    assert "מהמחשב, גם דרך Tailscale" in platforms
+    assert "איך מתחברים" in platforms
+    assert "Tailscale" not in platforms
+    assert "Bypass" not in platforms
+    assert "mcp-remote" not in platforms
+    assert "כפתור התקנה" in platforms and "Cursor" in platforms and "VS Code" in platforms
+    assert "לשאר מעתיקים לפי הלשונית" in platforms
+    assert "במסלול הזה אין חיבור ל-ChatGPT" in platforms
+    assert "לא נתמך:" not in platforms
+    assert "חיבור עם אישור גישה" in platforms
+    assert GUIDE_URL not in html
     for name in (
-        "Cursor", "Claude Desktop", "mcp-remote", "Claude Code", "GitHub Copilot",
+        "Cursor", "Claude Desktop", "Claude Code", "VS Code",
         "Gemini CLI", "Cline", "Windsurf", "LM Studio",
     ):
-        assert name in platforms
-    assert "Grok" in platforms and "grok.com" in platforms and "Copilot Studio" in platforms
-    assert "בטא" in platforms and "Bypass" in platforms
-    assert "לא נתמך:" in platforms and "OAuth 2.1" in platforms
-    assert "ChatGPT" in platforms and "בלי אימות" in platforms
-    assert GUIDE_URL not in platforms
+        assert name in html
+    assert "Grok" in html and "grok.com" in html and "Copilot Studio" in html
+    assert "Cloudflare Access" not in html
+    assert "HEB_CAL_PUBLIC_ORIGIN" not in html
+    assert "Tailscale" not in html
+    assert "Bypass" not in html
+    assert "docker compose pull" not in html
     assert html.index('id="mcpPlatforms"') < html.index('id="mcpKeyForm"')
     readme = README.read_text(encoding="utf-8")
     mcp_docs = readme.split('<a id="mcp"></a>', 1)[1].split("### התראות", 1)[0]
@@ -89,6 +100,13 @@ def test_settings_mcp_card_is_present(client):
     assert "התקנה ב-VS Code" in html
     assert "בלי אימות" in mcp_docs
     assert "כל אירועי הבית" in mcp_docs
+    assert "Tailscale" in mcp_docs
+    assert "Bypass" in mcp_docs
+    assert "mcp-remote" in mcp_docs
+    assert "כל בקשת פרוטוקול שהשרת קיבל" in mcp_docs
+    assert "גם אם הכלי החזיר שגיאה" in mcp_docs
+    assert "HEB_CAL_PUBLIC_ORIGIN" in mcp_docs
+    assert "OAuth 2.1" in mcp_docs
     assert 'id="mcpKeyNoUsers"' in html
     assert 'href="#settings-reminders"' in html
     assert "ב-README" not in html
@@ -145,11 +163,13 @@ def test_mobile_user_select_lists_household_users(live_server, app):
         expect(page.locator("#mcpKeyUser option:checked")).to_have_text("אביחי")
         platforms = page.locator("#mcpPlatforms")
         expect(platforms).to_be_visible()
-        expect(platforms).to_contain_text("לא נתמך")
-        expect(platforms).to_contain_text("OAuth 2.1")
-        expect(platforms).to_contain_text("ChatGPT")
-        expect(platforms).to_contain_text("Copilot Studio")
+        expect(platforms).to_contain_text("במסלול הזה אין חיבור ל-ChatGPT")
+        expect(platforms).to_contain_text("חיבור עם אישור גישה")
+        expect(platforms).to_contain_text("Cursor")
+        expect(platforms).to_contain_text("VS Code")
+        expect(platforms).not_to_contain_text("לא נתמך")
         expect(page.locator("#settings-mcp")).to_contain_text("כל אירועי הבית")
+        expect(page.locator('[data-mcp-tab="copilot"]')).to_have_count(1)
         place = page.evaluate(
             """() => {
                 const box = document.getElementById('mcpPlatforms').getBoundingClientRect();
@@ -159,8 +179,7 @@ def test_mobile_user_select_lists_household_users(live_server, app):
         )
         assert place["boxTop"] < place["formTop"]
         guide = page.locator(f'#settings-mcp a[href="{GUIDE_URL}"]')
-        expect(guide).to_have_count(1)
-        expect(guide).to_be_visible()
+        expect(guide).to_have_count(0)
         browser.close()
 
 
@@ -174,7 +193,7 @@ def test_mobile_without_users_links_to_the_users_section(live_server):
         page.goto(live_server + "/settings", wait_until="load")
         page.locator("#settings-mcp .settings-section-toggle").click()
         expect(page.locator("#mcpPlatforms")).to_be_visible()
-        expect(page.locator("#mcpPlatforms")).to_contain_text("לא נתמך")
+        expect(page.locator("#mcpPlatforms")).to_contain_text("במסלול הזה אין חיבור ל-ChatGPT")
         note = page.locator("#mcpKeyNoUsers")
         expect(note).to_be_visible()
         expect(note).to_contain_text("עדיין אין משתמשים")

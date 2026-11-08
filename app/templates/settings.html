@@ -20,6 +20,7 @@
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settingsUpdate-body">
+            <p class="text-muted small mb-2">בודקים אם יש גרסה חדשה ומתקינים מכאן. אם אין כפתור «עדכן עכשיו», פנו למנהל הלוח.</p>
             <p class="mb-1">גרסה מותקנת: <strong id="updateCurrentVersion">{{ app_version }}</strong></p>
             <p id="updateModeHint" class="text-muted small mb-2"></p>
             <p id="updateState" class="small mb-2" role="status">עדיין לא נבדק.</p>
@@ -31,7 +32,6 @@
                 <p id="updateReleaseLink" class="small mb-2"></p>
                 <button type="button" class="btn btn-primary" id="updateApplyBtn" hidden>עדכן עכשיו</button>
             </div>
-            <pre id="updateDockerCommand" class="update-command" dir="ltr" hidden></pre>
             <div id="updateProgress" class="mt-3" hidden>
                 <p id="updateProgressMessage" class="update-progress-msg mb-1" role="status" aria-live="polite"></p>
                 <ul id="updateProgressLines" class="update-progress-lines"></ul>
@@ -119,7 +119,7 @@
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settingsBackup-body">
-            <p class="text-muted">ייצוא כל האירועים לקובץ, או ייבוא מגיבוי.</p>
+            <p class="text-muted">שמירה לקובץ, או שחזור מגיבוי.</p>
             <div class="d-flex flex-wrap gap-2 mb-3">
                 <button type="button" class="btn btn-outline-secondary" id="exportEventsBtn">ייצוא</button>
                 <button type="button" class="btn btn-outline-secondary" id="importEventsBtn">ייבוא</button>
@@ -127,11 +127,11 @@
             <input type="file" id="importEventsFile" accept=".json,application/json" hidden>
             <label for="importMode" class="form-label">מצב ייבוא</label>
             <select id="importMode" class="form-select">
-                <option value="merge" selected>מיזוג (בלי כפילויות)</option>
-                <option value="replace">החלפה</option>
+                <option value="merge" selected>מיזוג (בלי למחוק מה שיש)</option>
+                <option value="replace">החלפה — מוחק את הלוח ומכניס רק את הקובץ</option>
             </select>
             <small class="text-muted d-block mt-2">
-                מיזוג מזהה אירוע לפי מזהה, או לפי כותרת ותאריך ושעה.
+                החלפה מוחקת אירועים קיימים. מיזוג מוסיף ומעדכן בלי למחוק את השאר.
             </small>
         </div>
     </section>
@@ -162,9 +162,7 @@
                 <small class="text-muted d-block mt-1">בין 1 ל־30. ברירת מחדל 3. נשמר במכשיר הזה.</small>
             </div>
             <p class="text-muted small mt-3 mb-2" id="autoBackupFolderHelp">
-                בחרו את תיקיית ההורדות, או תיקייה בשם «גיבוי יומן». אם בחרתם תיקייה אחרת, נוצרת בתוכה «גיבוי יומן» והקבצים נשמרים שם.
-                אם הדפדפן מסרב לתיקיית ההורדות עצמה, צרו את «גיבוי יומן» בחלון הבחירה ובחרו אותה.
-                ב־Chrome סמנו לאפשר גישה גם בביקורים הבאים, אחרת צריך לאשר שוב כל יום.
+                בחרו תיקייה. הקבצים יישמרו בתוך «גיבוי יומן». ב־Chrome סמנו לאפשר גישה גם בפעמים הבאות.
             </p>
             <p id="autoBackupFolderStatus" class="small mb-2">עדיין לא נבחרה תיקייה.</p>
             <div class="d-flex flex-wrap gap-2">
@@ -174,9 +172,7 @@
             <p id="autoBackupLastRun" class="small text-muted mt-2 mb-0">עדיין לא רץ גיבוי מהמכשיר הזה.</p>
             <p id="autoBackupStatus" class="small mt-2 mb-0" role="status"></p>
             <p id="autoBackupApiNote" class="small text-muted mt-2 mb-0" hidden>
-                בדפדפן הזה אי אפשר לבחור תיקייה קבועה. זה עובד ב־Chrome וב־Edge על מחשב, וב־Chrome לאנדרואיד, רק בכתובת מאובטחת (HTTPS, או localhost / 127.0.0.1). Safari, Firefox, ו־Chrome באייפון לא תומכים בזה.
-                הקובץ ירד להורדות בשם שמתחיל ב־heb-cal-backup, אחרי לחיצה ביומן — הדפדפן חוסם הורדה בלי פעולה.
-                בלי תיקייה, עותקים ישנים לא נמחקים לבד.
+                בדפדפן הזה אי אפשר לבחור תיקייה קבועה. הקובץ ירד להורדות בשם heb-cal-backup אחרי לחיצה. אם צריך, צרו תיקייה בשם «גיבוי יומן». עותקים ישנים לא נמחקים לבד.
             </p>
         </div>
     </section>
@@ -220,16 +216,15 @@
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settings-gcal-body">
-            <p>אירוע שמוסיפים, עורכים או מוחקים ביומן גוגל מופיע כאן לבד. בלוח הזה אי אפשר לשנות אותו.</p>
+            <p>אירוע שמשנים ביומן גוגל מופיע כאן לבד. מכאן אי אפשר לערוך אותו.</p>
             <ol class="gcal-steps">
                 <li>במחשב פותחים את Google Calendar.</li>
-                <li>ליד שם היומן לוחצים על שלוש הנקודות, ואז «הגדרות ושיתוף».</li>
-                <li>גוללים אל «שילוב היומן».</li>
-                <li>מעתיקים את «כתובת סודית בפורמט iCal».</li>
-                <li>מדביקים כאן ולוחצים «הוספה». אחרי השמירה רואים רק כתובת מוסתרת.</li>
+                <li>ליד שם היומן — שלוש נקודות → «הגדרות ושיתוף».</li>
+                <li>גוללים אל «שילוב היומן» ומעתיקים «כתובת סודית בפורמט iCal».</li>
+                <li>מדביקים כאן ולוחצים «הוספה».</li>
             </ol>
-            <p class="text-muted small">הכתובת היא כמו סיסמה: מי שיש לו אותה רואה את היומן. לא שולחים אותה בצ׳אט ולא שומרים צילום מסך שלה.</p>
-            <p class="text-muted small">המשיכה האוטומטית רצה בערך כל רבע שעה, אם תוכנית התזכורות או תוכנית הסנכרון פועלת. «סנכרן עכשיו» מושך מיד. נכנסים אירועים מכחצי שנה אחורה ועד קצת יותר משנה קדימה.</p>
+            <p class="text-muted small">הכתובת היא כמו סיסמה: מי שיש לו אותה רואה את היומן. לא שולחים אותה ולא מצלמים אותה. אחרי שמירה היא מוסתרת.</p>
+            <p class="text-muted small">«סנכרן עכשיו» מושך מיד. אם האירועים לא מתעדכנים לבד, פנו למנהל הלוח.</p>
             <form id="gcalSourceForm" class="row g-2 align-items-end">
                 <div class="col-12">
                     <label for="gcalUrl" class="form-label">כתובת סודית בפורמט iCal</label>
@@ -273,7 +268,7 @@
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settings-reminders-body">
-            <p class="mb-3">כל האנשים במקום אחד: תזכורות, משמרות, וקישור לטלגרם. אותו שם מעדכן את השורה הקיימת במקום ליצור כפילות. בלי מזהה צ׳אט התזכורת תופיע רק בדפדפן כשהלוח פתוח. אימייל גוגל אופציונלי, ליישור עתידי מול Cloudflare Access.</p>
+            <p class="mb-3">אנשי הבית: תזכורות, משמרות וטלגרם. אותו שם מעדכן את הקיים. בלי מזהה צ׳אט התזכורת תופיע רק כשהלוח פתוח בדפדפן. אימייל גוגל — לחיבור עם אישור גישה.</p>
             <p id="reminderPersonContext" class="person-edit-context">אדם חדש</p>
             <form id="reminderPersonForm" class="row g-2 align-items-end">
                 <input type="hidden" id="reminderPersonId" value="">
@@ -299,7 +294,7 @@
                             <li>הבוט משיב במספר. מעתיקים אותו.</li>
                             <li>מדביקים כאן בשדה של האדם המתאים, ושומרים.</li>
                         </ol>
-                        <p class="text-muted mb-0">מישהו בבית כבר הגדיר את הבוט — אין צורך להריץ שום דבר במחשב. אפשר להשאיר ריק. בלי מספר התזכורת תופיע רק בדפדפן כשהלוח פתוח.</p>
+                        <p class="text-muted mb-0">אפשר להשאיר ריק. בלי מספר התזכורת תופיע רק בדפדפן כשהלוח פתוח. אם אין בוט בטלגרם, פנו למנהל הלוח.</p>
                     </div>
                     <input type="text" class="form-control" id="reminderPersonChat" inputmode="numeric" dir="ltr" autocomplete="off" placeholder="למשל 123456789">
                 </div>
@@ -336,7 +331,7 @@
                     <input class="form-check-input" type="checkbox" role="switch" id="shiftsEnabled" aria-labelledby="settings-shifts-title">
                 </div>
             </div>
-            <p class="text-muted small">כשזה דלוק מופיע בלוח כפתור משמרות. כל משמרת היא אירוע של יום שלם — בוקר, ערב או לילה — בצבע של האדם.</p>
+            <p class="text-muted small">כשזה דלוק מופיע בלוח כפתור להזנת משמרות. כל משמרת היא יום שלם — בוקר, ערב או לילה — בצבע של האדם.</p>
             <div id="shiftPeoplePanel" hidden>
                 <p class="text-muted">מי עובד, באיזה צבע, ובאילו ימים. בלי שמירה השינויים לא נשמרים.</p>
                 <div id="shiftPeopleList"></div>
@@ -374,26 +369,21 @@
     <section class="card mb-3 settings-section" id="settings-mcp" data-settings-section="settings-mcp" aria-labelledby="settings-mcp-title">
         <h2 class="h5 settings-section-title" id="settings-mcp-title">
             <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="settings-mcp-body">
-                <span class="settings-section-label">חיבור לעוזר AI (MCP)</span>
+                <span class="settings-section-label">חיבור לעוזר AI</span>
                 <span class="settings-section-chevron" aria-hidden="true"></span>
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settings-mcp-body">
             <div class="mcp-platforms" id="mcpPlatforms">
-                <p class="mcp-platforms-title">אילו עוזרים מתחברים</p>
-                <ul>
-                    <li><strong>מהמחשב, גם דרך Tailscale אם המכשיר באותה רשת:</strong> <a href="https://cursor.com/docs/mcp/install-links" target="_blank" rel="noopener noreferrer">Cursor</a>, <a href="https://claude.com/docs/third-party/claude-desktop/configuration" target="_blank" rel="noopener noreferrer">Claude Desktop</a> דרך <span dir="ltr">mcp-remote</span>, <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener noreferrer">Claude Code</a>, <a href="https://code.visualstudio.com/api/extension-guides/ai/mcp" target="_blank" rel="noopener noreferrer">VS Code / GitHub Copilot</a>, <a href="https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md" target="_blank" rel="noopener noreferrer">Gemini CLI</a>, <a href="https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx" target="_blank" rel="noopener noreferrer">Cline</a>, <a href="https://docs.devin.ai/windsurf/plugins/cascade/mcp" target="_blank" rel="noopener noreferrer">Windsurf</a>, <a href="https://lmstudio.ai/docs/app/mcp" target="_blank" rel="noopener noreferrer">LM Studio</a>.</li>
-                    <li><strong>מהענן, רק אם הלוח ציבורי ב-Cloudflare עם Bypass לנתיב <span dir="ltr">/mcp</span>:</strong> <a href="https://grok.com/connectors" target="_blank" rel="noopener noreferrer">Grok</a> (מחבר ב-<span dir="ltr">grok.com</span> או ה-API), <a href="https://copilotstudio.microsoft.com/" target="_blank" rel="noopener noreferrer">Microsoft Copilot Studio</a>, <a href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">מחבר הענן של Claude</a>. כותרת קבועה אצל Claude היא בטא ולא זמינה לכל חשבון. מופע שחשוף רק ב-Tailscale לא מגיע אליהם.</li>
-                    <li><strong>אפליקציית Gemini:</strong> OAuth 2.1 דרך Connected Apps, בלי כפתור חיבור ישיר. פירוט בכרטיס «חיבור OAuth». <strong>לא נתמך:</strong> ChatGPT (האפשרויות הרשמיות הן OAuth, או בלי אימות).</li>
-                </ul>
+                <p class="mcp-platforms-title mb-1">איך מתחברים</p>
+                <p class="mb-2">יוצרים מפתח. בחלון שנפתח בוחרים את הלשונית של העוזר. ל-Cursor ול-VS Code יש כפתור התקנה; לשאר מעתיקים לפי הלשונית. במסלול הזה אין חיבור ל-ChatGPT.</p>
+                <p class="mb-0">אפליקציית Gemini: כרטיס «חיבור עם אישור גישה».</p>
             </div>
-            <p>מפתח אישי לכל אדם ולכל מכשיר, כדי לנהל אותו: מי הבעלים, מתי השתמשו, וביטול. העוזר רואה ועורך את כל אירועי הבית, לא רק של האדם הזה. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע. כל בקשת פרוטוקול שהשרת קיבל מחדשת את הספירה, גם אם הכלי החזיר שגיאה.</p>
+            <p>מפתח אישי לכל אדם ולכל מכשיר. העוזר רואה ועורך את כל אירועי הבית, לא רק שלכם. ברירת המחדל היא קריאה בלבד. בלי שימוש 30 יום המפתח פוקע. ביטול מפסיק מיד.</p>
             <ol class="mcp-steps">
                 <li>בחרו את האדם ושם למכשיר או לתוכנה, ולחצו «יצירת מפתח».</li>
-                <li>בחלון שנפתח לחצו «הוספה ל-Cursor» או «התקנה ב-VS Code». לכל תוכנה אחרת יש לשונית עם קישור להגדרות שלה, והעתקה אם אין כפתור התקנה.</li>
-                <li>אם הלוח מאחורי Cloudflare Access, <a href="https://dash.cloudflare.com/?to=/:account/one/access-controls/apps" target="_blank" rel="noopener noreferrer">פתחו את אפליקציות Access</a> והוסיפו Bypass רק לנתיב <span dir="ltr">/mcp</span>. שאר האתר נשאר סגור.</li>
+                <li>בחלון שנפתח בחרו את הלשונית של העוזר.</li>
             </ol>
-            <p><a href="https://github.com/pilpel1/HEB-CAL/blob/main/README.md#mcp" target="_blank" rel="noopener noreferrer">ההסבר המלא: מפתחות, Cursor, Claude ו-Cloudflare</a></p>
             <p id="mcpKeyNoUsers" class="mcp-no-users" hidden>עדיין אין משתמשים בבית. <a href="#settings-reminders">הוסיפו אדם במסך המשתמשים</a>, ואז חזרו לכאן ליצירת מפתח.</p>
             <form id="mcpKeyForm" class="row g-2 align-items-end">
                 <div class="col-12 col-md-4">
@@ -427,20 +417,20 @@
     <section class="card mb-3 settings-section" id="settings-oauth" data-settings-section="settings-oauth" aria-labelledby="settings-oauth-title">
         <h2 class="h5 settings-section-title" id="settings-oauth-title">
             <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="settings-oauth-body">
-                <span class="settings-section-label">חיבור OAuth לעוזר AI</span>
+                <span class="settings-section-label">חיבור עם אישור גישה</span>
                 <span class="settings-section-chevron" aria-hidden="true"></span>
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settings-oauth-body">
-            <p>חיבור בלי להעתיק מפתח <span dir="ltr">hcal_</span>. הלקוח עובר מסך אישור בעברית. המסך הזה נשאר מאחורי Cloudflare Access; רק אחרי אישור מתקבל טוקן קצר.</p>
-            <p id="oauthOriginMissing" class="reminder-form-error" hidden>חסר <span dir="ltr">HEB_CAL_PUBLIC_ORIGIN</span> בשרת. בלי זה אין גילוי ואין טוקנים.</p>
-            <p>כתובת ה-MCP: <code id="oauthMcpUrl" dir="ltr"></code>
+            <p>אחרי אישור במסך בעברית העוזר מתחבר ללוח. העוזר רואה ועורך את כל אירועי הבית. ביטול מפסיק מיד. הסוד מוצג פעם אחת בלבד — מעתיקים אותו מיד.</p>
+            <p id="oauthOriginMissing" class="reminder-form-error" hidden>החיבור הזה עדיין לא מוכן. פנו למנהל הלוח.</p>
+            <p>כתובת הלוח לעוזר: <code id="oauthMcpUrl" dir="ltr"></code>
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="oauthCopyMcpUrl">העתקה</button>
             </p>
             <h3 class="h6 mt-3">אפליקציית Gemini</h3>
-            <p class="small">אין כפתור חיבור רשמי מגוגל לשרת שלכם, ואין כאן deep link. ב-<a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> → הגדרות → Connected Apps → Custom apps מזינים את כתובת <span dir="ltr">/mcp</span>. אם אין רישום דינמי: Advanced → Client ID ו-Secret שנוצרים כאן. כתובת ההפניה חייבת להיות <strong>מדויקת</strong> כפי שמופיעה אצל גוגל בזרימת האישור (למשל <span dir="ltr">https://oauth-redirect.googleusercontent.com/r/…</span>) — לא כוכבית. מדריך הפלטפורמה מציין קידומות עם <span dir="ltr">*</span> ל-allowlist; כאן נשמר רק URI מלא.</p>
-            <p class="small text-muted mb-2">Gemini CLI ממשיך עם מפתח אישי. זה לא אפליקציית Gemini.</p>
-            <h3 class="h6 mt-3">לקוח רשום מראש</h3>
+            <p class="small">אין כפתור חיבור רשמי מגוגל, ואין כאן קישור הפעלה. ב-<a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> → הגדרות → Connected Apps, ומזינים את כתובת הלוח. אם מתבקשים מזהה לקוח וסוד — יוצרים אותם כאן ומדביקים. כתובת ההפניה חייבת להיות בדיוק כמו אצל גוגל (לא כוכבית). החיבור לא נבדק עדיין מול Gemini; הזמינות תלויה בחשבון גוגל שלכם.</p>
+            <p class="small text-muted mb-2">Gemini במסוף המחשב (CLI) ממשיך עם מפתח מהכרטיס הקודם — זה לא האפליקציה.</p>
+            <h3 class="h6 mt-3">מזהה לקוח וסוד להדבקה</h3>
             <form id="oauthClientForm" class="row g-2 align-items-end">
                 <div class="col-12 col-md-4">
                     <label for="oauthClientName" class="form-label">שם הלקוח</label>
@@ -475,7 +465,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="סגירה"></button>
                 </div>
                 <div class="modal-body">
-                    <p>לחצו על הכפתור של התוכנה. אחרי סגירה אי אפשר להציג את המפתח שוב — רק לבטל וליצור חדש.</p>
+                    <p>לחצו על הלשונית של העוזר שלכם. אחרי סגירה אי אפשר להציג את המפתח שוב — רק לבטל וליצור חדש.</p>
                     <div class="mcp-client-tabs" role="tablist" aria-label="תוכנות">
                         <button type="button" class="btn btn-sm btn-primary" role="tab" id="mcpTabCursor" data-mcp-tab="cursor" aria-selected="true" aria-controls="mcpPanelCursor">Cursor</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" role="tab" id="mcpTabVsCode" data-mcp-tab="vscode" aria-selected="false" aria-controls="mcpPanelVsCode" tabindex="-1">VS Code</button>
@@ -513,7 +503,7 @@
                     </div>
                     <div id="mcpPanelClaudeDesktop" data-mcp-panel="claude-desktop" role="tabpanel" hidden>
                         <p class="mcp-install-actions"><a class="btn btn-primary" href="https://claude.com/docs/third-party/claude-desktop/configuration" target="_blank" rel="noopener noreferrer">פתיחת ההסבר של Claude Desktop</a></p>
-                        <p class="text-muted small">אין כפתור התקנה. הקטע נשמר בקובץ ההגדרות יחד עם המפתח, וצריך Node.</p>
+                        <p class="text-muted small">אין כפתור התקנה. הקטע נשמר בקובץ ההגדרות יחד עם המפתח. צריך Node במחשב.</p>
                         <pre class="mcp-config" id="mcpClaudeConfig" dir="ltr"></pre>
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-mcp-copy="mcpClaudeConfig">העתקת ההגדרה</button>
                     </div>
@@ -540,17 +530,17 @@
                     </div>
                     <div id="mcpPanelGrok" data-mcp-panel="grok" role="tabpanel" hidden>
                         <p class="mcp-install-actions"><a class="btn btn-primary" href="https://grok.com/connectors" target="_blank" rel="noopener noreferrer">פתיחת המחברים ב-Grok</a></p>
-                        <p class="text-muted small">רק אם הלוח ציבורי ויש Bypass ל-<span dir="ltr">/mcp</span>.</p>
+                        <p class="text-muted small">אם החיבור נכשל — פנו למנהל הלוח.</p>
                         <p class="mb-0"><a href="https://docs.x.ai/grok/connectors" target="_blank" rel="noopener noreferrer">ההסבר של Grok</a></p>
                     </div>
                     <div id="mcpPanelCopilot" data-mcp-panel="copilot" role="tabpanel" hidden>
                         <p class="mcp-install-actions"><a class="btn btn-primary" href="https://copilotstudio.microsoft.com/" target="_blank" rel="noopener noreferrer">פתיחת Copilot Studio</a></p>
-                        <p class="text-muted small">רק אם הלוח ציבורי ויש Bypass ל-<span dir="ltr">/mcp</span>.</p>
+                        <p class="text-muted small">אם החיבור נכשל — פנו למנהל הלוח.</p>
                         <p class="mb-0"><a href="https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent" target="_blank" rel="noopener noreferrer">ההסבר של Microsoft</a></p>
                     </div>
                     <div id="mcpPanelClaudeCloud" data-mcp-panel="claude-cloud" role="tabpanel" hidden>
                         <p class="mcp-install-actions"><a class="btn btn-primary" href="https://claude.ai/settings/connectors" target="_blank" rel="noopener noreferrer">פתיחת המחברים ב-Claude</a></p>
-                        <p class="text-muted small">רק אם הלוח ציבורי ויש Bypass ל-<span dir="ltr">/mcp</span>. כותרת קבועה היא בטא ולא זמינה לכל חשבון.</p>
+                        <p class="text-muted small">אם החיבור נכשל — פנו למנהל הלוח. כותרת קבועה אצל Claude היא ניסוי ולא זמינה לכל חשבון.</p>
                         <p class="mb-0"><a href="https://claude.com/docs/connectors/custom/remote-mcp" target="_blank" rel="noopener noreferrer">ההסבר של Claude</a></p>
                     </div>
                     <pre class="mcp-config" id="mcpKeyToken" dir="ltr" hidden></pre>
@@ -573,7 +563,7 @@
             <p>כשהלוח פתוח, תזכורת מופיעה בדפדפן.</p>
             <button type="button" class="btn btn-outline-primary" data-reminder-notify-enable>אפשר התראות</button>
             <p id="reminderNotifyStatus" class="mt-2 mb-2"></p>
-            <p class="text-muted mb-0">אם הדפדפן סגור לא תגיע התראה. זה יתווסף בהמשך.</p>
+            <p class="text-muted mb-0">אם הדפדפן סגור לא תגיע התראה.</p>
         </div>
     </section>
 </div>

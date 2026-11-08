@@ -11,7 +11,7 @@ from app.database import BASE_DIR, get_database_path
 from app.updates.version import DEFAULT_REPO, parse_github_slug, valid_slug
 
 DOCKER_COMMAND = "docker compose pull && docker compose up -d"
-DOCKER_INSTRUCTIONS = "בהתקנת Docker העדכון לא רץ מתוך האפליקציה. בשרת מריצים את הפקודה הזו:"
+DOCKER_INSTRUCTIONS = "במצב Docker העדכון לא רץ מהמסך. פנו למנהל הלוח. הפקודה בשרת:"
 _LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 _DEFAULT_HEALTH = "http://127.0.0.1:5000/api/updates/health"
 
