@@ -268,7 +268,7 @@
             </button>
         </h2>
         <div class="card-body settings-section-body" id="settings-reminders-body">
-            <p class="mb-3">אנשי הבית: תזכורות, משמרות וטלגרם. אותו שם מעדכן את הקיים. בלי מזהה צ׳אט התזכורת תופיע רק כשהלוח פתוח בדפדפן. אימייל גוגל — לחיבור עם אישור גישה.</p>
+            <p class="mb-3">אנשי הבית: תזכורות, משמרות וטלגרם. אותו שם מעדכן את הקיים. בלי מזהה צ׳אט התזכורת תופיע רק כשהלוח פתוח בדפדפן.{% if ai_settings_ui %} אימייל גוגל — לחיבור עם אישור גישה.{% endif %}</p>
             <p id="reminderPersonContext" class="person-edit-context">אדם חדש</p>
             <form id="reminderPersonForm" class="row g-2 align-items-end">
                 <input type="hidden" id="reminderPersonId" value="">
@@ -366,6 +366,7 @@
         </div>
     </section>
 
+    {% if ai_settings_ui %}
     <section class="card mb-3 settings-section" id="settings-mcp" data-settings-section="settings-mcp" aria-labelledby="settings-mcp-title">
         <h2 class="h5 settings-section-title" id="settings-mcp-title">
             <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="settings-mcp-body">
@@ -551,6 +552,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <section class="card settings-section" id="settings-notify" data-settings-section="settings-notify" aria-labelledby="settings-notify-title">
         <h2 class="h5 settings-section-title" id="settings-notify-title">

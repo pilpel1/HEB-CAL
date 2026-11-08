@@ -30,7 +30,25 @@ def live_server(app):
         server.shutdown()
 
 
-def test_settings_mcp_card_is_present(client):
+def test_settings_hides_mcp_card_by_default(client):
+    html = client.get("/settings").get_data(as_text=True)
+    assert 'data-settings-section="settings-mcp"' not in html
+    assert "חיבור לעוזר AI" not in html
+    assert 'id="mcpKeyForm"' not in html
+    assert 'id="mcpKeyModal"' not in html
+    assert 'id="mcpPlatforms"' not in html
+    assert 'id="mcpCursorInstall"' not in html
+    assert 'id="reminderPersonEmail"' in html
+    assert "לחיבור עם אישור גישה" not in html
+    assert "/static/js/events/mcp-settings.js" in html
+    readme = README.read_text(encoding="utf-8")
+    mcp_docs = readme.split('<a id="mcp"></a>', 1)[1].split("### התראות", 1)[0]
+    assert "HEB_CAL_AI_SETTINGS_UI=1" in mcp_docs
+    assert "מוסתרים כברירת מחדל" in mcp_docs
+    assert "אין מתג במסך למשתמש הקצה" in mcp_docs
+
+
+def test_settings_mcp_card_is_present(client, ai_settings_ui):
     html = client.get("/settings").get_data(as_text=True)
     assert 'data-settings-section="settings-mcp"' in html
     assert "חיבור לעוזר AI" in html
@@ -118,7 +136,7 @@ def test_settings_mcp_card_is_present(client):
     assert "data-mcp-mounted" in script or "mcpMounted" in script
 
 
-def test_mobile_user_select_lists_household_users(live_server, app):
+def test_mobile_user_select_lists_household_users(live_server, app, ai_settings_ui):
     """הכרטיס נפתח סגור. הרשימה מתמלאת כשהוא מוצג, עם ערך שנבחר באמת."""
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import expect, sync_playwright
@@ -183,7 +201,7 @@ def test_mobile_user_select_lists_household_users(live_server, app):
         browser.close()
 
 
-def test_mobile_without_users_links_to_the_users_section(live_server):
+def test_mobile_without_users_links_to_the_users_section(live_server, ai_settings_ui):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import expect, sync_playwright
 
@@ -205,7 +223,7 @@ def test_mobile_without_users_links_to_the_users_section(live_server):
         browser.close()
 
 
-def test_create_shows_the_key_once_and_revoke_confirms(live_server, app):
+def test_create_shows_the_key_once_and_revoke_confirms(live_server, app, ai_settings_ui):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import expect, sync_playwright
 

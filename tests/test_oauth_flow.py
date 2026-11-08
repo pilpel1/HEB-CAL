@@ -33,7 +33,18 @@ def access_env(monkeypatch, keys):
     return keys
 
 
-def test_settings_oauth_card_and_no_gemini_deep_link(client):
+def test_settings_oauth_card_hidden_by_default(client):
+    html = client.get("/settings").get_data(as_text=True)
+    assert 'data-settings-section="settings-oauth"' not in html
+    assert "חיבור עם אישור גישה" not in html
+    assert "אין כפתור חיבור רשמי" not in html
+    assert "gemini.google.com" not in html
+    assert 'id="oauthClientForm"' not in html
+    assert 'id="oauthClientOnce"' not in html
+    assert "oauth-settings.js" in client.get("/").get_data(as_text=True)
+
+
+def test_settings_oauth_card_and_no_gemini_deep_link(client, ai_settings_ui):
     html = client.get("/settings").get_data(as_text=True)
     assert 'data-settings-section="settings-oauth"' in html
     assert "חיבור עם אישור גישה" in html
