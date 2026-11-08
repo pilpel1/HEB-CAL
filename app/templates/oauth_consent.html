@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEB-CAL — אישור גישה</title>
+    <style>
+        body { font-family: Heebo, sans-serif; margin: 2rem auto; max-width: 32rem; padding: 0 1rem; line-height: 1.5; }
+        .board { font-weight: 700; }
+        .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+        button { font: inherit; padding: 0.6rem 1.1rem; cursor: pointer; }
+        button[name="decision"][value="allow"] { background: #2563eb; color: #fff; border: 0; }
+        button[name="decision"][value="deny"] { background: #fff; }
+        code { direction: ltr; unicode-bidi: isolate; }
+    </style>
+</head>
+<body>
+    <h1>לאשר גישה ללוח?</h1>
+    <p>הלוח: <span class="board" dir="ltr">{{ board }}</span></p>
+    <p>הלקוח: <strong>{{ client_name }}</strong></p>
+    <p>המשתמש: {{ user_name }} (<span dir="ltr">{{ email }}</span>)</p>
+    <p>הרשאות מבוקשות:</p>
+    <ul>
+        {% for scope in scopes %}
+        <li><code>{{ scope }}</code>{% if scope == 'hebcal:write' %} — קריאה וכתיבה של אירועים{% elif scope == 'hebcal:read' %} — קריאת אירועים{% endif %}</li>
+        {% endfor %}
+    </ul>
+    <p>האישור לא ניתן אוטומטית. בחרו במפורש.</p>
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="actions">
+            <button type="submit" name="decision" value="allow">אישור</button>
+            <button type="submit" name="decision" value="deny">דחייה</button>
+        </div>
+    </form>
+</body>
+</html>

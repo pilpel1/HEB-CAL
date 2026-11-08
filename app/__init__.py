@@ -39,6 +39,11 @@ app.register_blueprint(api, url_prefix='/api')
 from app.mcp.transport import mcp as mcp_blueprint
 app.register_blueprint(mcp_blueprint)
 
+from app.oauth.discovery import oauth_discovery
+app.register_blueprint(oauth_discovery)
+from app.oauth.server import oauth_server
+app.register_blueprint(oauth_server)
+
 @app.route('/')
 def index():
     return render_template('index.html')

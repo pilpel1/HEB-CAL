@@ -940,8 +940,10 @@ def delete_person(person_id: int, *, reassign_to: int | None = None) -> bool:
                     (json.dumps(leftover), row["id"]),
                 )
     from app.mcp.keys import revoke_keys_for_user
+    from app.oauth.tokens import revoke_grants_for_user
 
     revoke_keys_for_user(db, person_id)
+    revoke_grants_for_user(db, person_id)
     cursor = db.execute(f"DELETE FROM {table} WHERE id = ?", (person_id,))
     db.commit()
     return cursor.rowcount > 0

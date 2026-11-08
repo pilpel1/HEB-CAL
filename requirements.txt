@@ -4,5 +4,7 @@ pyluach
 python-dotenv
 icalendar
 recurring-ical-events
+PyJWT>=2.8
+cryptography>=42
 
 

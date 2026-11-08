@@ -226,9 +226,12 @@ def init_db():
     from app.live_sync import ensure_live_sync_schema
     from app.mcp.keys import ensure_mcp_keys_schema
 
+    from app.oauth.schema import ensure_oauth_schema
+
     ensure_bot_schema(db)
     ensure_live_sync_schema(db)
     ensure_mcp_keys_schema(db)
+    ensure_oauth_schema(db)
     from app.reminders.repository import (
         disable_digest_without_telegram,
         ensure_unique_people_names,

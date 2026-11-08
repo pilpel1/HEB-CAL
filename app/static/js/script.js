@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof initMcpSettings === 'function') {
         initMcpSettings();
     }
+    if (typeof initOauthSettings === 'function') {
+        initOauthSettings();
+    }
     if (typeof initShiftEntry === 'function') {
         initShiftEntry();
     }
