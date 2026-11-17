@@ -20,7 +20,6 @@ RANGE_MAX_DAYS = 400
 LIST_LIMIT = 500
 SEARCH_LIMIT = 100
 QUERY_MAX = 200
-SHIFT_READONLY_MESSAGE = "משמרות עורכים בממשק של הלוח, לא דרך העוזר"
 WEEKDAYS = ("שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון")
 
 
@@ -91,8 +90,6 @@ def _recurrence_out(event: dict) -> dict | None:
 def _read_only_reason(event: dict) -> str | None:
     if is_gcal_event(event) or event.get("gcal_readonly"):
         return "google"
-    if event.get("is_shift"):
-        return "shift"
     return None
 
 
@@ -113,6 +110,7 @@ def event_out(event: dict) -> dict:
         "recurrence": _recurrence_out(event),
         "is_exception": bool(event.get("is_exception")),
         "is_shift": bool(event.get("is_shift")),
+        "shift_person_id": event.get("shift_person_id") or None,
         "shift_label": event.get("shift_label") or None,
         "source": "google" if reason == "google" else "local",
         "read_only": reason is not None,
@@ -232,6 +230,27 @@ def _op(callable_, *args):
         raise ToolError(code, exc.message) from exc
 
 
+def _shift_into(arguments: dict, data: dict, existing: dict | None = None) -> None:
+    """מעתיק שדות משמרת. בעדכון חלקי משלימים מהאירוע הקיים, כדי שתווית לבד לא תבטל משמרת."""
+    keys = ("is_shift", "shift_person_id", "shift_label")
+    if not any(key in arguments for key in keys):
+        return
+    if "is_shift" in arguments:
+        data["is_shift"] = arguments["is_shift"]
+    elif existing is not None:
+        data["is_shift"] = bool(existing.get("is_shift"))
+    else:
+        data["is_shift"] = True
+    if "shift_person_id" in arguments:
+        data["shift_person_id"] = arguments["shift_person_id"]
+    elif existing is not None:
+        data["shift_person_id"] = existing.get("shift_person_id")
+    if "shift_label" in arguments:
+        data["shift_label"] = arguments["shift_label"]
+    elif existing is not None:
+        data["shift_label"] = existing.get("shift_label")
+
+
 def create_event_tool(arguments: dict) -> dict:
     day = _parse_day(arguments.get("date"), "date")
     data = {
@@ -249,6 +268,9 @@ def create_event_tool(arguments: dict) -> dict:
         data["end_date"] = _parse_day(arguments["end_date"], "end_date").isoformat()
     if "recurrence" in arguments:
         _recurrence_payload(arguments["recurrence"], data)
+    _shift_into(arguments, data)
+    if data.get("is_shift") and (not data["title"] or not str(data["title"]).strip()):
+        data["title"] = data.get("shift_label") or "משמרת"
     event_id = _op(event_ops.create, data)
     return {"event": event_out(get_event(event_id))}
 
@@ -256,8 +278,6 @@ def create_event_tool(arguments: dict) -> dict:
 def _guard_writable(event: dict) -> None:
     if is_gcal_event(event):
         raise ToolError("read_only", READONLY_MESSAGE)
-    if event.get("is_shift"):
-        raise ToolError("read_only", SHIFT_READONLY_MESSAGE)
 
 
 def _scope(event: dict, arguments: dict) -> str:
@@ -274,7 +294,10 @@ def _scope(event: dict, arguments: dict) -> str:
     return scope
 
 
-_PATCH_FIELDS = ("title", "date", "time", "end_date", "description", "color", "recurrence")
+_PATCH_FIELDS = (
+    "title", "date", "time", "end_date", "description", "color", "recurrence",
+    "is_shift", "shift_person_id", "shift_label",
+)
 
 
 def update_event_tool(arguments: dict) -> dict:
@@ -331,6 +354,7 @@ def update_event_tool(arguments: dict) -> dict:
         )
     if "recurrence" in arguments:
         _recurrence_payload(arguments["recurrence"], data)
+    _shift_into(arguments, data, existing=event)
 
     result = _op(event_ops.update, event["id"], data)
     saved = get_event(event["id"])
@@ -465,7 +489,9 @@ _TOOLS = (
         title="אירוע חדש",
         description=(
             "Create an event. date accepts Gregorian or Hebrew text; the Hebrew date is computed by the server. "
-            "time is HH:MM or omitted for all-day. Optional recurrence. Shifts cannot be created here."
+            "time is HH:MM or omitted for all-day. Optional recurrence. "
+            "To create a shift pass is_shift=true, shift_person_id and shift_label (בוקר/ערב/לילה or free text). "
+            "Household shifts must be enabled."
         ),
         input_schema=_schema(
             {
@@ -476,6 +502,9 @@ _TOOLS = (
                 "description": {"type": ["string", "null"], "maxLength": 2000},
                 "color": _NULLABLE_TEXT,
                 "recurrence": _RECURRENCE,
+                "is_shift": {"type": "boolean", "description": "true למשמרת. דורש shift_person_id ו-shift_label"},
+                "shift_person_id": {"type": ["integer", "null"], "minimum": 1},
+                "shift_label": {"type": ["string", "null"], "maxLength": 80},
             },
             ["title", "date"],
         ),
@@ -489,7 +518,8 @@ _TOOLS = (
             "Update an event with a partial patch: only the fields you pass change. "
             "Recurring events require scope: 'occurrence' (with occurrence_date) or 'all'. "
             "Changing date or recurrence with scope 'all' discards per-occurrence edits (exceptions_cleared). "
-            "Google-imported events and shifts are read-only."
+            "Shifts can be created, updated or converted with is_shift / shift_person_id / shift_label. "
+            "Google-imported events are read-only."
         ),
         input_schema=_schema(
             {
@@ -503,6 +533,9 @@ _TOOLS = (
                 "description": {"type": ["string", "null"], "maxLength": 2000},
                 "color": _NULLABLE_TEXT,
                 "recurrence": _RECURRENCE,
+                "is_shift": {"type": "boolean"},
+                "shift_person_id": {"type": ["integer", "null"], "minimum": 1},
+                "shift_label": {"type": ["string", "null"], "maxLength": 80},
             },
             ["event_id"],
         ),
@@ -514,7 +547,7 @@ _TOOLS = (
         title="מחיקת אירוע",
         description=(
             "Delete an event. Recurring events require scope: 'occurrence' (with occurrence_date) to skip one day, "
-            "or 'all' to delete the whole series. Google-imported events and shifts are read-only."
+            "or 'all' to delete the whole series. Google-imported events are read-only. Shifts can be deleted."
         ),
         input_schema=_schema(
             {"event_id": _EVENT_ID, "scope": _SCOPE, "occurrence_date": _OCCURRENCE},
@@ -532,6 +565,7 @@ TOOLS: dict[str, Tool] = {tool.name: tool for tool in _TOOLS}
 _JSON_TYPES = {
     "string": str,
     "integer": int,
+    "boolean": bool,
     "object": dict,
     "null": type(None),
 }

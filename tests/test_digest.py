@@ -15,6 +15,7 @@ from app.reminders.digest import (
     digest_ready,
     digest_weekdays,
     format_digest,
+    format_digest_event,
     opted_in_people,
     process_daily_digests,
 )
@@ -224,11 +225,11 @@ def test_friday_digest_includes_saturday_and_labels_days(app):
     assert text == body
     assert "יום שישי" in text
     assert "יום שבת" in text
-    assert "<b>קניות</b>" in text
-    assert "10:00" in text
-    assert "<b>ארוחת שבת</b>" in text
-    assert "<b>בוקר</b>" in text
-    assert "משמרת · דני" in text
+    assert "• 10:00 | קניות" in text
+    assert "• ארוחת שבת" in text
+    assert "• בוקר | משמרת | דני" in text
+    assert "כל היום" not in text
+    assert "משמרת ·" not in text
     assert "רק ראשון" not in text
     assert "מזהה:" not in text
     friday_at = text.index("יום שישי")
@@ -286,9 +287,10 @@ def test_weekday_digest_is_that_day_only(app):
     with app.app_context():
         process_daily_digests(now=_at(THURSDAY, 6, 0), send=send, token="tok")
     text = sent[0]
-    assert "<b>רק חמישי</b>" in text
+    assert "• רק חמישי" in text
     assert "רק שישי" not in text
     assert "יום שבת" not in text
+    assert "כל היום" not in text
 
 
 def test_recurring_occurrence_appears_without_series_id(app):
@@ -307,8 +309,9 @@ def test_recurring_occurrence_appears_without_series_id(app):
 
         people = {person["id"]: person for person in list_people()}
         text = format_digest([THURSDAY], people)
-    assert "<b>יום הולדת</b>" in text
+    assert "• יום הולדת | חוזר" in text
     assert "מזהה:" not in text
+    assert "כל היום" not in text
 
 
 def test_weekly_occurrence_appears_in_digest(app):
@@ -328,9 +331,10 @@ def test_weekly_occurrence_appears_in_digest(app):
         people = {person["id"]: person for person in list_people()}
         thursday = format_digest([THURSDAY], people)
         friday = format_digest([FRIDAY], people)
-    assert "<b>חוג שבועי</b>" in thursday
+    assert "• חוג שבועי | חוזר" in thursday
     assert "מזהה:" not in thursday
     assert "חוג שבועי" not in friday
+    assert "כל היום" not in thursday
 
 
 def test_process_scheduled_runs_digest_after_reminders(app, monkeypatch):
@@ -343,3 +347,25 @@ def test_process_scheduled_runs_digest_after_reminders(app, monkeypatch):
     )
     assert worker.process_scheduled(now=_at(THURSDAY, 6, 0), send=None, token="t") == 2
     assert [item[0] for item in calls] == ["due", "digest"]
+
+
+def test_digest_event_line_is_one_line_with_pipes_and_never_all_day(app):
+    danny = _person(app, "אביחי", chat="42", daily_digest_enabled=True, works_shifts=1)
+    timed_id = _event(app, "קניות", THURSDAY, time="18:30")
+    timeless_id = _event(app, "יום הולדת", THURSDAY)
+    shift_id = _event(app, "ערב", THURSDAY, shift=(1, danny["id"], "ערב"))
+    with app.app_context():
+        from app.database import get_event
+        from app.reminders.repository import list_people
+
+        people = {person["id"]: person for person in list_people()}
+        assert format_digest_event(get_event(timed_id), people) == "• 18:30 | קניות"
+        assert format_digest_event(get_event(timeless_id), people) == "• יום הולדת"
+        assert format_digest_event(get_event(shift_id), people) == "• ערב | משמרת | אביחי"
+        text = format_digest([THURSDAY], people)
+    assert "כל היום" not in text
+    assert "\n• " in text
+    for line in text.splitlines():
+        if line.startswith("•"):
+            assert "\n" not in line
+            assert "כל היום" not in line

@@ -8,6 +8,9 @@ function settingsSectionHashId(hash) {
     if (raw === 'settings-users') {
         return 'settings-reminders';
     }
+    if (raw === 'settingsAutoBackup') {
+        return 'settingsBackup';
+    }
     return raw;
 }
 
@@ -63,14 +66,19 @@ function applySettingsSectionState(root, hash) {
     if (!sections.length) {
         return null;
     }
+    const rawHash = String(hash !== undefined ? hash : (window.location.hash || '')).replace(/^#/, '');
     const ids = sections.map((section) => section.getAttribute('data-settings-section'));
     const firstId = ids[0];
-    const hashId = settingsSectionHashId(hash !== undefined ? hash : (window.location.hash || ''));
+    const hashId = settingsSectionHashId(rawHash);
     const map = settingsSectionOpenMap(readSettingsSectionStore(), ids, firstId, hashId);
     sections.forEach((section) => {
         const id = section.getAttribute('data-settings-section');
         setSettingsSectionOpen(section, Boolean(map[id]));
     });
+    const auto = (root || document).querySelector('#settingsAutoBackup');
+    if (auto) {
+        auto.open = rawHash === 'settingsAutoBackup';
+    }
     return map;
 }
 

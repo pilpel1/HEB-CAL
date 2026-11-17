@@ -892,6 +892,23 @@
     padding-top: 0.25rem;
 }
 
+.settings-backup-auto {
+    border-top: 1px solid var(--bs-border-color, #dee2e6);
+    padding-top: 0.75rem;
+}
+
+.settings-backup-auto > summary {
+    cursor: pointer;
+    font-weight: 600;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+}
+
+.settings-backup-auto-body {
+    padding-top: 0.75rem;
+}
+
 @media (max-width: 480px) {
     .settings-section-toggle {
         padding: 0.55rem 0.75rem;

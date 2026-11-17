@@ -152,7 +152,7 @@ def test_agenda_row_reuses_event_chip_color_helpers():
     assert "eventChipFill(ev, 1)" not in agenda
 
 
-def test_agenda_description_is_inline_after_title():
+def test_agenda_description_shows_full_multiline_note():
     agenda = DAY_AGENDA.read_text(encoding="utf-8")
     render = EVENT_RENDER.read_text(encoding="utf-8")
     css = CALENDAR_CSS.read_text(encoding="utf-8")
@@ -176,13 +176,17 @@ process.stdout.write(JSON.stringify(out));
     empty, spaces, short, multiline = json.loads(result.stdout)
     assert empty == ""
     assert spaces == ""
-    assert short == '<span class="agenda-desc"> • פגישה קצרה</span>'
-    assert multiline == '<span class="agenda-desc"> • שורה שנייה &lt;b&gt;x&lt;/b&gt;</span>'
+    assert short == ' <span class="agenda-desc">פגישה קצרה</span>'
+    assert multiline == ' <span class="agenda-desc">שורה\nשנייה  &lt;b&gt;x&lt;/b&gt;</span>'
+    assert "…" not in short and "..." not in short
     assert "agenda-text has-desc" in agenda
     assert "agendaDescriptionHtml(ev)" in agenda
-    assert ".agenda-text.has-desc" in css
-    assert "text-overflow: ellipsis" in css
-    assert ".agenda-desc" in css
+    desc_block = css.split(".agenda-text.has-desc", 1)[1].split(".agenda-desc", 1)[0]
+    assert "text-overflow: ellipsis" not in desc_block
+    assert "white-space: nowrap" not in desc_block
+    agenda_desc = css.split(".agenda-desc {", 1)[1].split("}", 1)[0]
+    assert "pre-wrap" in agenda_desc
+    assert "overflow-wrap: anywhere" in agenda_desc
     assert "font-weight: 300" in css
 
 

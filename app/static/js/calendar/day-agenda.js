@@ -817,13 +817,16 @@ function ensureAgendaDayVisible(dateStr) {
     stream.scrollTop += delta;
 }
 
-/** תיאור בשורה אחת. ריק / רווחים בלבד — בלי תוספת, השורה נשארת כמו שהייתה. */
+/** תיאור מלא מתחת לכותרת. ריק / רווחים בלבד - בלי תוספת. שורות וגלישה נשמרים. */
 function agendaDescriptionHtml(event) {
-    const text = String((event && event.description) || '').replace(/\s+/g, ' ').trim();
+    const text = String((event && event.description) || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .trim();
     if (!text) {
         return '';
     }
-    return `<span class="agenda-desc"> • ${escapeHtml(text)}</span>`;
+    return ` <span class="agenda-desc">${escapeHtml(text)}</span>`;
 }
 
 function renderDayAgenda(dateStr) {
