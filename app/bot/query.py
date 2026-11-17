@@ -64,6 +64,7 @@ def _master_row(event: dict) -> dict:
         "gregorian_date": (event.get("gregorian_date") or "")[:10],
         "hebrew_date": event.get("hebrew_date") or "",
         "time": event.get("time"),
+        "end_time": event.get("end_time"),
         "description": event.get("description") or "",
         "end_date": event.get("end_date"),
         "occurrence_date": (event.get("gregorian_date") or "")[:10],

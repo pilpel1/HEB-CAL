@@ -741,7 +741,10 @@ function buildEventRowHtml(event) {
                 ? 'כל שבוע'
                 : '';
     const safeTitle = escapeHtml(event.title);
-    const metaBits = [event.gregorian_date, event.hebrew_date, event.time, repeatNote]
+    const timeLabel = typeof formatEventTimeRange === 'function'
+        ? formatEventTimeRange(event)
+        : (event.time || '');
+    const metaBits = [event.gregorian_date, event.hebrew_date, timeLabel, repeatNote]
         .filter(Boolean)
         .map((bit) => escapeHtml(bit));
 
@@ -764,7 +767,7 @@ function buildEventRowHtml(event) {
             </td>
             <td>${escapeHtml(event.gregorian_date)}</td>
             <td>${escapeHtml(event.hebrew_date)}</td>
-            <td>${escapeHtml(event.time || '')}</td>
+            <td>${escapeHtml(timeLabel)}</td>
             <td>${escapeHtml(event.description)}</td>
             <td>
                 <div class="btn-group" role="group">

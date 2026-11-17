@@ -40,6 +40,8 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert "quick-simple-row" in simple
     assert 'id="quick_title"' in simple
     assert 'id="quick_time"' in simple
+    assert 'id="quick_end_time"' in simple
+    assert "עד שעה" in simple
     assert "quick-color-picker" in simple
     assert 'id="quick_gregorian_date"' not in simple
     assert 'id="quick_hebrew_day"' not in simple
@@ -70,6 +72,8 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert "function setEndDateOpen" in MODAL_JS
     assert "function clearQuickEndDate" in MODAL_JS
     assert "function openQuickEndDate" in MODAL_JS
+    assert "function getQuickEndTimeValue" in MODAL_JS
+    assert "function assertEndTimeValid" in MODAL_JS
 
 
 def test_full_form_setting_is_local_to_the_device():
@@ -93,7 +97,8 @@ def test_full_form_setting_is_local_to_the_device():
 
 def test_simple_when_row_is_one_grid_on_narrow_phones():
     assert ".quick-simple-row" in FORMS
-    assert "minmax(5.5rem" in FORMS
+    assert "minmax(5.2rem" in FORMS
+    assert "minmax(4.8rem" in FORMS
     assert "display: contents" in FORMS
     assert "minmax(2.9rem" in FORMS
     assert ".quick-advanced-toggle" in FORMS
@@ -177,18 +182,20 @@ def _simple_row_metrics(page):
             };
             const title = box('quick_title');
             const time = box('quick_time');
+            const endTime = box('quick_end_time');
             const color = document.querySelector('#quickEventModal .quick-color-picker').getBoundingClientRect();
             const content = document.querySelector('#quickEventModal .modal-content').getBoundingClientRect();
             const footer = document.querySelector('#quickEventModal .modal-footer').getBoundingClientRect();
             const submit = document.getElementById('quick_submit_btn').getBoundingClientRect();
-            const boxes = [title, time];
+            const boxes = [title, time, endTime];
             return {
                 title,
                 time,
+                endTime,
                 color: { top: color.top, bottom: color.bottom, left: color.left, right: color.right },
-                topSpread: Math.abs(title.top - time.top),
+                topSpread: Math.max(title.top, time.top, endTime.top) - Math.min(title.top, time.top, endTime.top),
                 timeOnLeft: time.left < title.left - 4,
-                colorBelow: color.top >= Math.max(title.bottom, time.bottom) - 2,
+                colorBelow: color.top >= Math.max(title.bottom, time.bottom, endTime.bottom) - 2,
                 overflowRight: Math.max(0, Math.max(...boxes.map((b) => b.right)) - content.right),
                 overflowLeft: Math.max(0, content.left - Math.min(...boxes.map((b) => b.left))),
                 footerBottom: footer.bottom,
@@ -240,6 +247,7 @@ def test_new_event_opens_simple_and_expander_reveals_advanced(live_server):
         expect(page.locator("#quick_title")).to_be_visible()
         expect(page.locator(".quick-color-picker")).to_be_visible()
         expect(page.locator("#quick_time")).to_be_visible()
+        expect(page.locator("#quick_end_time")).to_be_visible()
         expect(page.locator("#quick_hebrew_day")).to_be_hidden()
         expect(page.locator("#quick_gregorian_date")).to_be_hidden()
         expect(page.locator("#quick_end_hebrew_day")).to_be_hidden()

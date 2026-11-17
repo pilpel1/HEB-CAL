@@ -32,6 +32,7 @@ def test_one_off_create_matches_rest_and_partial_update(app, client):
         "title": "רופא",
         "date": "02.12.2026",
         "time": "09:30",
+        "end_time": "10:15",
         "description": "בדיקה",
         "end_date": "2026-12-03",
     })
@@ -40,13 +41,16 @@ def test_one_off_create_matches_rest_and_partial_update(app, client):
     assert stored["title"] == "רופא"
     assert stored["gregorian_date"] == DAY
     assert stored["time"] == "09:30"
+    assert stored["end_time"] == "10:15"
     assert stored["end_date"] == "2026-12-03"
+    assert created["event"]["end_time"] == "10:15"
     assert stored["hebrew_date"]
     assert created["event"]["hebrew_date"] == stored["hebrew_date"]
 
     updated = ok(client, token, "update_event", {"event_id": event_id, "title": "רופא שיניים"})
     assert updated["event"]["title"] == "רופא שיניים"
     assert updated["event"]["time"] == "09:30"
+    assert updated["event"]["end_time"] == "10:15"
     assert updated["event"]["gregorian_date"] == DAY
     assert updated["exceptions_cleared"] is False
     assert _rest(client, event_id)["description"] == "בדיקה"
@@ -56,6 +60,7 @@ def test_one_off_create_matches_rest_and_partial_update(app, client):
     assert [row["title"] for row in listed["events"]] == ["רופא שיניים"]
     assert [row["gregorian_date"][:10] for row in rest_rows] == [row["gregorian_date"] for row in listed["events"]]
     assert listed["events"][0]["end_date"] == rest_rows[0]["end_date"][:10]
+    assert listed["events"][0]["end_time"] == rest_rows[0]["end_time"] == "10:15"
 
 
 def test_hebrew_date_input_and_convert_date(app, client):

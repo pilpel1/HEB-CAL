@@ -51,6 +51,7 @@ def _event(app, title, day, **kwargs):
             time=kwargs.get("time"),
             description=kwargs.get("description") or "",
             end_date=kwargs.get("end_date"),
+            end_time=kwargs.get("end_time"),
             recurrence=kwargs.get("recurrence"),
             shift=kwargs.get("shift"),
         )

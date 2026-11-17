@@ -83,14 +83,16 @@ def format_digest_event(event: dict, people: dict) -> str:
     """שורה אחת לסיכום בוקר: שדות מופרדים ב- | , בלי "כל היום"."""
     from app.bot.textutil import esc
     from app.bot.ui import visible_name, _person_name
+    from app.services.event_payload import format_event_time_range
 
     parts: list[str] = []
     if event.get("is_shift"):
         parts.append(esc(visible_name(event)))
         parts.append(esc(_person_name(people, event.get("shift_person_id"))))
     else:
-        if event.get("time"):
-            parts.append(esc(event["time"]))
+        clock = format_event_time_range(event)
+        if clock:
+            parts.append(esc(clock))
         parts.append(esc(visible_name(event)))
         if event.get("recurring") or event.get("recurrence_freq"):
             parts.append("חוזר")

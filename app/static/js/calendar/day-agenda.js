@@ -879,8 +879,11 @@ function renderDayAgenda(dateStr) {
         .filter((ev) => isDateInRange(dateStr, ev.gregorian_date, ev.end_date))
         .sort(compareEventsByTime);
     for (const ev of events) {
-        const time = ev.time
-            ? `<span class="agenda-time">${escapeHtml(ev.time)}</span>`
+        const clock = typeof formatEventTimeRange === 'function'
+            ? formatEventTimeRange(ev)
+            : (ev.time || '');
+        const time = clock
+            ? `<span class="agenda-time">${escapeHtml(clock)}</span>`
             : '';
         const range = ev.end_date && ev.end_date > ev.gregorian_date
             ? `<span class="agenda-range">עד ${escapeHtml(formatShortGregorian(ev.end_date))}</span>`

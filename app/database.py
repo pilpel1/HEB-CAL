@@ -24,9 +24,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # גרסה 8: טבלת users (גיבוי users_backup_v8, מיזוג כפילויות לפי שם/טלגרם, google_email).
 # סיכום בוקר בלי telegram_chat_id נכבה ב-ensure_users_schema ושוב ב-init_db
 # (גם על בסיס שכבר על 8).
+# גרסה 9: end_time (HH:MM, nullable) על events ועל event_exceptions.
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
@@ -204,6 +205,7 @@ def apply_pending_migrations(db) -> None:
         _ensure_base_schema(db)
         ensure_reminder_schema(db)
         ensure_recurrence_schema(db)
+        ensure_end_time_schema(db)
         ensure_shift_schema(db)
         ensure_gcal_schema(db)
         from app.reminders.repository import backfill_people_role_flags
@@ -271,6 +273,7 @@ def ensure_recurrence_schema(db) -> None:
                 gregorian_date TEXT,
                 hebrew_date TEXT,
                 time TEXT,
+                end_time TEXT,
                 description TEXT,
                 end_date TEXT,
                 color TEXT,
@@ -304,6 +307,17 @@ def ensure_recurrence_schema(db) -> None:
         from app.reminders.repository import ensure_reminder_sends_per_chat
 
         ensure_reminder_sends_per_chat(db)
+
+
+def ensure_end_time_schema(db) -> None:
+    """שעת סיום אופציונלית (HH:MM). NULL על אירועים קיימים. בטוח להרצה חוזרת."""
+    _add_column_if_missing(db, "events", "end_time", "TEXT")
+    tables = {
+        row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
+    if "event_exceptions" in tables:
+        _add_column_if_missing(db, "event_exceptions", "end_time", "TEXT")
+
 
 def _migrate_hebrew_years_to_letters(db):
     """ממיר שנים מספריות בתאריכים עבריים שמורים לאותיות (פעם אחת לנתונים קיימים)."""
@@ -373,6 +387,7 @@ def _event_fingerprint(event):
         event.get("gregorian_date") or "",
         event.get("time") or "",
         event.get("end_date") or "",
+        event.get("end_time") or "",
     )
 
 
@@ -648,12 +663,14 @@ def import_data(payload, mode="replace"):
             gregorian_date = cleaned["gregorian_date"]
             hebrew_date = normalize_hebrew_date_text(cleaned["hebrew_date"])
             time_value = cleaned["time"]
+            end_time = cleaned["end_time"]
             description = cleaned["description"]
             end_date = cleaned["end_date"]
             color_value = cleaned["color"] if "color" in cleaned else event.get("color")
             fingerprint = _event_fingerprint({
                 **event,
                 "end_date": end_date,
+                "end_time": end_time,
             })
             slot = _event_slot({
                 **event,
@@ -680,7 +697,7 @@ def import_data(payload, mode="replace"):
                     f'''
                     UPDATE events
                     SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
-                        description = ?, end_date = ?, color = ?{recurrence_sql}{shift_sql}
+                        end_time = ?, description = ?, end_date = ?, color = ?{recurrence_sql}{shift_sql}
                     WHERE id = ?
                     ''',
                     (
@@ -688,6 +705,7 @@ def import_data(payload, mode="replace"):
                         gregorian_date,
                         hebrew_date,
                         time_value,
+                        end_time,
                         description,
                         end_date,
                         color_value,
@@ -702,6 +720,7 @@ def import_data(payload, mode="replace"):
                     "gregorian_date": gregorian_date,
                     "hebrew_date": hebrew_date,
                     "time": time_value,
+                    "end_time": end_time,
                     "description": description,
                     "end_date": end_date,
                     "color": color_value,
@@ -728,17 +747,18 @@ def import_data(payload, mode="replace"):
                 cursor = db.execute(
                     '''
                     INSERT INTO events (
-                        title, gregorian_date, hebrew_date, time, description, end_date, color,
+                        title, gregorian_date, hebrew_date, time, end_time, description, end_date, color,
                         recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count,
                         is_shift, shift_person_id, shift_label
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''',
                     (
                         title,
                         gregorian_date,
                         hebrew_date,
                         time_value,
+                        end_time,
                         description,
                         end_date,
                         color_value,
@@ -758,6 +778,7 @@ def import_data(payload, mode="replace"):
                     "gregorian_date": gregorian_date,
                     "hebrew_date": hebrew_date,
                     "time": time_value,
+                    "end_time": end_time,
                     "description": description,
                     "end_date": end_date,
                     "color": color_value,
@@ -825,6 +846,7 @@ def create_event(
     color=None,
     recurrence=None,
     shift=None,
+    end_time=None,
 ):
     db = get_db()
     try:
@@ -835,17 +857,18 @@ def create_event(
         cursor = db.execute(
             '''
             INSERT INTO events (
-                title, gregorian_date, hebrew_date, time, description, end_date, color,
+                title, gregorian_date, hebrew_date, time, end_time, description, end_date, color,
                 recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count,
                 is_shift, shift_person_id, shift_label
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 title,
                 gregorian_date,
                 hebrew_date,
                 time,
+                end_time,
                 description,
                 end_date,
                 color,
@@ -908,6 +931,7 @@ def update_event(
     recurrence="keep",
     clear_exceptions=False,
     shift="keep",
+    end_time=None,
 ):
     db = get_db()
     try:
@@ -924,10 +948,10 @@ def update_event(
                 f'''
                 UPDATE events
                 SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
-                    description = ?, end_date = ?, color = ?{shift_sql}
+                    end_time = ?, description = ?, end_date = ?, color = ?{shift_sql}
                 WHERE id = ?
                 ''',
-                (title, gregorian_date, hebrew_date, time, description, end_date, color, *shift_params, event_id),
+                (title, gregorian_date, hebrew_date, time, end_time, description, end_date, color, *shift_params, event_id),
             )
         else:
             rule = recurrence or {}
@@ -935,7 +959,7 @@ def update_event(
                 f'''
                 UPDATE events
                 SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
-                    description = ?, end_date = ?, color = ?,
+                    end_time = ?, description = ?, end_date = ?, color = ?,
                     recurrence_freq = ?, recurrence_calendar = ?,
                     recurrence_until = ?, recurrence_count = ?{shift_sql}
                 WHERE id = ?
@@ -945,6 +969,7 @@ def update_event(
                     gregorian_date,
                     hebrew_date,
                     time,
+                    end_time,
                     description,
                     end_date,
                     color,
@@ -992,7 +1017,7 @@ def exceptions_for_events(event_ids):
     rows = db.execute(
         f"""
         SELECT id, event_id, original_date, kind, title, gregorian_date, hebrew_date,
-               time, description, end_date, color
+               time, end_time, description, end_date, color
         FROM event_exceptions
         WHERE event_id IN ({marks})
         ORDER BY original_date, id
@@ -1016,15 +1041,16 @@ def upsert_exception(event_id, original_date, kind, fields=None, commit=True):
         """
         INSERT INTO event_exceptions (
             event_id, original_date, kind, title, gregorian_date, hebrew_date,
-            time, description, end_date, color
+            time, end_time, description, end_date, color
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(event_id, original_date) DO UPDATE SET
             kind = excluded.kind,
             title = excluded.title,
             gregorian_date = excluded.gregorian_date,
             hebrew_date = excluded.hebrew_date,
             time = excluded.time,
+            end_time = excluded.end_time,
             description = excluded.description,
             end_date = excluded.end_date,
             color = excluded.color
@@ -1037,6 +1063,7 @@ def upsert_exception(event_id, original_date, kind, fields=None, commit=True):
             fields.get("gregorian_date"),
             fields.get("hebrew_date"),
             fields.get("time"),
+            fields.get("end_time"),
             fields.get("description"),
             fields.get("end_date"),
             fields.get("color"),

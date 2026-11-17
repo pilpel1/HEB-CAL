@@ -95,19 +95,21 @@ const cases = [
   { time: '17:30', title: 'ערב עם נעמי' },
   { time: '00:05', title: 'לילה' },
   { time: '9:15', title: 'בוקר' },
+  { time: '07:30', end_time: '09:30', title: 'ישבצ' },
   { title: 'כל היום' },
 ];
 const out = cases.map((ev) => ({
   html: buildEventItemHtml(ev),
   label: eventTimeLabel(ev),
   clock: formatChipTime(ev.time || ''),
+  range: formatEventTimeRange(ev),
 }));
 process.stdout.write(JSON.stringify(out));
 """
     )
     result = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
     out = json.loads(result.stdout)
-    morning, evening, night, single, all_day = out
+    morning, evening, night, single, ranged, all_day = out
     assert morning["clock"] == "8:00"
     assert evening["clock"] == "17:30"
     assert night["clock"] == "0:05"
@@ -119,6 +121,9 @@ process.stdout.write(JSON.stringify(out));
     assert 'class="event-sep"> </span>' in morning["html"]
     assert morning["label"] == "8:00 לסדר ארון וחדר ילדים"
     assert evening["label"] == "17:30 ערב עם נעמי"
+    assert ranged["range"] == "07:30-09:30"
+    assert 'class="event-time">07:30-09:30</span>' in ranged["html"]
+    assert ranged["label"] == "07:30-09:30 ישבצ"
     assert "event-timed" not in all_day["html"]
     assert "event-time" not in all_day["html"]
     assert all_day["label"] == "כל היום"

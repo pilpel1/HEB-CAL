@@ -170,7 +170,7 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
     existing = db.execute(
         """
         SELECT id, gcal_uid, gcal_recurrence_id, title, gregorian_date, hebrew_date,
-               time, description, end_date, color
+               time, end_time, description, end_date, color
         FROM events
         WHERE gcal_source_id = ?
         """,
@@ -194,17 +194,18 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
                 cursor = db.execute(
                     """
                     INSERT INTO events (
-                        title, gregorian_date, hebrew_date, time, description, end_date, color,
+                        title, gregorian_date, hebrew_date, time, end_time, description, end_date, color,
                         recurrence_freq, recurrence_calendar, recurrence_until, recurrence_count,
                         is_shift, shift_person_id, shift_label,
                         gcal_source_id, gcal_uid, gcal_recurrence_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, NULL, NULL, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, NULL, NULL, ?, ?, ?)
                     """,
                     (
                         item["title"],
                         item["gregorian_date"],
                         hebrew,
                         item["time"],
+                        item.get("end_time"),
                         item["description"],
                         item["end_date"],
                         color,
@@ -221,6 +222,7 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
                 and (current["gregorian_date"] or "")[:10] == (item["gregorian_date"] or "")[:10]
                 and (current["hebrew_date"] or "") == (hebrew or "")
                 and (current["time"] or None) == (item["time"] or None)
+                and (current["end_time"] or None) == (item.get("end_time") or None)
                 and (current["description"] or "") == (item["description"] or "")
                 and (current["end_date"] or None) == (item["end_date"] or None)
                 and (current["color"] or None) == (color or None)
@@ -231,7 +233,7 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
                 """
                 UPDATE events
                 SET title = ?, gregorian_date = ?, hebrew_date = ?, time = ?,
-                    description = ?, end_date = ?, color = ?
+                    end_time = ?, description = ?, end_date = ?, color = ?
                 WHERE id = ? AND gcal_source_id = ?
                 """,
                 (
@@ -239,6 +241,7 @@ def _apply(source_id: int, occurrences: list[dict], window_start: date, window_e
                     item["gregorian_date"],
                     hebrew,
                     item["time"],
+                    item.get("end_time"),
                     item["description"],
                     item["end_date"],
                     color,

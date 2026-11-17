@@ -103,6 +103,7 @@ def event_out(event: dict) -> dict:
         "gregorian_date": (event.get("gregorian_date") or "")[:10],
         "hebrew_date": event.get("hebrew_date") or "",
         "time": event.get("time") or None,
+        "end_time": event.get("end_time") or None,
         "end_date": (event.get("end_date") or "")[:10] or None,
         "description": event.get("description") or "",
         "color": event.get("color") or None,
@@ -258,6 +259,7 @@ def create_event_tool(arguments: dict) -> dict:
         "gregorian_date": day.isoformat(),
         "hebrew_date": hebrew_display(day),
         "time": _text_or_none(arguments.get("time"), "time"),
+        "end_time": _text_or_none(arguments.get("end_time"), "end_time"),
         "description": _text_or_none(arguments.get("description"), "description") or "",
         "end_date": None,
         "color": _text_or_none(arguments.get("color"), "color"),
@@ -295,7 +297,7 @@ def _scope(event: dict, arguments: dict) -> str:
 
 
 _PATCH_FIELDS = (
-    "title", "date", "time", "end_date", "description", "color", "recurrence",
+    "title", "date", "time", "end_time", "end_date", "description", "color", "recurrence",
     "is_shift", "shift_person_id", "shift_label",
 )
 
@@ -330,6 +332,7 @@ def update_event_tool(arguments: dict) -> dict:
         "gregorian_date": gregorian,
         "hebrew_date": hebrew,
         "time": base.get("time") or None,
+        "end_time": base.get("end_time") or None,
         "description": base.get("description") or "",
         "end_date": (base.get("end_date") or "")[:10] or None,
         "color": base.get("color") or None,
@@ -341,7 +344,7 @@ def update_event_tool(arguments: dict) -> dict:
         if not isinstance(arguments["title"], str):
             raise ToolError("invalid_input", "title: צריך טקסט")
         data["title"] = arguments["title"]
-    for field in ("time", "description", "color"):
+    for field in ("time", "end_time", "description", "color"):
         if field in arguments:
             data[field] = _text_or_none(arguments[field], field)
     if data["description"] is None:
@@ -489,7 +492,9 @@ _TOOLS = (
         title="אירוע חדש",
         description=(
             "Create an event. date accepts Gregorian or Hebrew text; the Hebrew date is computed by the server. "
-            "time is HH:MM or omitted for all-day. Optional recurrence. "
+            "time is HH:MM or omitted for all-day. Optional end_time (HH:MM) requires time; "
+            "same-day end_time before time is rejected (overnight is allowed when end_date is later). "
+            "Optional recurrence. "
             "To create a shift pass is_shift=true, shift_person_id and shift_label (בוקר/ערב/לילה or free text). "
             "Household shifts must be enabled."
         ),
@@ -498,6 +503,7 @@ _TOOLS = (
                 "title": {"type": "string", "minLength": 1, "maxLength": 200},
                 "date": _DATE_TEXT,
                 "time": {"type": ["string", "null"], "description": "HH:MM, או null ליום שלם"},
+                "end_time": {"type": ["string", "null"], "description": "HH:MM אופציונלי. דורש time. באותו יום לא לפני time"},
                 "end_date": {**_DATE_TEXT, "type": ["string", "null"], "description": "יום אחרון לאירוע של כמה ימים"},
                 "description": {"type": ["string", "null"], "maxLength": 2000},
                 "color": _NULLABLE_TEXT,
@@ -516,6 +522,7 @@ _TOOLS = (
         title="עדכון אירוע",
         description=(
             "Update an event with a partial patch: only the fields you pass change. "
+            "end_time may be set or cleared (null). It requires a start time; same-day end before start is rejected. "
             "Recurring events require scope: 'occurrence' (with occurrence_date) or 'all'. "
             "Changing date or recurrence with scope 'all' discards per-occurrence edits (exceptions_cleared). "
             "Shifts can be created, updated or converted with is_shift / shift_person_id / shift_label. "
@@ -529,6 +536,7 @@ _TOOLS = (
                 "title": {"type": "string", "minLength": 1, "maxLength": 200},
                 "date": _DATE_TEXT,
                 "time": {"type": ["string", "null"]},
+                "end_time": {"type": ["string", "null"]},
                 "end_date": {**_DATE_TEXT, "type": ["string", "null"]},
                 "description": {"type": ["string", "null"], "maxLength": 2000},
                 "color": _NULLABLE_TEXT,
