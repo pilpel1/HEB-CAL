@@ -32,6 +32,7 @@ def test_one_off_create_matches_rest_and_partial_update(app, client):
         "title": "רופא",
         "date": "02.12.2026",
         "time": "09:30",
+        "end_time": "10:15",
         "description": "בדיקה",
         "end_date": "2026-12-03",
     })
@@ -40,13 +41,16 @@ def test_one_off_create_matches_rest_and_partial_update(app, client):
     assert stored["title"] == "רופא"
     assert stored["gregorian_date"] == DAY
     assert stored["time"] == "09:30"
+    assert stored["end_time"] == "10:15"
     assert stored["end_date"] == "2026-12-03"
+    assert created["event"]["end_time"] == "10:15"
     assert stored["hebrew_date"]
     assert created["event"]["hebrew_date"] == stored["hebrew_date"]
 
     updated = ok(client, token, "update_event", {"event_id": event_id, "title": "רופא שיניים"})
     assert updated["event"]["title"] == "רופא שיניים"
     assert updated["event"]["time"] == "09:30"
+    assert updated["event"]["end_time"] == "10:15"
     assert updated["event"]["gregorian_date"] == DAY
     assert updated["exceptions_cleared"] is False
     assert _rest(client, event_id)["description"] == "בדיקה"
@@ -56,6 +60,7 @@ def test_one_off_create_matches_rest_and_partial_update(app, client):
     assert [row["title"] for row in listed["events"]] == ["רופא שיניים"]
     assert [row["gregorian_date"][:10] for row in rest_rows] == [row["gregorian_date"] for row in listed["events"]]
     assert listed["events"][0]["end_date"] == rest_rows[0]["end_date"][:10]
+    assert listed["events"][0]["end_time"] == rest_rows[0]["end_time"] == "10:15"
 
 
 def test_hebrew_date_input_and_convert_date(app, client):
@@ -185,28 +190,80 @@ def test_google_event_is_read_only(app, client):
     assert db_snapshot(app) == before
 
 
-def test_shift_is_read_only(app, client):
+def test_shift_create_update_delete_via_event_tools(app, client):
     token = _setup(app)
+    reader = make_key(app, add_user(app, name="נועה"), "read", label="קריאה")
     person = client.post("/api/reminder-people", json={"name": "אביחי", "works_shifts": True}).get_json()
     assert client.put("/api/shifts/settings", json={"enabled": True}).status_code == 200
-    created = client.post("/api/events", json={
-        "title": "משמרת",
-        "gregorian_date": "2026-12-06",
-        "hebrew_date": "יום",
+
+    missing = tool_error(client, token, "create_event", {
+        "title": "ערב",
+        "date": "2026-12-06",
+        "is_shift": True,
+        "shift_label": "ערב",
+    })
+    assert missing["code"] == "invalid_input"
+    assert "בחרו" in missing["message"]
+
+    off = client.put("/api/shifts/settings", json={"enabled": False})
+    assert off.status_code == 200
+    disabled = tool_error(client, token, "create_event", {
+        "title": "ערב",
+        "date": "2026-12-06",
         "is_shift": True,
         "shift_person_id": person["id"],
-        "shift_label": "בוקר",
+        "shift_label": "ערב",
     })
-    assert created.status_code == 200, created.get_json()
-    event_id = created.get_json()["id"]
-    shown = ok(client, token, "list_events", {"from": "2026-12-06", "to": "2026-12-06"})["events"][0]
-    assert shown["is_shift"] is True
-    assert shown["read_only_reason"] == "shift"
-    before = db_snapshot(app)
-    error = tool_error(client, token, "delete_event", {"event_id": event_id})
-    assert error["code"] == "read_only"
-    assert "משמרות" in error["message"]
-    assert db_snapshot(app) == before
+    assert disabled["code"] == "invalid_input"
+    assert "כבוי" in disabled["message"]
+    assert client.put("/api/shifts/settings", json={"enabled": True}).status_code == 200
+
+    forbidden = tool_error(client, reader, "create_event", {
+        "title": "ערב",
+        "date": "2026-12-06",
+        "is_shift": True,
+        "shift_person_id": person["id"],
+        "shift_label": "ערב",
+    })
+    assert forbidden["code"] == "forbidden"
+
+    created = ok(client, token, "create_event", {
+        "title": "ערב",
+        "date": "2026-12-06",
+        "is_shift": True,
+        "shift_person_id": person["id"],
+        "shift_label": "ערב",
+    })
+    event = created["event"]
+    event_id = event["id"]
+    assert event["is_shift"] is True
+    assert event["shift_label"] == "ערב"
+    assert event["shift_person_id"] == person["id"]
+    assert event["read_only"] is False
+    assert event["read_only_reason"] is None
+    assert event["time"] is None
+    stored = _rest(client, event_id)
+    assert stored["is_shift"] == 1
+    assert stored["shift_label"] == "ערב"
+    assert stored["shift_person_id"] == person["id"]
+
+    listed = ok(client, token, "list_events", {"from": "2026-12-06", "to": "2026-12-06"})["events"][0]
+    assert listed["is_shift"] is True
+    assert listed["read_only"] is False
+
+    renamed = ok(client, token, "update_event", {
+        "event_id": event_id,
+        "shift_label": "לילה",
+    })
+    assert renamed["event"]["is_shift"] is True
+    assert renamed["event"]["shift_label"] == "לילה"
+    assert renamed["event"]["shift_person_id"] == person["id"]
+    assert _rest(client, event_id)["shift_label"] == "לילה"
+
+    assert tool_error(client, reader, "delete_event", {"event_id": event_id})["code"] == "forbidden"
+    deleted = ok(client, token, "delete_event", {"event_id": event_id})
+    assert deleted["deleted"] is True
+    assert tool_error(client, token, "get_event", {"event_id": event_id})["code"] == "not_found"
 
 
 def test_delete_series_and_validation_errors(app, client):

@@ -630,8 +630,8 @@ async function openQuickEndDate() {
     endInput?.focus();
 }
 
-function setQuickTime(timeValue) {
-    const input = document.getElementById('quick_time');
+function setQuickTimeInput(inputId, timeValue) {
+    const input = document.getElementById(inputId);
     if (!input) {
         return;
     }
@@ -647,14 +647,43 @@ function setQuickTime(timeValue) {
     input.value = `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
-function getQuickTimeValue() {
-    const input = document.getElementById('quick_time');
+function getQuickTimeInput(inputId) {
+    const input = document.getElementById(inputId);
     const value = (input?.value || '').trim();
     const match = value.match(/^(\d{2}):(\d{2})/);
     if (!match) {
         return null;
     }
     return `${match[1]}:${match[2]}`;
+}
+
+function setQuickTime(timeValue) {
+    setQuickTimeInput('quick_time', timeValue);
+}
+
+function getQuickTimeValue() {
+    return getQuickTimeInput('quick_time');
+}
+
+function setQuickEndTime(timeValue) {
+    setQuickTimeInput('quick_end_time', timeValue);
+}
+
+function getQuickEndTimeValue() {
+    return getQuickTimeInput('quick_end_time');
+}
+
+function assertEndTimeValid(eventData) {
+    if (eventData.end_time && !eventData.time) {
+        alert('שעת סיום בלי שעת התחלה');
+        return false;
+    }
+    const sameDay = !eventData.end_date || eventData.end_date === eventData.gregorian_date;
+    if (eventData.end_time && eventData.time && sameDay && eventData.end_time < eventData.time) {
+        alert('שעת הסיום לא יכולה להיות לפני שעת ההתחלה');
+        return false;
+    }
+    return true;
 }
 
 function extractTimeFromTitle(titleValue) {
@@ -744,6 +773,7 @@ function fillQuickEventForm(eventData = {}, options = {}) {
     document.getElementById('quick_gregorian_date').value = eventData.gregorian_date || '';
     document.getElementById('quick_hebrew_date').value = eventData.hebrew_date || '';
     setQuickTime(eventData.time || '');
+    setQuickEndTime(eventData.end_time || '');
     document.getElementById('quick_end_date').value = eventData.end_date || '';
     setEndDateOpen(Boolean(eventData.end_date));
     document.getElementById('quick_description').value = eventData.description || '';
@@ -796,6 +826,7 @@ function getQuickEventFormData() {
         gregorian_date: document.getElementById('quick_gregorian_date').value,
         hebrew_date: document.getElementById('quick_hebrew_date').value,
         time: getQuickTimeValue(),
+        end_time: getQuickEndTimeValue(),
         description: document.getElementById('quick_description').value || '',
         end_date: document.getElementById('quick_end_date').value || null,
         color: document.getElementById('quick_color').value || null,
@@ -1133,6 +1164,9 @@ function initQuickEventModal() {
         const endInput = document.getElementById('quick_end_date');
         syncEndDateMin(eventData.gregorian_date, endInput);
         if (!assertEndDateNotBeforeStart(eventData.gregorian_date, eventData.end_date, endInput)) {
+            return;
+        }
+        if (!assertEndTimeValid(eventData)) {
             return;
         }
 

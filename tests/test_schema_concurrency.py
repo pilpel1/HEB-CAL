@@ -103,6 +103,7 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
             "is_shift",
             "shift_person_id",
             "shift_label",
+            "end_time",
         } <= cols
         people = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
         assert {
@@ -116,6 +117,8 @@ def _assert_migrated(path: Path, *, legacy: bool) -> None:
             "daily_digest_enabled",
             "daily_digest_last_sent",
         } <= people
+        exceptions = {row[1] for row in conn.execute("PRAGMA table_info(event_exceptions)")}
+        assert "end_time" in exceptions
         reminders = {row[1] for row in conn.execute("PRAGMA table_info(reminders)")}
         assert {"event_id", "offset_minutes", "recipient_ids", "sent_at"} <= reminders
         sends = {row[1] for row in conn.execute("PRAGMA table_info(reminder_sends)")}

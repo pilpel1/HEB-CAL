@@ -817,13 +817,16 @@ function ensureAgendaDayVisible(dateStr) {
     stream.scrollTop += delta;
 }
 
-/** תיאור בשורה אחת. ריק / רווחים בלבד — בלי תוספת, השורה נשארת כמו שהייתה. */
+/** תיאור מלא מתחת לכותרת. ריק / רווחים בלבד - בלי תוספת. שורות וגלישה נשמרים. */
 function agendaDescriptionHtml(event) {
-    const text = String((event && event.description) || '').replace(/\s+/g, ' ').trim();
+    const text = String((event && event.description) || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .trim();
     if (!text) {
         return '';
     }
-    return `<span class="agenda-desc"> • ${escapeHtml(text)}</span>`;
+    return ` <span class="agenda-desc">${escapeHtml(text)}</span>`;
 }
 
 function renderDayAgenda(dateStr) {
@@ -876,8 +879,11 @@ function renderDayAgenda(dateStr) {
         .filter((ev) => isDateInRange(dateStr, ev.gregorian_date, ev.end_date))
         .sort(compareEventsByTime);
     for (const ev of events) {
-        const time = ev.time
-            ? `<span class="agenda-time">${escapeHtml(ev.time)}</span>`
+        const clock = typeof formatEventTimeRange === 'function'
+            ? formatEventTimeRange(ev)
+            : (ev.time || '');
+        const time = clock
+            ? `<span class="agenda-time">${escapeHtml(clock)}</span>`
             : '';
         const range = ev.end_date && ev.end_date > ev.gregorian_date
             ? `<span class="agenda-range">עד ${escapeHtml(formatShortGregorian(ev.end_date))}</span>`

@@ -33,6 +33,12 @@ def test_desktop_agenda_is_side_column_only_from_992(client):
     phone = css.split("@media (max-width: 480px)", 1)[1].split("@media", 1)[0]
     assert "grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 0.25fr)" in phone
     assert "clamp(280px, 25%, 380px)" not in phone
+    container = phone.split("body:has(.infinite-calendar) .container", 1)[1].split("}", 1)[0]
+    assert "padding-inline: 0.15rem" in container
+    assert "--bs-gutter-x: 0.3rem" in container
+    cal = phone.split(".calendar-container.infinite-calendar", 1)[1].split("}", 1)[0]
+    assert "padding: 0.35rem 0.1rem 0.2rem" in cal
+    assert "padding: 0.35rem 0.3rem 0.2rem" not in cal
     # v1.0.17: במצב compact בלבד תאים מוגבלים בגובה
     assert 'data-cal-density="compact"' in phone or 'data-cal-density="compact"' in css
     assert "touch-action: pan-x pan-y pinch-zoom" in css

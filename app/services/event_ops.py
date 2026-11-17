@@ -102,6 +102,7 @@ def manual_shift(data: dict):
     # הכותרת נשארת מהטופס. סוג המשמרת נשמר לחוד ב-shift_label.
     adjusted["color"] = resolved["color"]
     adjusted["time"] = None
+    adjusted["end_time"] = None
     adjusted["end_date"] = None
     adjusted["recurrence_freq"] = None
     return (1, resolved["shift_person_id"], resolved["shift_label"]), adjusted
@@ -193,6 +194,7 @@ def create(data: dict) -> int:
         color=data.get('color'),
         recurrence=rule,
         shift=None if shift == "keep" else shift,
+        end_time=data.get('end_time') or None,
     )
     if not event_id:
         raise EventOpError("Failed to create event")
@@ -245,6 +247,7 @@ def update(event_id: int, data: dict) -> dict:
                 "gregorian_date": data["gregorian_date"],
                 "hebrew_date": data["hebrew_date"],
                 "time": data.get("time") or None,
+                "end_time": data.get("end_time") or None,
                 "description": data.get("description", ""),
                 "end_date": end_date,
                 "color": data.get("color"),
@@ -283,6 +286,7 @@ def update(event_id: int, data: dict) -> dict:
         recurrence=rule,
         clear_exceptions=clear_exceptions,
         shift=shift,
+        end_time=data.get('end_time') or None,
     )
     if not success:
         raise EventOpError("Failed to update event")

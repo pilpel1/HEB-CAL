@@ -95,19 +95,21 @@ const cases = [
   { time: '17:30', title: 'ערב עם נעמי' },
   { time: '00:05', title: 'לילה' },
   { time: '9:15', title: 'בוקר' },
+  { time: '07:30', end_time: '09:30', title: 'ישבצ' },
   { title: 'כל היום' },
 ];
 const out = cases.map((ev) => ({
   html: buildEventItemHtml(ev),
   label: eventTimeLabel(ev),
   clock: formatChipTime(ev.time || ''),
+  range: formatEventTimeRange(ev),
 }));
 process.stdout.write(JSON.stringify(out));
 """
     )
     result = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
     out = json.loads(result.stdout)
-    morning, evening, night, single, all_day = out
+    morning, evening, night, single, ranged, all_day = out
     assert morning["clock"] == "8:00"
     assert evening["clock"] == "17:30"
     assert night["clock"] == "0:05"
@@ -119,6 +121,9 @@ process.stdout.write(JSON.stringify(out));
     assert 'class="event-sep"> </span>' in morning["html"]
     assert morning["label"] == "8:00 לסדר ארון וחדר ילדים"
     assert evening["label"] == "17:30 ערב עם נעמי"
+    assert ranged["range"] == "07:30-09:30"
+    assert 'class="event-time">07:30-09:30</span>' in ranged["html"]
+    assert ranged["label"] == "07:30-09:30 ישבצ"
     assert "event-timed" not in all_day["html"]
     assert "event-time" not in all_day["html"]
     assert all_day["label"] == "כל היום"
@@ -152,7 +157,7 @@ def test_agenda_row_reuses_event_chip_color_helpers():
     assert "eventChipFill(ev, 1)" not in agenda
 
 
-def test_agenda_description_is_inline_after_title():
+def test_agenda_description_shows_full_multiline_note():
     agenda = DAY_AGENDA.read_text(encoding="utf-8")
     render = EVENT_RENDER.read_text(encoding="utf-8")
     css = CALENDAR_CSS.read_text(encoding="utf-8")
@@ -176,13 +181,17 @@ process.stdout.write(JSON.stringify(out));
     empty, spaces, short, multiline = json.loads(result.stdout)
     assert empty == ""
     assert spaces == ""
-    assert short == '<span class="agenda-desc"> • פגישה קצרה</span>'
-    assert multiline == '<span class="agenda-desc"> • שורה שנייה &lt;b&gt;x&lt;/b&gt;</span>'
+    assert short == ' <span class="agenda-desc">פגישה קצרה</span>'
+    assert multiline == ' <span class="agenda-desc">שורה\nשנייה  &lt;b&gt;x&lt;/b&gt;</span>'
+    assert "…" not in short and "..." not in short
     assert "agenda-text has-desc" in agenda
     assert "agendaDescriptionHtml(ev)" in agenda
-    assert ".agenda-text.has-desc" in css
-    assert "text-overflow: ellipsis" in css
-    assert ".agenda-desc" in css
+    desc_block = css.split(".agenda-text.has-desc", 1)[1].split(".agenda-desc", 1)[0]
+    assert "text-overflow: ellipsis" not in desc_block
+    assert "white-space: nowrap" not in desc_block
+    agenda_desc = css.split(".agenda-desc {", 1)[1].split("}", 1)[0]
+    assert "pre-wrap" in agenda_desc
+    assert "overflow-wrap: anywhere" in agenda_desc
     assert "font-weight: 300" in css
 
 

@@ -872,7 +872,7 @@ def test_calendar_and_settings_markup(client):
     assert 'data-density-switch' in settings
     assert "מצב כהה" in settings
     assert "תצוגה צפופה" in settings
-    assert "גיבוי וייבוא" in settings
+    assert "גיבוי ושחזור" in settings
     assert 'id="exportEventsBtn"' in settings
     assert 'id="importEventsBtn"' in settings
     assert "צבעים" in settings

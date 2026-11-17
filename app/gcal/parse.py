@@ -96,6 +96,7 @@ def _occurrence(component, uid: str, series: set[str]) -> dict | None:
             last_day = start_day
         gregorian = start_day
         time_value = None
+        end_time = None
         end_date = last_day.isoformat() if last_day > start_day else None
     else:
         start = _to_jerusalem(start_raw)
@@ -103,9 +104,15 @@ def _occurrence(component, uid: str, series: set[str]) -> dict | None:
         gregorian = start.date()
         time_value = start.strftime("%H:%M")
         end_day = end.date()
+        end_clock = end.strftime("%H:%M")
         if end_day > gregorian and end.timetz().replace(tzinfo=None) == time.min:
             end_day -= timedelta(days=1)
+            end_clock = None
         end_date = end_day.isoformat() if end_day > gregorian else None
+        if end_clock and (end_date or end_clock > time_value):
+            end_time = end_clock
+        else:
+            end_time = None
 
     rid = ""
     if uid in series:
@@ -118,6 +125,7 @@ def _occurrence(component, uid: str, series: set[str]) -> dict | None:
         "gregorian_date": gregorian.isoformat(),
         "hebrew_date": gregorian_to_hebrew(gregorian)["hebrew_date"],
         "time": time_value,
+        "end_time": end_time,
         "description": _description(component),
         "end_date": end_date,
         "gcal_uid": uid,

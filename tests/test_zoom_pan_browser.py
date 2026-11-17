@@ -62,7 +62,7 @@ def _install_prevent_default_spy(page):
 
 def test_zoomed_pan_and_agenda_description(live_server, client):
     today = dt.date.today().isoformat()
-    long_desc = "פגישה עם הרופא " + ("ואז עוד פרטים " * 12) + "<img src=x>"
+    long_desc = "פגישה עם הרופא\nשורה שנייה " + ("ואז עוד פרטים " * 12) + "<img src=x>"
     created = client.post("/api/events", json={
         "title": "בוקר",
         "gregorian_date": today,
@@ -109,9 +109,11 @@ def test_zoomed_pan_and_agenda_description(live_server, client):
                 weight: cs.fontWeight,
                 color: cs.color,
                 nowrap: textCs.whiteSpace,
+                descWhite: cs.whiteSpace,
                 ellipsis: textCs.textOverflow,
                 overflowX: textCs.overflowX,
                 truncated: text.scrollWidth > text.clientWidth + 1,
+                descTruncated: descEl.scrollWidth > descEl.clientWidth + 1,
                 highlightW: highlight.getBoundingClientRect().width,
                 listW: list.getBoundingClientRect().width,
                 plainClass: plain && plain.className,
@@ -119,16 +121,19 @@ def test_zoomed_pan_and_agenda_description(live_server, client):
             };
         }""")
         assert desc["text"].startswith("בוקר")
-        assert " • " in desc["text"]
         assert "פגישה עם הרופא" in desc["text"]
+        assert "שורה שנייה" in desc["text"]
+        assert "ואז עוד פרטים" in desc["text"]
+        assert "…" not in desc["text"] and "..." not in desc["text"]
         assert desc["img"] is None
         assert "&lt;img" in desc["html"] or "<img" not in desc["html"]
         assert desc["html"].find("<img") == -1
         assert desc["weight"] in {"300", "300.0"} or str(desc["weight"]).startswith("300")
-        assert desc["nowrap"] == "nowrap"
-        assert desc["ellipsis"] == "ellipsis"
-        assert desc["overflowX"] == "hidden"
-        assert desc["truncated"] is True
+        assert desc["nowrap"] != "nowrap"
+        assert desc["descWhite"] == "pre-wrap"
+        assert desc["ellipsis"] != "ellipsis"
+        assert desc["truncated"] is False
+        assert desc["descTruncated"] is False
         # ההדגשה תופסת כמעט את כל רוחב הפאנל (נשאר מקום לעיגול)
         assert desc["highlightW"] > desc["listW"] * 0.75
         assert desc["plainClass"] == "agenda-text"

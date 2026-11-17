@@ -17,16 +17,18 @@ async function exportEvents() {
         link.remove();
         window.URL.revokeObjectURL(url);
         if (typeof showMessage === 'function') {
-            showMessage('הקובץ ירד (heb-cal-events.json)');
+            showMessage('הקובץ נשמר (heb-cal-events.json)');
         }
     } catch (error) {
-        console.error('שגיאה ביצוא האירועים:', error);
-        alert('לא הצלחנו לייצא');
+        console.error('שגיאה בשמירת הגיבוי:', error);
+        alert('לא הצלחנו לשמור');
     }
 }
 
 async function importEventsFromFile(file, mode) {
-    const question = mode === 'replace' ? 'לייבא ולהחליף את כל הנתונים?' : 'לייבא ולמזג עם הקיימים?';
+    const question = mode === 'replace'
+        ? 'לשחזר מהקובץ ולמחוק את כל מה שיש ביומן עכשיו? אי אפשר לבטל.'
+        : 'להוסיף את האירועים מהקובץ בלי למחוק מה שיש?';
     if (!confirm(question)) {
         return;
     }
@@ -43,7 +45,7 @@ async function importEventsFromFile(file, mode) {
 
         const result = await response.json();
         if (!response.ok || !result.success) {
-            throw new Error(result.error || 'לא הצלחנו לייבא');
+            throw new Error(result.error || 'לא הצלחנו לשחזר');
         }
 
         if (typeof refreshEventsViews === 'function') {
@@ -53,16 +55,16 @@ async function importEventsFromFile(file, mode) {
         const inserted = result.inserted_events || 0;
         const updated = result.updated_events || 0;
         const colors = result.imported_colors || 0;
-        const modeLabel = mode === 'replace' ? 'החלפה' : 'מיזוג';
+        const modeLabel = mode === 'replace' ? 'החלפה' : 'הוספה';
         alert(
-            `הייבוא הושלם (${modeLabel})\n` +
+            `השחזור הושלם (${modeLabel})\n` +
             `נוספו: ${inserted}\n` +
             `עודכנו: ${updated}\n` +
             `צבעים חדשים: ${colors}`
         );
     } catch (error) {
-        console.error('שגיאה ביבוא האירועים:', error);
-        alert(error.message || 'לא הצלחנו לייבא');
+        console.error('שגיאה בשחזור האירועים:', error);
+        alert(error.message || 'לא הצלחנו לשחזר');
     }
 }
 

@@ -21,8 +21,12 @@
                                 <input type="text" class="form-control" id="quick_title" required autofocus>
                             </div>
                             <div class="quick-field quick-field-time">
-                                <label for="quick_time" class="form-label">שעה</label>
-                                <input type="time" class="form-control" id="quick_time" dir="ltr" step="60">
+                                <label for="quick_time" class="form-label">משעה</label>
+                                <input type="time" class="form-control" id="quick_time" dir="ltr" step="60" aria-label="שעת התחלה">
+                            </div>
+                            <div class="quick-field quick-field-time quick-field-end-time">
+                                <label for="quick_end_time" class="form-label">עד שעה</label>
+                                <input type="time" class="form-control" id="quick_end_time" dir="ltr" step="60" aria-label="שעת סיום">
                             </div>
                         </div>
                         <div class="quick-color-picker mt-2" role="radiogroup" aria-label="צבע האירוע">

@@ -269,7 +269,10 @@ def test_phone_agenda_stays_under_the_grid(live_server, client):
             info = page.evaluate("""() => {
                 const stream = document.querySelector('.calendar-stream').getBoundingClientRect();
                 const agenda = document.querySelector('.day-agenda').getBoundingClientRect();
+                const cal = document.querySelector('.infinite-calendar').getBoundingClientRect();
+                const container = document.querySelector('.container');
                 const td = document.querySelector('td[data-date]');
+                const cs = getComputedStyle(container);
                 return {
                     agendaBelow: agenda.top >= stream.bottom - 40,
                     overlapX: agenda.left < stream.right && agenda.right > stream.left,
@@ -280,6 +283,10 @@ def test_phone_agenda_stays_under_the_grid(live_server, client):
                     addLabel: getComputedStyle(document.querySelector('.day-agenda-add-label')).display,
                     addIcon: getComputedStyle(document.querySelector('.day-agenda-add-icon')).display,
                     labelText: document.querySelector('.day-agenda-add-label').textContent,
+                    calLeft: cal.left,
+                    calRight: cal.right,
+                    vw: window.innerWidth,
+                    padInline: parseFloat(cs.paddingInlineStart) + parseFloat(cs.paddingInlineEnd),
                 };
             }""")
             assert info["agendaBelow"] is True
@@ -291,6 +298,9 @@ def test_phone_agenda_stays_under_the_grid(live_server, client):
             assert info["addLabel"] != "none"
             assert info["addIcon"] == "none"
             assert info["labelText"] == "הוסף"
+            assert info["padInline"] <= 8
+            assert info["calLeft"] <= 8
+            assert info["vw"] - info["calRight"] <= 8
 
             page.evaluate("""() => {
                 document.querySelector('td.current-day .event-item')

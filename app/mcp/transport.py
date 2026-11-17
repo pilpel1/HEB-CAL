@@ -41,8 +41,10 @@ META_SERVER_INFO = "io.modelcontextprotocol/serverInfo"
 INSTRUCTIONS = (
     "HEB-CAL is a shared Hebrew/Gregorian household calendar. Dates accept YYYY-MM-DD or Hebrew text. "
     "Use list_events for a date range, then pass id and occurrence_date of recurring events to "
-    "update_event / delete_event with scope 'occurrence' or 'all'. Events with read_only=true "
-    "(Google-imported or shifts) cannot be changed here."
+    "update_event / delete_event with scope 'occurrence' or 'all'. Optional end_time (HH:MM) "
+    "requires time; same-day end before start is rejected. Shifts are writable: pass "
+    "is_shift, shift_person_id and shift_label on create_event / update_event. Events with "
+    "read_only=true (Google-imported) cannot be changed here."
 )
 
 

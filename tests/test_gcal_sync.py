@@ -140,14 +140,20 @@ def test_parse_all_day_timed_and_dst():
     assert rows["all-span"]["hebrew_date"]
     # חורף UTC+2, קיץ UTC+3. 10:00 מקומי נשאר 10:00 גם במעבר.
     assert (rows["utc-winter"]["gregorian_date"], rows["utc-winter"]["time"]) == ("2026-01-15", "10:00")
+    assert rows["utc-winter"]["end_time"] == "11:00"
     assert (rows["utc-summer"]["gregorian_date"], rows["utc-summer"]["time"]) == ("2026-07-01", "10:00")
+    assert rows["utc-summer"]["end_time"] == "11:00"
     assert rows["local-spring"]["time"] == "10:00"
+    assert rows["local-spring"]["end_time"] == "11:00"
     assert rows["local-spring"]["gregorian_date"] == "2026-03-27"
     assert rows["local-fall"]["time"] == "10:00"
+    assert rows["local-fall"]["end_time"] == "11:00"
     assert rows["local-fall"]["gregorian_date"] == "2026-10-25"
     # שעה צפה נחשבת ירושלים, וחצי שעה אחרי חצות נשפכת ליום הבא.
     assert (rows["float-one"]["gregorian_date"], rows["float-one"]["time"]) == ("2026-06-01", "21:30")
     assert rows["float-one"]["end_date"] == "2026-06-02"
+    assert rows["float-one"]["end_time"] == "00:30"
+    assert rows["all-one"]["end_time"] is None
 
 
 def test_parse_recurrence_exdate_and_cancelled():
@@ -175,6 +181,7 @@ def test_parse_recurrence_exdate_and_cancelled():
     assert len({row["gcal_recurrence_id"] for row in rows}) == 2
     assert all(row["gcal_uid"] == "weekly-1" for row in rows)
     assert all(row["time"] == "09:00" for row in rows)
+    assert all(row["end_time"] == "10:00" for row in rows)
 
 
 def test_parse_moved_instance_keeps_original_recurrence_id():

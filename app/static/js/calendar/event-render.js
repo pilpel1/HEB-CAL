@@ -196,12 +196,24 @@ function formatChipTime(time) {
     return `${Number(match[1])}:${match[2]}`;
 }
 
+function formatEventTimeRange(event, options = {}) {
+    const start = event && event.time;
+    if (!start) {
+        return '';
+    }
+    if (event.end_time) {
+        return `${start}-${event.end_time}`;
+    }
+    return options.compact ? formatChipTime(start) : String(start);
+}
+
 function eventTimeLabel(event) {
     const title = String(event.title ?? '');
-    if (!event.time) {
+    const clock = formatEventTimeRange(event, { compact: !event.end_time });
+    if (!clock) {
         return title;
     }
-    return `${formatChipTime(event.time)} ${title}`.trim();
+    return `${clock} ${title}`.trim();
 }
 
 function buildEventItemHtml(event, extraClasses = []) {
@@ -216,8 +228,9 @@ function buildEventItemHtml(event, extraClasses = []) {
 
     const style = fill ? `background-color: ${fill}` : '';
     const label = escapeHtml(eventTimeLabel(event));
-    const timeHtml = event.time
-        ? `<span class="event-time">${escapeHtml(formatChipTime(event.time))}</span><span class="event-sep"> </span>`
+    const clock = formatEventTimeRange(event, { compact: !event.end_time });
+    const timeHtml = clock
+        ? `<span class="event-time">${escapeHtml(clock)}</span><span class="event-sep"> </span>`
         : '';
     const title = `${timeHtml}${googleBadgeHtml(event)}${repeatIconHtml(event)}${escapeHtml(event.title ?? '')}`;
     const occurrence = escapeHtml(event.occurrence_date || event.gregorian_date || '');

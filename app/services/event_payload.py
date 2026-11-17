@@ -39,6 +39,19 @@ def clean_event_time(value):
     return f"{hour:02d}:{minute:02d}"
 
 
+def format_event_time_range(event: dict | None) -> str | None:
+    """HH:MM או HH:MM-HH:MM. None אם אין שעת התחלה."""
+    if not event:
+        return None
+    start = event.get("time")
+    if not start:
+        return None
+    end = event.get("end_time")
+    if end:
+        return f"{start}-{end}"
+    return start
+
+
 def clean_event_write(data: dict) -> dict:
     """כותרת, תאריכים, שעה ותיאור מוכנים לכתיבה."""
     if not isinstance(data, dict):
@@ -69,18 +82,25 @@ def clean_event_write(data: dict) -> dict:
         raise EventPayloadError("חסר תאריך עברי")
 
     time_value = clean_event_time(data.get("time"))
+    end_time = clean_event_time(data.get("end_time"))
+    if end_time and not time_value:
+        raise EventPayloadError("שעת סיום בלי שעת התחלה")
     end_raw = data.get("end_date") or None
     end_date = None
     if end_raw:
         end_date = parse_real_date(end_raw)
         if end_date < gregorian:
             raise EventPayloadError("תאריך הסיום לא יכול להיות לפני ההתחלה")
+    same_day = end_date is None or end_date == gregorian
+    if end_time and time_value and same_day and end_time < time_value:
+        raise EventPayloadError("שעת הסיום לא יכולה להיות לפני שעת ההתחלה")
 
     return {
         "title": title,
         "gregorian_date": gregorian.isoformat(),
         "hebrew_date": hebrew,
         "time": time_value,
+        "end_time": end_time,
         "description": description,
         "end_date": end_date.isoformat() if end_date else None,
         "color": data.get("color"),

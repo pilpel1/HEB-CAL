@@ -16,6 +16,7 @@ def fingerprint(event: dict) -> str:
         event.get("title") or "",
         (event.get("gregorian_date") or "")[:10],
         event.get("time") or "",
+        event.get("end_time") or "",
         event.get("description") or "",
         end[:10] if end else "",
     ]
@@ -32,6 +33,7 @@ def snapshot(event: dict) -> dict:
         "title": event.get("title") or "",
         "gregorian_date": (event.get("gregorian_date") or "")[:10],
         "time": event.get("time"),
+        "end_time": event.get("end_time"),
         "description": event.get("description") or "",
         "end_date": end[:10] if end else None,
         "is_shift": 1 if event.get("is_shift") else 0,
@@ -66,6 +68,7 @@ def _insert(cleaned: dict, shift=None) -> dict:
         end_date=cleaned["end_date"],
         color=cleaned["color"],
         shift=shift,
+        end_time=cleaned.get("end_time"),
     )
     if not event_id:
         raise InputError("לא הצלחתי לשמור. נסו שוב.")
@@ -83,6 +86,7 @@ def create_user_event(draft: dict) -> dict:
             "gregorian_date": day.isoformat(),
             "hebrew_date": hebrew_display(day),
             "time": draft.get("time"),
+            "end_time": draft.get("end_time"),
             "description": draft.get("description") or "",
             "end_date": _blank_end(day.isoformat(), draft.get("end_date")),
             "color": None,
@@ -127,6 +131,7 @@ def create_shift(person_id: int, label: str, gregorian_date: str) -> dict:
             "gregorian_date": day.isoformat(),
             "hebrew_date": hebrew_display(day),
             "time": None,
+            "end_time": None,
             "description": "",
             "end_date": None,
             "color": resolved.get("color"),
@@ -186,6 +191,7 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
     if current.get("is_shift"):
         title = (draft.get("title") or "").strip() or (current.get("title") or "")
         time_value = None
+        end_time = None
         if "description" in draft:
             description = draft.get("description") or ""
         else:
@@ -195,6 +201,10 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
     else:
         title = draft.get("title") or ""
         time_value = draft.get("time")
+        if "end_time" in draft:
+            end_time = draft.get("end_time")
+        else:
+            end_time = current.get("end_time")
         description = draft.get("description") or ""
         end = _blank_end(day.isoformat(), draft.get("end_date"))
     cleaned = clean_event_write(
@@ -203,6 +213,7 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
             "gregorian_date": day.isoformat(),
             "hebrew_date": hebrew_display(day),
             "time": time_value,
+            "end_time": end_time,
             "description": description,
             "end_date": end,
             "color": color,
@@ -219,6 +230,7 @@ def update_user_event(draft: dict) -> tuple[str, dict | None]:
         color=color,
         recurrence="keep",
         shift=shift_arg,
+        end_time=cleaned.get("end_time"),
     )
     saved = get_event(event_id)
     if saved is None:

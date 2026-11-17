@@ -116,6 +116,7 @@ Manual checks:
 | `scripts/migrate_shifts.py` | Idempotent additive migration for shift columns, people color/rules, and the household toggle (also applied by `init_db`) |
 | `scripts/migrate_gcal.py` | Idempotent additive migration for `gcal_sources` and the Google identity columns on `events` (also applied by `init_db`). Does not delete rows |
 | `scripts/migrate_users.py` | Idempotent v8 people migration: backup `users_backup_v8`, rename `reminder_people` → `users`, add `google_email` (also applied by `init_db`) |
+| `scripts/migrate_end_time.py` | Idempotent additive `end_time` (HH:MM, nullable) on `events` and `event_exceptions` (schema v9, also applied by `init_db`) |
 | `scripts/verify_infinite_scroll.py`, `scripts/smoke_ui.py` | Playwright checks. Not collected by pytest. See Test |
 | `test_calendar.py` | Manual pyluach script at the repo root. Not part of pytest |
 | `init_db.py` | Optional DB init helper |

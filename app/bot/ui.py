@@ -221,7 +221,9 @@ def _row_button(event: dict, people: dict, *, with_date: bool) -> str:
     if with_date and day is not None:
         prefix = f"{day.day:02d}.{day.month:02d} "
     elif event.get("time"):
-        prefix = f"{event['time']} "
+        from app.services.event_payload import format_event_time_range
+
+        prefix = f"{format_event_time_range(event)} "
     return clip(f"{prefix}{title}")
 
 
@@ -406,7 +408,9 @@ def _event_line(
     if with_date and event.get("gregorian_date"):
         bits.append(esc(_safe_greg(event["gregorian_date"])))
     if event.get("time"):
-        bits.append(esc(event["time"]))
+        from app.services.event_payload import format_event_time_range
+
+        bits.append(esc(format_event_time_range(event)))
     else:
         bits.append("כל היום")
     if event.get("is_shift"):
@@ -559,7 +563,9 @@ def event_screen(event: dict, people: dict, focus: date | None = None) -> tuple[
     if event.get("is_shift"):
         lines.append("כל היום")
     elif event.get("time"):
-        lines.append(f"שעה {code(event['time'])}")
+        from app.services.event_payload import format_event_time_range
+
+        lines.append(f"שעה {code(format_event_time_range(event))}")
     else:
         lines.append("כל היום")
     end = event.get("end_date")
