@@ -87,7 +87,6 @@ def format_digest_event(event: dict, people: dict) -> str:
     parts: list[str] = []
     if event.get("is_shift"):
         parts.append(esc(visible_name(event)))
-        parts.append("משמרת")
         parts.append(esc(_person_name(people, event.get("shift_person_id"))))
     else:
         if event.get("time"):

@@ -227,8 +227,9 @@ def test_friday_digest_includes_saturday_and_labels_days(app):
     assert "יום שבת" in text
     assert "• 10:00 | קניות" in text
     assert "• ארוחת שבת" in text
-    assert "• בוקר | משמרת | דני" in text
+    assert "• בוקר | דני" in text
     assert "כל היום" not in text
+    assert "משמרת" not in text
     assert "משמרת ·" not in text
     assert "רק ראשון" not in text
     assert "מזהה:" not in text
@@ -361,9 +362,11 @@ def test_digest_event_line_is_one_line_with_pipes_and_never_all_day(app):
         people = {person["id"]: person for person in list_people()}
         assert format_digest_event(get_event(timed_id), people) == "• 18:30 | קניות"
         assert format_digest_event(get_event(timeless_id), people) == "• יום הולדת"
-        assert format_digest_event(get_event(shift_id), people) == "• ערב | משמרת | אביחי"
+        assert format_digest_event(get_event(shift_id), people) == "• ערב | אביחי"
+        assert "משמרת" not in format_digest_event(get_event(shift_id), people)
         text = format_digest([THURSDAY], people)
     assert "כל היום" not in text
+    assert "משמרת" not in text
     assert "\n• " in text
     for line in text.splitlines():
         if line.startswith("•"):
