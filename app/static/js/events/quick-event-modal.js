@@ -630,6 +630,15 @@ async function openQuickEndDate() {
     endInput?.focus();
 }
 
+function syncQuickEndTimeHint() {
+    const input = document.getElementById('quick_end_time');
+    const wrap = input && input.closest('.quick-end-time-wrap');
+    if (!wrap) {
+        return;
+    }
+    wrap.classList.toggle('has-value', Boolean((input.value || '').trim()));
+}
+
 function setQuickTimeInput(inputId, timeValue) {
     const input = document.getElementById(inputId);
     if (!input) {
@@ -637,14 +646,23 @@ function setQuickTimeInput(inputId, timeValue) {
     }
     if (!timeValue) {
         input.value = '';
+        if (inputId === 'quick_end_time') {
+            syncQuickEndTimeHint();
+        }
         return;
     }
     const match = String(timeValue).match(/^(\d{1,2}):(\d{2})/);
     if (!match) {
         input.value = '';
+        if (inputId === 'quick_end_time') {
+            syncQuickEndTimeHint();
+        }
         return;
     }
     input.value = `${match[1].padStart(2, '0')}:${match[2]}`;
+    if (inputId === 'quick_end_time') {
+        syncQuickEndTimeHint();
+    }
 }
 
 function getQuickTimeInput(inputId) {
@@ -923,6 +941,13 @@ function initQuickEventModal() {
     }
     if (typeof initQuickShiftFields === 'function') {
         initQuickShiftFields();
+    }
+    const endTimeInput = document.getElementById('quick_end_time');
+    if (endTimeInput && !endTimeInput.dataset.hintBound) {
+        endTimeInput.dataset.hintBound = '1';
+        endTimeInput.addEventListener('input', syncQuickEndTimeHint);
+        endTimeInput.addEventListener('change', syncQuickEndTimeHint);
+        syncQuickEndTimeHint();
     }
     const markDirty = () => {
         if (!quickEventFormMute) {

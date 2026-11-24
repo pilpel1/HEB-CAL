@@ -395,9 +395,12 @@ const CATEGORY_META = {
 };
 
 let currentEventsDataset = [];
+let currentOneOffEvents = [];
+let currentRecurringEvents = [];
 let currentPage = 1;
 let pageSize = 20;
 let sortOrder = 'desc';
+let recurringOpen = true;
 
 function getTodayDateStr() {
     const parts = new Intl.DateTimeFormat('en-GB', {
@@ -447,6 +450,9 @@ function loadListPrefs() {
         if (Number(prefs.page) >= 1) {
             currentPage = Number(prefs.page);
         }
+        if (typeof prefs.recurringOpen === 'boolean') {
+            recurringOpen = prefs.recurringOpen;
+        }
     } catch (error) {
         console.warn('לא ניתן לטעון העדפות רשימה:', error);
     }
@@ -458,10 +464,31 @@ function saveListPrefs() {
             pageSize,
             page: currentPage,
             sortOrder,
+            recurringOpen,
         }));
     } catch (error) {
         console.warn('לא ניתן לשמור העדפות רשימה:', error);
     }
+}
+
+function eventIsRecurringMaster(event) {
+    return Boolean(event && event.recurrence_freq);
+}
+
+function partitionEventsList(events) {
+    const oneOff = [];
+    const recurring = [];
+    (events || []).forEach((event) => {
+        if (eventIsRecurringMaster(event)) {
+            recurring.push(event);
+        } else {
+            oneOff.push(event);
+        }
+    });
+    return {
+        oneOff: sortEventsChronologically(oneOff),
+        recurring: sortEventsChronologically(recurring),
+    };
 }
 
 function applyPrefsToControls() {
@@ -849,7 +876,7 @@ function goToPage(page) {
 }
 
 function updatePaginationControls() {
-    const total = currentEventsDataset.length;
+    const total = currentOneOffEvents.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
     if (currentPage > totalPages) {
         currentPage = totalPages;
@@ -917,16 +944,16 @@ function renderEventsPage() {
     updatePaginationControls();
     saveListPrefs();
 
-    if (currentEventsDataset.length === 0) {
+    if (currentOneOffEvents.length === 0 && currentRecurringEvents.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center">לא נמצאו תוצאות</td></tr>';
         return;
     }
 
     const startIndex = (currentPage - 1) * pageSize;
-    const pageEvents = currentEventsDataset.slice(startIndex, startIndex + pageSize);
+    const pageEvents = currentOneOffEvents.slice(startIndex, startIndex + pageSize);
     let newContent = '';
     let previousCategory = startIndex > 0
-        ? getEventTimeCategory(currentEventsDataset[startIndex - 1])
+        ? getEventTimeCategory(currentOneOffEvents[startIndex - 1])
         : null;
 
     pageEvents.forEach((event) => {
@@ -939,13 +966,47 @@ function renderEventsPage() {
         previousCategory = category;
     });
 
+    if (currentRecurringEvents.length) {
+        const count = currentRecurringEvents.length;
+        const openAttr = recurringOpen ? ' open' : '';
+        newContent += `
+            <tr class="events-recurring-section">
+                <td colspan="6" class="events-recurring-cell">
+                    <details class="events-recurring-details"${openAttr}>
+                        <summary class="events-recurring-summary">
+                            אירועים חוזרים
+                            <span class="events-recurring-count">(${count})</span>
+                        </summary>
+                        <div class="events-recurring-list">
+                            <table class="table table-hover events-recurring-table mb-0">
+                                <tbody>
+                                    ${currentRecurringEvents.map((event) => buildEventRowHtml(event)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                </td>
+            </tr>
+        `;
+    }
+
     tbody.innerHTML = newContent;
+    const details = tbody.querySelector('.events-recurring-details');
+    if (details) {
+        details.addEventListener('toggle', () => {
+            recurringOpen = details.open;
+            saveListPrefs();
+        });
+    }
 }
 
 function updateTable(events, options = {}) {
     const { resetPage = true, restorePage = false } = options;
     const savedPage = currentPage;
     currentEventsDataset = sortEventsChronologically(events || []);
+    const parts = partitionEventsList(currentEventsDataset);
+    currentOneOffEvents = parts.oneOff;
+    currentRecurringEvents = parts.recurring;
     if (resetPage && !restorePage) {
         currentPage = 1;
     } else if (restorePage) {

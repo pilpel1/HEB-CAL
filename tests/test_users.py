@@ -293,6 +293,59 @@ def test_import_digest_without_chat_is_coerced_off(client, app):
     assert people[0]["receives_reminders"] is True
 
 
+def test_person_reminder_defaults_round_trip_and_import(client, app):
+    created = client.post(
+        "/api/users",
+        json={
+            "name": "רוני",
+            "telegram_chat_id": "11",
+            "receives_reminders": True,
+            "reminder_defaults": [60, 1440],
+        },
+    )
+    assert created.status_code == 201, created.get_json()
+    person_id = created.get_json()["id"]
+    listed = client.get("/api/users?role=reminders").get_json()
+    match = next(row for row in listed if row["id"] == person_id)
+    assert match["reminder_defaults"] == [60, 1440]
+
+    updated = client.put(
+        f"/api/users/{person_id}",
+        json={
+            "name": "רוני",
+            "telegram_chat_id": "11",
+            "reminder_defaults": [30],
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.get_json()["reminder_defaults"] == [30]
+
+    with app.app_context():
+        from app.database import export_data, import_data
+
+        payload = export_data()
+    imported_person = next(
+        row for row in payload["users"] if row["id"] == person_id
+    )
+    assert imported_person["reminder_defaults"] == [30]
+
+    payload["users"] = [
+        {
+            "id": person_id,
+            "name": "רוני",
+            "telegram_chat_id": "11",
+            "receives_reminders": True,
+            "reminder_defaults": [15, 120],
+        }
+    ]
+    with app.app_context():
+        import_data(payload, mode="merge")
+        from app.reminders.repository import get_person
+
+        restored = get_person(person_id)
+    assert restored["reminder_defaults"] == [15, 120]
+
+
 def test_unlink_confirm_copy_keeps_browser_reminders():
     from app.users.telegram import UNLINK_CONFIRM_CONSEQUENCES, unlink_telegram_confirm
 

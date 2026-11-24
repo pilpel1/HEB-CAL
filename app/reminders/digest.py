@@ -85,10 +85,16 @@ def format_digest_event(event: dict, people: dict) -> str:
     from app.bot.ui import visible_name, _person_name
     from app.services.event_payload import format_event_time_range
 
+    from app.services.shifts import shift_event_display_clock
+
     parts: list[str] = []
     if event.get("is_shift"):
         parts.append(esc(visible_name(event)))
         parts.append(esc(_person_name(people, event.get("shift_person_id"))))
+        # טווח שעות רק כשיש - בלי לשנות את פורמט 1.0.35 כשאין
+        clock = shift_event_display_clock(event, people)
+        if clock:
+            parts.append(esc(clock))
     else:
         clock = format_event_time_range(event)
         if clock:

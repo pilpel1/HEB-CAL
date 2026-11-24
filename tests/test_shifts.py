@@ -1024,3 +1024,72 @@ def test_put_shift_allowed_persists_and_round_trips(client):
     stored = json.loads(row["shift_allowed"])
     assert stored["בוקר"] == [0, 1, 2, 3, 4]
     assert stored["לילה"] == []
+
+
+def test_shift_hours_round_trip(client):
+    created = client.post(
+        "/api/users",
+        json={
+            "name": "שירה",
+            "telegram_chat_id": None,
+            "works_shifts": True,
+            "shift_hours": {
+                "בוקר": {"start": "07:00", "end": "15:00"},
+                "לילה": {"start": "22:00", "end": "07:00"},
+            },
+        },
+    )
+    assert created.status_code == 201, created.get_json()
+    person = created.get_json()
+    assert person["shift_hours"]["בוקר"] == {"start": "07:00", "end": "15:00"}
+
+    week = date(2026, 10, 25)
+    save = client.put(
+        "/api/shifts/week",
+        json={
+            "person_id": person["id"],
+            "week_start": week.isoformat(),
+            "cells": [{"date": week.isoformat(), "label": "בוקר"}],
+        },
+    )
+    assert save.status_code == 200, save.get_json()
+
+    listed = client.get(f"/api/events?from={week.isoformat()}&to={week.isoformat()}").get_json()
+    shift = next(row for row in listed if row.get("is_shift"))
+    assert shift["shift_display_time"] == "07:00-15:00"
+    assert shift["time"] is None
+
+    updated = client.put(
+        f"/api/users/{person['id']}",
+        json={
+            "name": "שירה",
+            "telegram_chat_id": None,
+            "shift_hours": None,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.get_json()["shift_hours"] is None
+
+
+def test_exceptional_shift_ignores_hours(client):
+    person = _person(
+        client,
+        works_shifts=True,
+        shift_hours={"בוקר": {"start": "07:00", "end": "15:00"}},
+    )
+    day = date(2026, 10, 26)
+    event = client.post(
+        "/api/events",
+        json={
+            "title": "בוקר מוקדם",
+            "gregorian_date": day.isoformat(),
+            "hebrew_date": "ו׳ חשוון תשפ״ז",
+            "is_shift": True,
+            "shift_person_id": person["id"],
+            "shift_label": "בוקר מוקדם",
+        },
+    )
+    assert event.status_code in (200, 201), event.get_json()
+    event_id = event.get_json()["id"]
+    fetched = client.get(f"/api/events/{event_id}").get_json()
+    assert fetched.get("shift_display_time") is None

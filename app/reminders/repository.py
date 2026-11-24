@@ -90,6 +90,27 @@ def ensure_reminder_schema(db) -> None:
             db,
             "CREATE INDEX IF NOT EXISTS idx_reminders_unsent ON reminders(sent_at)",
         )
+        if _has_people_table(db):
+            people_table = resolve_people_table(db)
+            _schema_execute(
+                db,
+                f"""
+                CREATE TABLE IF NOT EXISTS user_reminder_defaults (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    person_id INTEGER NOT NULL,
+                    offset_minutes INTEGER NOT NULL,
+                    UNIQUE (person_id, offset_minutes),
+                    FOREIGN KEY (person_id) REFERENCES {people_table}(id) ON DELETE CASCADE
+                )
+                """,
+            )
+            _schema_execute(
+                db,
+                """
+                CREATE INDEX IF NOT EXISTS idx_user_reminder_defaults_person
+                ON user_reminder_defaults(person_id)
+                """,
+            )
         ensure_unique_people_names(db)
 
 
@@ -284,11 +305,73 @@ def _row_flag(row, key: str, default: bool = False) -> bool:
         return default
 
 
+def list_person_reminder_defaults(person_id: int) -> list[int]:
+    db = get_db()
+    tables = {
+        row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "user_reminder_defaults" not in tables:
+        return []
+    rows = db.execute(
+        """
+        SELECT offset_minutes
+        FROM user_reminder_defaults
+        WHERE person_id = ?
+        ORDER BY offset_minutes, id
+        """,
+        (int(person_id),),
+    ).fetchall()
+    return [int(row["offset_minutes"]) for row in rows]
+
+
+def _parse_reminder_defaults(raw) -> list[int]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError("reminder_defaults חייב להיות מערך מספרים")
+    from app.reminders.schedule import OffsetError, coerce_offset_minutes
+
+    offsets: list[int] = []
+    seen: set[int] = set()
+    for item in raw:
+        try:
+            value = coerce_offset_minutes(item)
+        except OffsetError as exc:
+            raise ValueError(str(exc)) from exc
+        if value in seen:
+            continue
+        seen.add(value)
+        offsets.append(value)
+    return sorted(offsets)
+
+
+def replace_person_reminder_defaults(
+    person_id: int,
+    offsets: list[int],
+    *,
+    commit: bool = True,
+) -> None:
+    db = get_db()
+    clean = _parse_reminder_defaults(offsets)
+    db.execute("DELETE FROM user_reminder_defaults WHERE person_id = ?", (int(person_id),))
+    for offset in clean:
+        db.execute(
+            """
+            INSERT OR IGNORE INTO user_reminder_defaults (person_id, offset_minutes)
+            VALUES (?, ?)
+            """,
+            (int(person_id), int(offset)),
+        )
+    if commit:
+        db.commit()
+
+
 def person_to_dict(row) -> dict:
-    from app.services.shifts import parse_shift_allowed
+    from app.services.shifts import parse_shift_allowed, parse_shift_hours
 
     keys = row.keys()
     raw_allowed = row["shift_allowed"] if "shift_allowed" in keys else None
+    raw_hours = row["shift_hours"] if "shift_hours" in keys else None
     flags = {name: _row_flag(row, name) for name in USER_FLAG_KEYS}
     email = None
     if "google_email" in keys and row["google_email"]:
@@ -300,6 +383,8 @@ def person_to_dict(row) -> dict:
         "google_email": email,
         "color": row["color"] if "color" in keys else None,
         "shift_allowed": parse_shift_allowed(raw_allowed),
+        "shift_hours": parse_shift_hours(raw_hours),
+        "reminder_defaults": list_person_reminder_defaults(row["id"]),
         "flags": flags,
         **flags,
     }
@@ -373,12 +458,23 @@ def _clean_flag(value) -> int:
     raise ValueError("הדגל חייב להיות true או false")
 
 
-def _person_color_and_rules(color, shift_allowed):
-    from app.services.shifts import clean_person_color, dump_shift_allowed
+def _person_color_and_rules(color, shift_allowed, shift_hours=_MISSING):
+    from app.services.shifts import (
+        ShiftError,
+        clean_person_color,
+        dump_shift_allowed,
+        dump_shift_hours,
+    )
 
     color_value = None if color is _MISSING else clean_person_color(color)
     rules_value = None if shift_allowed is _MISSING else dump_shift_allowed(shift_allowed)
-    return color_value, rules_value
+    hours_value = _MISSING
+    if shift_hours is not _MISSING:
+        try:
+            hours_value = dump_shift_hours(shift_hours)
+        except ShiftError as exc:
+            raise ValueError(str(exc)) from exc
+    return color_value, rules_value, hours_value
 
 
 def _default_role_flags(color, shift_allowed, receives_reminders, works_shifts) -> tuple[int, int]:
@@ -677,6 +773,8 @@ def _reuse_existing_person(
     works_shifts,
     daily_digest_enabled,
     google_email=_MISSING,
+    shift_hours=_MISSING,
+    reminder_defaults=_MISSING,
 ) -> dict:
     existing_chat = existing.get("telegram_chat_id") or None
     if chat_id and existing_chat and str(chat_id) != str(existing_chat):
@@ -696,6 +794,10 @@ def _reuse_existing_person(
         extras["color"] = color
     if shift_allowed is not _MISSING:
         extras["shift_allowed"] = shift_allowed
+    if shift_hours is not _MISSING:
+        extras["shift_hours"] = shift_hours
+    if reminder_defaults is not _MISSING:
+        extras["reminder_defaults"] = reminder_defaults
     resulting_chat = chat_id or existing_chat
     if daily_digest_enabled is not _MISSING:
         extras["daily_digest_enabled"] = bool(existing.get("daily_digest_enabled")) or bool(
@@ -722,6 +824,8 @@ def create_person(
     person_id=None,
     color=_MISSING,
     shift_allowed=_MISSING,
+    shift_hours=_MISSING,
+    reminder_defaults=_MISSING,
     receives_reminders=_MISSING,
     works_shifts=_MISSING,
     daily_digest_enabled=_MISSING,
@@ -747,6 +851,8 @@ def create_person(
                 works_shifts,
                 daily_digest_enabled,
                 google_email,
+                shift_hours,
+                reminder_defaults,
             )
         raise ValueError(_name_conflict_message(existing["name"]))
     if email:
@@ -756,7 +862,9 @@ def create_person(
         )
         if taken is not None:
             raise ValueError(_email_conflict_message(taken["name"]))
-    color_value, rules_value = _person_color_and_rules(color, shift_allowed)
+    color_value, rules_value, hours_value = _person_color_and_rules(
+        color, shift_allowed, shift_hours
+    )
     receives, works = _default_role_flags(
         color, shift_allowed, receives_reminders, works_shifts
     )
@@ -766,39 +874,62 @@ def create_person(
         else _clean_flag(daily_digest_enabled)
     )
     _require_chat_for_digest(chat_id, digest)
+    people_cols = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+    include_hours = "shift_hours" in people_cols and shift_hours is not _MISSING
     try:
         if person_id is None:
+            columns = [
+                "name",
+                "telegram_chat_id",
+                "google_email",
+                "color",
+                "shift_allowed",
+                "receives_reminders",
+                "works_shifts",
+                "daily_digest_enabled",
+            ]
+            values = [clean_name, chat_id, email, color_value, rules_value, receives, works, digest]
+            if include_hours:
+                columns.append("shift_hours")
+                values.append(hours_value)
+            marks = ", ".join("?" for _ in columns)
             cursor = db.execute(
-                f"""
-                INSERT INTO {table} (
-                    name, telegram_chat_id, google_email, color, shift_allowed,
-                    receives_reminders, works_shifts, daily_digest_enabled
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (clean_name, chat_id, email, color_value, rules_value, receives, works, digest),
+                f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({marks})",
+                tuple(values),
             )
+            saved_id = cursor.lastrowid
         else:
+            columns = [
+                "id",
+                "name",
+                "telegram_chat_id",
+                "google_email",
+                "color",
+                "shift_allowed",
+                "receives_reminders",
+                "works_shifts",
+                "daily_digest_enabled",
+            ]
+            values = [
+                int(person_id),
+                clean_name,
+                chat_id,
+                email,
+                color_value,
+                rules_value,
+                receives,
+                works,
+                digest,
+            ]
+            if include_hours:
+                columns.append("shift_hours")
+                values.append(hours_value)
+            marks = ", ".join("?" for _ in columns)
             cursor = db.execute(
-                f"""
-                INSERT INTO {table} (
-                    id, name, telegram_chat_id, google_email, color, shift_allowed,
-                    receives_reminders, works_shifts, daily_digest_enabled
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    int(person_id),
-                    clean_name,
-                    chat_id,
-                    email,
-                    color_value,
-                    rules_value,
-                    receives,
-                    works,
-                    digest,
-                ),
+                f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({marks})",
+                tuple(values),
             )
+            saved_id = person_id
     except sqlite3.IntegrityError:
         db.rollback()
         raced = find_person_by_normalized_name(clean_name)
@@ -812,14 +943,18 @@ def create_person(
                 works_shifts,
                 daily_digest_enabled,
                 google_email,
+                shift_hours,
+                reminder_defaults,
             )
         if email:
             taken = find_person_by_google_email(email)
             if taken is not None:
                 raise ValueError(_email_conflict_message(taken["name"])) from None
         raise ValueError(_name_conflict_message(clean_name)) from None
+    if reminder_defaults is not _MISSING:
+        replace_person_reminder_defaults(saved_id, reminder_defaults, commit=False)
     db.commit()
-    return get_person(cursor.lastrowid)
+    return get_person(saved_id)
 
 
 def update_person(
@@ -829,6 +964,8 @@ def update_person(
     *,
     color=_MISSING,
     shift_allowed=_MISSING,
+    shift_hours=_MISSING,
+    reminder_defaults=_MISSING,
     receives_reminders=_MISSING,
     works_shifts=_MISSING,
     daily_digest_enabled=_MISSING,
@@ -857,14 +994,19 @@ def update_person(
     if google_email is not _MISSING:
         assignments.append("google_email = ?")
         params.append(email)
-    if color is not _MISSING or shift_allowed is not _MISSING:
-        color_value, rules_value = _person_color_and_rules(color, shift_allowed)
+    if color is not _MISSING or shift_allowed is not _MISSING or shift_hours is not _MISSING:
+        color_value, rules_value, hours_value = _person_color_and_rules(
+            color, shift_allowed, shift_hours
+        )
         if color is not _MISSING:
             assignments.append("color = ?")
             params.append(color_value)
         if shift_allowed is not _MISSING:
             assignments.append("shift_allowed = ?")
             params.append(rules_value)
+        if shift_hours is not _MISSING:
+            assignments.append("shift_hours = ?")
+            params.append(hours_value)
     if receives_reminders is not _MISSING:
         assignments.append("receives_reminders = ?")
         params.append(_clean_flag(receives_reminders))
@@ -889,6 +1031,8 @@ def update_person(
             if taken is not None:
                 raise ValueError(_email_conflict_message(taken["name"])) from exc
         raise ValueError(_name_conflict_message(clean_name)) from exc
+    if reminder_defaults is not _MISSING:
+        replace_person_reminder_defaults(person_id, reminder_defaults, commit=False)
     db.commit()
     return get_person(person_id)
 
@@ -1196,13 +1340,23 @@ def _apply_imported_person_extras(db, person_id: int, person: dict) -> None:
     assignments = []
     params: list = []
     if "color" in person:
-        color_value, _ignored = _person_color_and_rules(person.get("color"), _MISSING)
+        color_value, _ignored, _hours = _person_color_and_rules(
+            person.get("color"), _MISSING, _MISSING
+        )
         assignments.append("color = ?")
         params.append(color_value)
     if "shift_allowed" in person:
-        _ignored, rules_value = _person_color_and_rules(_MISSING, person.get("shift_allowed"))
+        _ignored, rules_value, _hours = _person_color_and_rules(
+            _MISSING, person.get("shift_allowed"), _MISSING
+        )
         assignments.append("shift_allowed = ?")
         params.append(rules_value)
+    if "shift_hours" in person:
+        _ignored, _rules, hours_value = _person_color_and_rules(
+            _MISSING, _MISSING, person.get("shift_hours")
+        )
+        assignments.append("shift_hours = ?")
+        params.append(hours_value)
     has_role_keys = "receives_reminders" in person or "works_shifts" in person
     if has_role_keys:
         if "receives_reminders" in person:
@@ -1319,6 +1473,10 @@ def upsert_person_for_import(person: dict, *, replace_ids: bool) -> None:
         raise ValueError(_name_conflict_message(name)) from exc
     if saved_id is not None:
         _apply_imported_person_extras(db, saved_id, person)
+        if "reminder_defaults" in person:
+            replace_person_reminder_defaults(
+                saved_id, person.get("reminder_defaults"), commit=False
+            )
 
 
 def delete_all_people() -> None:

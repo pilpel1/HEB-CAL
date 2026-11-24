@@ -373,3 +373,23 @@ def test_digest_event_line_is_one_line_with_pipes_and_never_all_day(app):
         if line.startswith("•"):
             assert "\n" not in line
             assert "כל היום" not in line
+
+
+def test_digest_shift_includes_hours_when_configured(app):
+    danny = _person(
+        app,
+        "אביחי",
+        chat="42",
+        daily_digest_enabled=True,
+        works_shifts=1,
+        shift_hours={"בוקר": {"start": "07:00", "end": "15:00"}},
+    )
+    shift_id = _event(app, "בוקר", THURSDAY, shift=(1, danny["id"], "בוקר"))
+    with app.app_context():
+        from app.database import get_event
+        from app.reminders.repository import list_people
+
+        people = {person["id"]: person for person in list_people()}
+        line = format_digest_event(get_event(shift_id), people)
+    assert line == "• בוקר | אביחי | 07:00-15:00"
+    assert "כל היום" not in line

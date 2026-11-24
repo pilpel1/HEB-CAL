@@ -25,9 +25,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # סיכום בוקר בלי telegram_chat_id נכבה ב-ensure_users_schema ושוב ב-init_db
 # (גם על בסיס שכבר על 8).
 # גרסה 9: end_time (HH:MM, nullable) על events ועל event_exceptions.
+# גרסה 10: shift_hours JSON על users + user_reminder_defaults.
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000

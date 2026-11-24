@@ -336,7 +336,7 @@ def test_schema_v9_adds_nullable_end_time(tmp_path):
     assert row["title"] == "ישן"
     assert row["time"] == "10:00"
     assert row["end_time"] is None
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 9
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 10
     conn.close()
 
 
@@ -347,7 +347,7 @@ def test_ui_has_end_time_next_to_start():
     simple, _, _advanced = html.partition('id="quick_advanced"')
     assert 'id="quick_time"' in simple
     assert 'id="quick_end_time"' in simple
-    assert "עד שעה" in simple
+    assert "שעת סיום" in simple
     assert "function getQuickEndTimeValue" in js
     assert "function assertEndTimeValid" in js
     assert "function formatEventTimeRange" in render

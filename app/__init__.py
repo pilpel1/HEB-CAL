@@ -1,7 +1,7 @@
 import mimetypes
 import os
 
-from flask import Flask, redirect, render_template, send_from_directory, url_for
+from flask import Flask, redirect, render_template, request, send_from_directory, url_for
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
@@ -51,6 +51,26 @@ def inject_settings_ui_flags():
     return {"ai_settings_ui": ai_settings_ui_enabled()}
 
 
+@app.context_processor
+def inject_static_version():
+    """כל נכס מקומי עם ?v=VERSION — בלי לגעת ב-CDN."""
+    from app.updates.version import installed_version
+
+    version = installed_version()
+
+    def static_v(filename: str) -> str:
+        return url_for("static", filename=filename, v=version)
+
+    return {"asset_version": version, "static_v": static_v}
+
+
+@app.after_request
+def static_no_cache(response):
+    if request.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -83,8 +103,16 @@ def favicon():
 @app.route("/sw.js")
 def service_worker():
     # מהשורש כדי ש-scope של ה-worker יהיה `/` (לא `/static/`).
-    response = send_from_directory(app.static_folder, "sw.js")
-    response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    from app.updates.version import installed_version
+
+    path = os.path.join(app.static_folder, "sw.js")
+    with open(path, encoding="utf-8") as handle:
+        body = handle.read()
+    version = installed_version() or "0"
+    body = body.replace("__HEB_CAL_VERSION__", version)
+    from flask import Response
+
+    response = Response(body, mimetype="application/javascript; charset=utf-8")
     response.headers["Cache-Control"] = "no-cache"
     response.headers["Service-Worker-Allowed"] = "/"
     return response

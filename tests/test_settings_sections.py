@@ -97,9 +97,11 @@ def test_settings_auto_backup_hash_opens_backup_card():
 
 def test_settings_markup_has_independent_sections(client):
     html = client.get("/settings").get_data(as_text=True)
-    assert html.count("data-settings-section=") == 8
+    assert html.count("data-settings-section=") == 9
     assert 'data-settings-section="settings-reminders"' in html
+    assert 'data-settings-section="settingsReminderDefaults"' in html
     assert 'settings-section-label">משתמשים</span>' in html
+    assert 'settings-section-label">תזכורות</span>' in html
     assert 'data-settings-section="settingsUpdate"' in html
     assert 'data-settings-section="settings-mcp"' not in html
     assert 'data-settings-section="settings-oauth"' not in html
@@ -111,14 +113,14 @@ def test_settings_markup_has_independent_sections(client):
     assert "heb-cal-settings-sections" in js
     assert "toggleSettingsSection" in js
     page = SETTINGS.read_text(encoding="utf-8")
-    assert page.count("class=\"settings-section-toggle\"") == 10
+    assert page.count("class=\"settings-section-toggle\"") == 11
     assert 'data-settings-section="settings-oauth"' in page
     assert 'data-settings-section="settings-mcp"' in page
 
 
 def test_settings_markup_shows_ai_sections_when_enabled(client, ai_settings_ui):
     html = client.get("/settings").get_data(as_text=True)
-    assert html.count("data-settings-section=") == 10
+    assert html.count("data-settings-section=") == 11
     assert 'data-settings-section="settings-mcp"' in html
     assert 'data-settings-section="settings-oauth"' in html
 

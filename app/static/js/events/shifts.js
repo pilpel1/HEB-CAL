@@ -221,6 +221,90 @@ function buildShiftMatrix(root, options) {
     root.dataset.ready = '1';
 }
 
+function normalizeShiftHourInput(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return '';
+    }
+    const match = raw.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) {
+        return '';
+    }
+    return `${Number(match[1])}:${match[2]}`;
+}
+
+function buildShiftHoursGrid(root) {
+    if (!root || root.dataset.ready === '1') {
+        return;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'shift-hours-table';
+    shiftLabelNames().forEach((label) => {
+        const row = document.createElement('div');
+        row.className = 'shift-hours-row';
+        const title = document.createElement('span');
+        title.className = 'shift-hours-label';
+        title.textContent = label;
+        const start = document.createElement('input');
+        start.type = 'time';
+        start.className = 'form-control form-control-sm';
+        start.dataset.shiftHoursStart = label;
+        start.setAttribute('aria-label', `התחלה ${label}`);
+        const dash = document.createElement('span');
+        dash.className = 'shift-hours-dash';
+        dash.textContent = '–';
+        const end = document.createElement('input');
+        end.type = 'time';
+        end.className = 'form-control form-control-sm';
+        end.dataset.shiftHoursEnd = label;
+        end.setAttribute('aria-label', `סיום ${label}`);
+        const onEdit = () => noteShiftRulesEdited();
+        start.addEventListener('input', onEdit);
+        end.addEventListener('input', onEdit);
+        row.append(title, start, dash, end);
+        wrap.append(row);
+    });
+    root.replaceChildren(wrap);
+    root.dataset.ready = '1';
+}
+
+function readShiftHours(root) {
+    if (!root) {
+        return null;
+    }
+    const hours = {};
+    shiftLabelNames().forEach((label) => {
+        const start = normalizeShiftHourInput(
+            root.querySelector(`[data-shift-hours-start="${label}"]`)?.value,
+        );
+        const end = normalizeShiftHourInput(
+            root.querySelector(`[data-shift-hours-end="${label}"]`)?.value,
+        );
+        if (start && end) {
+            hours[label] = { start, end };
+        }
+    });
+    return Object.keys(hours).length ? hours : null;
+}
+
+function writeShiftHours(root, hours) {
+    if (!root) {
+        return;
+    }
+    const source = hours && typeof hours === 'object' ? hours : {};
+    shiftLabelNames().forEach((label) => {
+        const block = source[label] || {};
+        const startInput = root.querySelector(`[data-shift-hours-start="${label}"]`);
+        const endInput = root.querySelector(`[data-shift-hours-end="${label}"]`);
+        if (startInput) {
+            startInput.value = block.start ? normalizeShiftHourInput(block.start) : '';
+        }
+        if (endInput) {
+            endInput.value = block.end ? normalizeShiftHourInput(block.end) : '';
+        }
+    });
+}
+
 function shiftRulesSummary(allowed) {
     const letters = shiftDayLetters();
     const parts = [];
@@ -291,6 +375,8 @@ function resetPersonShiftFields() {
         shiftUiState.colorIsSuggested = true;
         setPersonColor(suggestPersonColor());
         writeShiftMatrix(document.getElementById('personShiftMatrix'), defaultShiftAllowed());
+        buildShiftHoursGrid(document.getElementById('personShiftHours'));
+        writeShiftHours(document.getElementById('personShiftHours'), null);
     } finally {
         shiftUiState.filling = false;
     }
@@ -306,6 +392,8 @@ function fillPersonShiftFields(person) {
             document.getElementById('personShiftMatrix'),
             person.shift_allowed || defaultShiftAllowed(),
         );
+        buildShiftHoursGrid(document.getElementById('personShiftHours'));
+        writeShiftHours(document.getElementById('personShiftHours'), person.shift_hours || null);
     } finally {
         shiftUiState.filling = false;
     }
@@ -327,6 +415,7 @@ function personShiftPayload() {
     return {
         color: shiftUiState.personColor || null,
         shift_allowed: readShiftMatrix(matrix),
+        shift_hours: readShiftHours(document.getElementById('personShiftHours')),
     };
 }
 
@@ -539,6 +628,7 @@ async function saveShiftPerson(event) {
         telegram_chat_id: existing ? existing.telegram_chat_id || null : null,
         color: extra.color || null,
         shift_allowed: extra.shift_allowed || defaultShiftAllowed(),
+        shift_hours: extra.shift_hours,
         works_shifts: true,
     };
     if (existing && existing.receives_reminders) {
@@ -617,6 +707,7 @@ function initShiftSettings() {
         return;
     }
     buildShiftMatrix(document.getElementById('personShiftMatrix'), { allDays: true });
+    buildShiftHoursGrid(document.getElementById('personShiftHours'));
     document.getElementById('personColorPicker')?.addEventListener('click', (event) => {
         const button = event.target.closest('[data-color]');
         if (!button) {
@@ -1092,6 +1183,9 @@ function applyQuickShiftLook() {
     }
     if (typeof setEndDateOpen === 'function') {
         setEndDateOpen(false);
+    }
+    if (typeof applyShiftPersonReminderDefaults === 'function') {
+        applyShiftPersonReminderDefaults(personId);
     }
 }
 

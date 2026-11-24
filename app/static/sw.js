@@ -1,17 +1,19 @@
 /* מעטפת PWA בסיסית: HTML + CSS/JS מקומי. לא שומר /api ולא משאבי CDN. */
-const CACHE_NAME = 'heb-cal-shell-v3';
+/* __HEB_CAL_VERSION__ מוחלף בזמן הגשת /sw.js */
+const CACHE_VERSION = '__HEB_CAL_VERSION__';
+const CACHE_NAME = 'heb-cal-shell-' + CACHE_VERSION;
 
 const SHELL = [
     '/',
-    '/static/css/style.css',
-    '/static/css/components/variables.css',
-    '/static/css/components/calendar.css',
-    '/static/css/components/events-table.css',
-    '/static/css/components/forms.css',
-    '/static/css/components/dark-theme.css',
-    '/static/js/theme.js',
-    '/static/js/script.js',
-    '/static/manifest.webmanifest',
+    '/static/css/style.css?v=' + CACHE_VERSION,
+    '/static/css/components/variables.css?v=' + CACHE_VERSION,
+    '/static/css/components/calendar.css?v=' + CACHE_VERSION,
+    '/static/css/components/events-table.css?v=' + CACHE_VERSION,
+    '/static/css/components/forms.css?v=' + CACHE_VERSION,
+    '/static/css/components/dark-theme.css?v=' + CACHE_VERSION,
+    '/static/js/theme.js?v=' + CACHE_VERSION,
+    '/static/js/script.js?v=' + CACHE_VERSION,
+    '/static/manifest.webmanifest?v=' + CACHE_VERSION,
 ];
 
 function isShellRequest(url) {

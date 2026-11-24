@@ -30,6 +30,10 @@ def _person_extras(data: dict) -> dict:
         extra["color"] = data.get("color")
     if "shift_allowed" in data:
         extra["shift_allowed"] = data.get("shift_allowed")
+    if "shift_hours" in data:
+        extra["shift_hours"] = data.get("shift_hours")
+    if "reminder_defaults" in data:
+        extra["reminder_defaults"] = data.get("reminder_defaults")
     if "receives_reminders" in data:
         extra["receives_reminders"] = data.get("receives_reminders")
     if "works_shifts" in data:

@@ -196,10 +196,31 @@ function formatChipTime(time) {
     return `${Number(match[1])}:${match[2]}`;
 }
 
+function shiftDisplayClock(event) {
+    if (!event || !event.is_shift || event.time) {
+        return '';
+    }
+    if (event.shift_display_time) {
+        return String(event.shift_display_time);
+    }
+    const label = String(event.shift_label || '').trim();
+    if (!['בוקר', 'ערב', 'לילה'].includes(label)) {
+        return '';
+    }
+    const list = (typeof shiftUiState !== 'undefined' && shiftUiState.people) || [];
+    const person = list.find((item) => String(item.id) === String(event.shift_person_id));
+    const hours = person && person.shift_hours;
+    const block = hours && hours[label];
+    if (!block || !block.start || !block.end) {
+        return '';
+    }
+    return `${block.start}-${block.end}`;
+}
+
 function formatEventTimeRange(event, options = {}) {
     const start = event && event.time;
     if (!start) {
-        return '';
+        return shiftDisplayClock(event);
     }
     if (event.end_time) {
         return `${start}-${event.end_time}`;

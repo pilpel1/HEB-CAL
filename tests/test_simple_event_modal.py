@@ -41,7 +41,10 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     assert 'id="quick_title"' in simple
     assert 'id="quick_time"' in simple
     assert 'id="quick_end_time"' in simple
-    assert "עד שעה" in simple
+    assert "שעת התחלה" in simple
+    assert "שעת סיום" in simple
+    assert "אופציונלי" in simple
+    assert "quick-times-row" in simple
     assert "quick-color-picker" in simple
     assert 'id="quick_gregorian_date"' not in simple
     assert 'id="quick_hebrew_day"' not in simple
@@ -97,8 +100,8 @@ def test_full_form_setting_is_local_to_the_device():
 
 def test_simple_when_row_is_one_grid_on_narrow_phones():
     assert ".quick-simple-row" in FORMS
-    assert "minmax(5.2rem" in FORMS
-    assert "minmax(4.8rem" in FORMS
+    assert ".quick-times-row" in FORMS
+    assert "minmax(8rem" in FORMS
     assert "display: contents" in FORMS
     assert "minmax(2.9rem" in FORMS
     assert ".quick-advanced-toggle" in FORMS
@@ -106,10 +109,17 @@ def test_simple_when_row_is_one_grid_on_narrow_phones():
     assert ".quick-end-toggle" in FORMS
     assert ".quick-end-wrap[hidden]" in FORMS
     assert "quick-end-when" in FORMS or "quick-end-when" in MODAL_HTML
+    assert ".quick-end-time-hint" in FORMS
     mobile = FORMS.partition("@media (max-width: 480px)")[2].partition("@media (min-width: 481px)")[0]
-    assert ".quick-simple-row .form-label" in mobile
     assert ".quick-when .form-label" in mobile
     assert "display: none" in mobile
+    # תוויות השעות גלויות; מוסתרות רק תוויות «מתקדם»
+    when_label_block = mobile.split(".quick-when .form-label", 1)[1][:120]
+    assert "display: none" in when_label_block
+    assert ".quick-simple-row .form-label,\n    .quick-when .form-label" not in mobile
+    desktop = FORMS.partition("@media (min-width: 481px)")[2]
+    assert "quick-times-row" in desktop
+    assert "grid-template-columns: minmax(0, 1fr) minmax(6.5rem, 8rem)" not in desktop
     assert "align-items: flex-start" in mobile
 
 
@@ -180,21 +190,45 @@ def _simple_row_metrics(page):
                 const r = el.getBoundingClientRect();
                 return { id, top: r.top, bottom: r.bottom, left: r.left, right: r.right, height: r.height };
             };
+            const labelText = (id) => {
+                const input = document.getElementById(id);
+                const field = input && input.closest('.quick-field');
+                const label = field && field.querySelector('.form-label');
+                if (!label) {
+                    return { text: '', visible: false };
+                }
+                const style = window.getComputedStyle(label);
+                const r = label.getBoundingClientRect();
+                return {
+                    text: (label.textContent || '').trim(),
+                    visible: style.display !== 'none' && style.visibility !== 'hidden' && r.width > 0 && r.height > 0,
+                };
+            };
             const title = box('quick_title');
             const time = box('quick_time');
             const endTime = box('quick_end_time');
+            const hint = document.getElementById('quick_end_time_hint');
+            const hintStyle = hint ? window.getComputedStyle(hint) : null;
+            const hintRect = hint ? hint.getBoundingClientRect() : null;
             const color = document.querySelector('#quickEventModal .quick-color-picker').getBoundingClientRect();
             const content = document.querySelector('#quickEventModal .modal-content').getBoundingClientRect();
             const footer = document.querySelector('#quickEventModal .modal-footer').getBoundingClientRect();
             const submit = document.getElementById('quick_submit_btn').getBoundingClientRect();
             const boxes = [title, time, endTime];
+            const timesSpread = Math.abs(time.top - endTime.top);
             return {
                 title,
                 time,
                 endTime,
+                startLabel: labelText('quick_time'),
+                endLabel: labelText('quick_end_time'),
+                optionalHintVisible: Boolean(
+                    hint && hintStyle && hintStyle.display !== 'none' && hintRect && hintRect.width > 0
+                ),
                 color: { top: color.top, bottom: color.bottom, left: color.left, right: color.right },
-                topSpread: Math.max(title.top, time.top, endTime.top) - Math.min(title.top, time.top, endTime.top),
-                timeOnLeft: time.left < title.left - 4,
+                timesSpread,
+                titleAboveTimes: title.bottom <= Math.min(time.top, endTime.top) + 2,
+                timesSideBySide: timesSpread <= 8 && Math.abs(time.left - endTime.left) > 8,
                 colorBelow: color.top >= Math.max(title.bottom, time.bottom, endTime.bottom) - 2,
                 overflowRight: Math.max(0, Math.max(...boxes.map((b) => b.right)) - content.right),
                 overflowLeft: Math.max(0, content.left - Math.min(...boxes.map((b) => b.left))),
@@ -266,14 +300,23 @@ def test_new_event_opens_simple_and_expander_reveals_advanced(live_server):
         expect(page.locator("#quickEventModalLabel")).to_contain_text("אירוע חדש")
 
         row = _simple_row_metrics(page)
-        assert row["topSpread"] <= 8, row
-        assert row["timeOnLeft"] is True, row
+        assert row["startLabel"]["visible"] is True, row
+        assert row["startLabel"]["text"] == "שעת התחלה", row
+        assert row["endLabel"]["visible"] is True, row
+        assert row["endLabel"]["text"] == "שעת סיום", row
+        assert row["optionalHintVisible"] is True, row
+        assert row["titleAboveTimes"] is True, row
+        # בשורה אחת (צד-צד) או בעמודה (מחסנית) - לא על אותה נקודה כמו הכותרת
+        assert row["timesSideBySide"] or row["timesSpread"] > 4, row
         assert row["colorBelow"] is True, row
+        assert abs(row["time"]["top"] - row["title"]["top"]) > 4 or row["timesSideBySide"], row
         assert row["overflowRight"] <= 2, row
         assert row["overflowLeft"] <= 2, row
         assert row["footerBottom"] <= row["vh"] + 1, row
         assert row["submitBottom"] <= row["vh"] + 1, row
 
+        page.fill("#quick_time", "07:30")
+        expect(page.locator("#quick_time")).to_have_value("07:30")
         page.fill("#quick_title", "2110 בדיקה")
         page.wait_for_function("() => document.getElementById('quick_time').value === '21:10'")
         expect(page.locator("#quick_title")).to_have_value("בדיקה")
