@@ -248,16 +248,19 @@ function renderPersonTabs() {
         name.textContent = person.name;
         btn.append(name);
         const count = personReminderCount(id);
+        /* תמיד badge (גם 0) — אותו מבנה ויזואלי לכל אדם */
+        const badge = document.createElement('span');
+        badge.className = 'reminder-person-tab-badge';
+        badge.textContent = String(count);
+        badge.title = count > 0 ? `${count} תזכורות` : 'בלי תזכורות';
+        badge.hidden = count === 0;
+        btn.append(badge);
         if (count > 0) {
-            const badge = document.createElement('span');
-            badge.className = 'reminder-person-tab-badge';
-            badge.textContent = String(count);
-            badge.title = `${count} תזכורות`;
-            btn.append(badge);
             btn.classList.add('has-reminders');
         }
         if (!(person.telegram_chat_id || '').trim()) {
             btn.classList.add('no-telegram');
+            btn.title = 'בלי קישור לטלגרם';
         }
         btn.addEventListener('click', () => {
             reminderFormState.activePersonId = id;

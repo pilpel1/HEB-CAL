@@ -636,7 +636,14 @@ function syncQuickTimeHint(inputId) {
     if (!wrap) {
         return;
     }
-    wrap.classList.toggle('has-value', Boolean((input.value || '').trim()));
+    const filled = Boolean((input.value || '').trim());
+    wrap.classList.toggle('has-value', filled);
+    wrap.toggleAttribute('data-empty', !filled);
+    if (filled) {
+        input.removeAttribute('data-empty');
+    } else {
+        input.setAttribute('data-empty', '');
+    }
 }
 
 function syncQuickEndTimeHint() {

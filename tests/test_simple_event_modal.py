@@ -39,6 +39,7 @@ def test_simple_mode_markup_hides_caption_and_end_toggle():
     simple, _, advanced = body.partition("id=\"quick_advanced\"")
     assert "quick-simple-row" in simple
     assert 'id="quick_title"' in simple
+    assert 'placeholder="כותרת"' in simple
     assert 'id="quick_time"' in simple
     assert 'id="quick_end_time"' in simple
     assert "שעת התחלה" in simple
@@ -102,7 +103,9 @@ def test_simple_when_row_is_one_grid_on_narrow_phones():
     assert ".quick-simple-row" in FORMS
     assert ".quick-time-wrap" in FORMS
     assert ".quick-time-hint" in FORMS
-    assert "minmax(5.2rem" in FORMS
+    assert "::-webkit-datetime-edit" in FORMS
+    assert "data-empty" in FORMS
+    assert "minmax(5.2rem" in FORMS or "minmax(5rem" in FORMS
     assert "minmax(2.9rem" in FORMS
     assert ".quick-advanced-toggle" in FORMS
     assert ".quick-when-caption" in FORMS
@@ -118,8 +121,8 @@ def test_simple_when_row_is_one_grid_on_narrow_phones():
     assert "display: none" in when_label_block
     desktop = FORMS.partition("@media (min-width: 481px)")[2]
     assert "quick-simple-row" in desktop or "quick-simple-row" in FORMS
-    # שורה אחת: כותרת + שתי שעות (לא כותרת מעל ואז שתי עמודות בלבד)
-    assert "minmax(6.5rem, 8rem) minmax(6.5rem, 8rem)" in desktop
+    # שורה אחת: כותרת רחבה + שתי עמודות שעה
+    assert "minmax(5.8rem, 7.2rem) minmax(5.8rem, 7.2rem)" in desktop
     assert "align-items: flex-start" in mobile
 
 

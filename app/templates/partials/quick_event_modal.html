@@ -17,20 +17,20 @@
                     <div class="quick-simple">
                         <div class="quick-simple-row">
                             <div class="quick-field quick-field-title">
-                                <label for="quick_title" class="form-label">כותרת</label>
-                                <input type="text" class="form-control" id="quick_title" required autofocus>
+                                <label for="quick_title" class="form-label visually-hidden">כותרת</label>
+                                <input type="text" class="form-control" id="quick_title" placeholder="כותרת" required autofocus>
                             </div>
                             <div class="quick-field quick-field-time">
                                 <label for="quick_time" class="form-label visually-hidden">שעת התחלה</label>
-                                <div class="quick-time-wrap">
-                                    <input type="time" class="form-control" id="quick_time" dir="ltr" step="60" aria-label="שעת התחלה">
+                                <div class="quick-time-wrap" data-empty>
+                                    <input type="time" class="form-control" id="quick_time" dir="ltr" step="60" data-empty aria-label="שעת התחלה">
                                     <span class="quick-time-hint" id="quick_time_hint" aria-hidden="true">שעת התחלה</span>
                                 </div>
                             </div>
                             <div class="quick-field quick-field-time quick-field-end-time">
                                 <label for="quick_end_time" class="form-label visually-hidden">שעת סיום</label>
-                                <div class="quick-time-wrap quick-end-time-wrap">
-                                    <input type="time" class="form-control" id="quick_end_time" dir="ltr" step="60" aria-label="שעת סיום">
+                                <div class="quick-time-wrap quick-end-time-wrap" data-empty>
+                                    <input type="time" class="form-control" id="quick_end_time" dir="ltr" step="60" data-empty aria-label="שעת סיום">
                                     <span class="quick-time-hint" id="quick_end_time_hint" aria-hidden="true">שעת סיום</span>
                                 </div>
                             </div>
