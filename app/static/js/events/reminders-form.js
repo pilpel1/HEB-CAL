@@ -1,4 +1,4 @@
-// טופס התזכורת בתוך מודל האירוע. נשאר סגור עד שמסמנים «תזכורת».
+// תזכורות במודל האירוע — לשונית לכל אדם עם offsets משלו.
 
 const REMINDER_PRESETS = [
     [0, 'בזמן'],
@@ -19,12 +19,16 @@ const REMINDER_PRESETS = [
 
 const reminderFormState = {
     fillToken: 0,
-    customOffsets: [],
     ready: false,
     allowDefaultPrefill: false,
+    people: [],
+    activePersonId: null,
+    /** @type {Record<number, {presets: Set<number>, customs: number[]}>} */
+    byPerson: {},
 };
 
 const REMINDER_MAX_MINUTES = 365 * 24 * 60;
+const REMINDER_PRESET_VALUES = new Set(REMINDER_PRESETS.map(([value]) => value));
 
 function reminderOffsetLabel(minutes) {
     const preset = REMINDER_PRESETS.find(([value]) => value === minutes);
@@ -80,25 +84,39 @@ function setReminderPanelOpen(isOpen) {
     }
 }
 
-function renderCustomOffsets() {
-    const list = document.getElementById('quick_reminder_custom_list');
-    if (!list) {
-        return;
+function emptyPersonReminderState() {
+    return { presets: new Set(), customs: [] };
+}
+
+function ensurePersonReminderState(personId) {
+    const id = Number(personId);
+    if (!reminderFormState.byPerson[id]) {
+        reminderFormState.byPerson[id] = emptyPersonReminderState();
     }
-    list.replaceChildren();
-    reminderFormState.customOffsets.forEach((minutes) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'reminder-offset-chip is-selected';
-        chip.dataset.offset = String(minutes);
-        chip.textContent = `${reminderOffsetLabel(minutes)} ×`;
-        chip.title = 'הסר';
-        chip.addEventListener('click', () => {
-            reminderFormState.customOffsets = reminderFormState.customOffsets.filter((value) => value !== minutes);
-            renderCustomOffsets();
-        });
-        list.append(chip);
-    });
+    return reminderFormState.byPerson[id];
+}
+
+function personReminderOffsets(personId) {
+    const state = ensurePersonReminderState(personId);
+    return new Set([...state.presets, ...state.customs]);
+}
+
+function personReminderCount(personId) {
+    return personReminderOffsets(personId).size;
+}
+
+function totalReminderCount() {
+    return Object.keys(reminderFormState.byPerson).reduce(
+        (sum, id) => sum + personReminderCount(id),
+        0,
+    );
+}
+
+function setPersonOffsets(personId, offsets) {
+    const state = ensurePersonReminderState(personId);
+    const selected = new Set([...offsets].map(Number).filter((value) => Number.isInteger(value) && value >= 0));
+    state.presets = new Set([...selected].filter((value) => REMINDER_PRESET_VALUES.has(value)));
+    state.customs = [...selected].filter((value) => !REMINDER_PRESET_VALUES.has(value)).sort((a, b) => a - b);
 }
 
 function hebrewAndNames(names) {
@@ -124,75 +142,142 @@ function setReminderChatWarn(message) {
     node.hidden = !message;
 }
 
-function updateReminderChatWarning(people) {
-    const selected = new Set();
-    document.querySelectorAll('#quick_reminder_recipients input:checked').forEach((input) => {
-        selected.add(Number(input.value));
-    });
-    const missing = (people || []).filter((person) => (
-        selected.has(Number(person.id)) && !(person.telegram_chat_id || '').trim()
-    ));
-    if (!missing.length) {
+function updateReminderChatWarning() {
+    const personId = reminderFormState.activePersonId;
+    if (!personId || personReminderCount(personId) === 0) {
+        setReminderChatWarn('');
+        return;
+    }
+    const person = reminderFormState.people.find((item) => Number(item.id) === Number(personId));
+    if (!person) {
+        setReminderChatWarn('');
+        return;
+    }
+    if ((person.telegram_chat_id || '').trim()) {
         setReminderChatWarn('');
         return;
     }
     setReminderChatWarn(
-        `${hebrewAndNames(missing.map((person) => person.name))} אין קישור לטלגרם — התזכורת תופיע רק בדפדפן כשהלוח פתוח.`
+        `${hebrewAndNames([person.name])} אין קישור לטלגרם — התזכורת תופיע רק בדפדפן כשהלוח פתוח.`,
     );
 }
 
-function renderReminderRecipients(people, selected) {
-    const root = document.getElementById('quick_reminder_recipients');
+function renderCustomOffsets() {
+    const list = document.getElementById('quick_reminder_custom_list');
+    if (!list) {
+        return;
+    }
+    list.replaceChildren();
+    const personId = reminderFormState.activePersonId;
+    if (!personId) {
+        return;
+    }
+    const state = ensurePersonReminderState(personId);
+    state.customs.forEach((minutes) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'reminder-offset-chip is-selected';
+        chip.dataset.offset = String(minutes);
+        chip.textContent = `${reminderOffsetLabel(minutes)} ×`;
+        chip.title = 'הסר';
+        chip.addEventListener('click', () => {
+            state.customs = state.customs.filter((value) => value !== minutes);
+            renderPersonTabs();
+            renderActivePersonOffsets();
+        });
+        list.append(chip);
+    });
+}
+
+function renderActivePersonOffsets() {
+    const personId = reminderFormState.activePersonId;
+    const body = document.getElementById('quick_reminder_person_body');
+    if (body) {
+        body.hidden = !personId;
+    }
+    document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip').forEach((chip) => {
+        if (!chip.dataset.offset) {
+            return;
+        }
+        const state = personId ? ensurePersonReminderState(personId) : null;
+        const on = Boolean(state && state.presets.has(Number(chip.dataset.offset)));
+        chip.classList.toggle('is-selected', on);
+        chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    renderCustomOffsets();
+    updateReminderChatWarning();
+}
+
+function renderPersonTabs() {
+    const root = document.getElementById('quick_reminder_person_tabs');
+    const empty = document.getElementById('quick_reminder_empty_people');
     if (!root) {
         return;
     }
     root.replaceChildren();
+    const people = reminderFormState.people || [];
+    if (empty) {
+        empty.hidden = people.length > 0;
+    }
     if (!people.length) {
-        const empty = document.createElement('p');
-        empty.className = 'reminder-empty-people';
-        empty.textContent = 'עדיין אין אנשים. בלי נמען התזכורת תופיע בדפדפן כשהלוח פתוח.';
-        root.append(empty);
-        setReminderChatWarn('');
+        reminderFormState.activePersonId = null;
+        const body = document.getElementById('quick_reminder_person_body');
+        if (body) {
+            body.hidden = true;
+        }
         return;
     }
-    const wrap = document.createElement('div');
-    wrap.className = 'reminder-recipient-list';
-    people.forEach((person) => {
-        const label = document.createElement('label');
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.value = String(person.id);
-        input.checked = selected.has(Number(person.id));
-        input.addEventListener('change', () => {
-            updateReminderChatWarning(people);
-            applyReminderDefaultsFromSelection(people);
-        });
-        const name = document.createElement('span');
-        name.textContent = person.name;
-        label.append(input, name);
-        if (!(person.telegram_chat_id || '').trim()) {
-            const note = document.createElement('span');
-            note.className = 'reminder-recipient-no-chat';
-            note.textContent = 'בלי טלגרם';
-            label.append(note);
-        }
-        wrap.append(label);
-    });
-    root.append(wrap);
-    updateReminderChatWarning(people);
-}
-
-function selectPreset(minutes) {
-    const chip = document.querySelector(`#quick_reminder_offsets .reminder-offset-chip[data-offset="${minutes}"]`);
-    if (!chip) {
-        return false;
+    if (
+        !reminderFormState.activePersonId
+        || !people.some((person) => Number(person.id) === Number(reminderFormState.activePersonId))
+    ) {
+        reminderFormState.activePersonId = Number(people[0].id);
     }
-    chip.classList.add('is-selected');
-    chip.setAttribute('aria-pressed', 'true');
-    return true;
+    people.forEach((person) => {
+        const id = Number(person.id);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'reminder-person-tab';
+        btn.setAttribute('role', 'tab');
+        btn.dataset.personId = String(id);
+        const active = Number(reminderFormState.activePersonId) === id;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        const name = document.createElement('span');
+        name.className = 'reminder-person-tab-name';
+        name.textContent = person.name;
+        btn.append(name);
+        const count = personReminderCount(id);
+        /* תמיד badge (גם 0) — אותו מבנה ויזואלי לכל אדם */
+        const badge = document.createElement('span');
+        badge.className = 'reminder-person-tab-badge';
+        badge.textContent = String(count);
+        badge.title = count > 0 ? `${count} תזכורות` : 'בלי תזכורות';
+        badge.hidden = count === 0;
+        btn.append(badge);
+        if (count > 0) {
+            btn.classList.add('has-reminders');
+        }
+        if (!(person.telegram_chat_id || '').trim()) {
+            btn.classList.add('no-telegram');
+            btn.title = 'בלי קישור לטלגרם';
+        }
+        btn.addEventListener('click', () => {
+            reminderFormState.activePersonId = id;
+            renderPersonTabs();
+            renderActivePersonOffsets();
+            setReminderError('');
+        });
+        root.append(btn);
+    });
 }
 
 function addCustomReminder() {
+    const personId = reminderFormState.activePersonId;
+    if (!personId) {
+        setReminderError('בחרו אדם ללשונית');
+        return;
+    }
     const amountInput = document.getElementById('quick_reminder_custom_amount');
     const unitInput = document.getElementById('quick_reminder_custom_unit');
     const minutes = customOffsetMinutes(amountInput?.value, unitInput?.value);
@@ -200,20 +285,16 @@ function addCustomReminder() {
         setReminderError('מספר חיובי של דקות, שעות או ימים (עד שנה)');
         return;
     }
-    if (selectPreset(minutes)) {
-        reminderFormState.customOffsets = reminderFormState.customOffsets.filter((value) => value !== minutes);
-        renderCustomOffsets();
-        setReminderError('');
-        if (amountInput) {
-            amountInput.value = '';
-        }
-        return;
+    const state = ensurePersonReminderState(personId);
+    if (REMINDER_PRESET_VALUES.has(minutes)) {
+        state.presets.add(minutes);
+        state.customs = state.customs.filter((value) => value !== minutes);
+    } else if (!state.customs.includes(minutes)) {
+        state.customs.push(minutes);
+        state.customs.sort((a, b) => a - b);
     }
-    if (!reminderFormState.customOffsets.includes(minutes)) {
-        reminderFormState.customOffsets.push(minutes);
-        reminderFormState.customOffsets.sort((a, b) => a - b);
-    }
-    renderCustomOffsets();
+    renderPersonTabs();
+    renderActivePersonOffsets();
     setReminderError('');
     if (amountInput) {
         amountInput.value = '';
@@ -239,9 +320,18 @@ function initReminderFields() {
         chip.textContent = label;
         chip.setAttribute('aria-pressed', 'false');
         chip.addEventListener('click', () => {
-            const on = !chip.classList.contains('is-selected');
-            chip.classList.toggle('is-selected', on);
-            chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+            const personId = reminderFormState.activePersonId;
+            if (!personId) {
+                return;
+            }
+            const state = ensurePersonReminderState(personId);
+            if (state.presets.has(minutes)) {
+                state.presets.delete(minutes);
+            } else {
+                state.presets.add(minutes);
+            }
+            renderPersonTabs();
+            renderActivePersonOffsets();
             setReminderError('');
         });
         grid.append(chip);
@@ -285,116 +375,90 @@ function initReminderFields() {
     });
 }
 
-function currentSelectedReminderOffsets() {
-    const offsets = new Set(reminderFormState.customOffsets);
-    document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip.is-selected').forEach((chip) => {
-        const value = Number(chip.dataset.offset);
-        if (Number.isInteger(value)) {
-            offsets.add(value);
-        }
-    });
-    return offsets;
-}
-
-function applyOffsetChipSelection(offsets) {
-    const presetValues = new Set(REMINDER_PRESETS.map(([value]) => value));
-    const selected = new Set([...offsets].map(Number));
-    reminderFormState.customOffsets = [...selected].filter((value) => !presetValues.has(value));
-    document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip').forEach((chip) => {
-        if (!chip.dataset.offset) {
-            return;
-        }
-        const on = selected.has(Number(chip.dataset.offset));
-        chip.classList.toggle('is-selected', on);
-        chip.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-    renderCustomOffsets();
-    const checkbox = document.getElementById('quick_reminder_enabled');
-    if (checkbox) {
-        checkbox.checked = selected.size > 0;
-    }
-    setReminderPanelOpen(selected.size > 0);
-}
-
-function applyReminderDefaultsFromSelection(people) {
+function applyReminderDefaultsForPeople(people) {
     if (!reminderFormState.allowDefaultPrefill) {
         return;
     }
-    if (currentSelectedReminderOffsets().size) {
+    if (totalReminderCount() > 0) {
         return;
     }
-    const selectedIds = [];
-    document.querySelectorAll('#quick_reminder_recipients input:checked').forEach((input) => {
-        selectedIds.push(Number(input.value));
+    (people || []).forEach((person) => {
+        const defaults = (person.reminder_defaults || []).map(Number).filter((value) => Number.isInteger(value));
+        if (!defaults.length) {
+            return;
+        }
+        setPersonOffsets(person.id, defaults);
     });
-    const merged = new Set();
-    selectedIds.forEach((id) => {
-        const person = (people || []).find((item) => Number(item.id) === id);
-        (person?.reminder_defaults || []).forEach((offset) => merged.add(Number(offset)));
-    });
-    if (!merged.size) {
-        return;
-    }
-    applyOffsetChipSelection(merged);
 }
 
 function applyShiftPersonReminderDefaults(personId) {
     if (!reminderFormState.allowDefaultPrefill || !personId) {
         return;
     }
-    if (currentSelectedReminderOffsets().size) {
+    if (personReminderCount(personId) > 0) {
         return;
     }
-    const person = (typeof shiftUiState !== 'undefined' ? shiftUiState.people : [])
-        .find((item) => String(item.id) === String(personId));
-    const offsets = new Set((person?.reminder_defaults || []).map(Number));
-    if (!offsets.size) {
+    const person = (reminderFormState.people.length
+        ? reminderFormState.people
+        : (typeof shiftUiState !== 'undefined' ? shiftUiState.people : [])
+    ).find((item) => String(item.id) === String(personId));
+    const offsets = (person?.reminder_defaults || []).map(Number);
+    if (!offsets.length) {
         return;
     }
-    applyOffsetChipSelection(offsets);
-    const recipient = document.querySelector(`#quick_reminder_recipients input[value="${personId}"]`);
-    if (recipient && !recipient.checked) {
-        recipient.checked = true;
-        updateReminderChatWarning(
-            (typeof shiftUiState !== 'undefined' ? shiftUiState.people : []),
-        );
+    setPersonOffsets(personId, offsets);
+    reminderFormState.activePersonId = Number(personId);
+    const checkbox = document.getElementById('quick_reminder_enabled');
+    if (checkbox) {
+        checkbox.checked = true;
     }
+    setReminderPanelOpen(true);
+    renderPersonTabs();
+    renderActivePersonOffsets();
 }
 
 async function fillReminderFields(reminders) {
     initReminderFields();
     const token = ++reminderFormState.fillToken;
     const list = Array.isArray(reminders) ? reminders : [];
-    const offsets = list
-        .map((item) => Number(item.offset_minutes))
-        .filter((value) => Number.isInteger(value) && value >= 0);
-    const presetValues = new Set(REMINDER_PRESETS.map(([value]) => value));
-    reminderFormState.customOffsets = [...new Set(offsets.filter((value) => !presetValues.has(value)))];
-    const selectedPresets = new Set(offsets.filter((value) => presetValues.has(value)));
-    document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip').forEach((chip) => {
-        if (!chip.dataset.offset) {
+    reminderFormState.byPerson = {};
+    reminderFormState.activePersonId = null;
+
+    list.forEach((item) => {
+        const offset = Number(item.offset_minutes);
+        if (!Number.isInteger(offset) || offset < 0) {
             return;
         }
-        const on = selectedPresets.has(Number(chip.dataset.offset));
-        chip.classList.toggle('is-selected', on);
-        chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+        let personIds = [];
+        if (item.person_id != null && item.person_id !== '') {
+            personIds = [Number(item.person_id)];
+        } else {
+            personIds = (item.recipient_ids || []).map(Number);
+        }
+        personIds.forEach((personId) => {
+            if (!Number.isInteger(personId) || personId <= 0) {
+                return;
+            }
+            const state = ensurePersonReminderState(personId);
+            if (REMINDER_PRESET_VALUES.has(offset)) {
+                state.presets.add(offset);
+            } else if (!state.customs.includes(offset)) {
+                state.customs.push(offset);
+                state.customs.sort((a, b) => a - b);
+            }
+        });
     });
-    renderCustomOffsets();
+
+    const enabled = totalReminderCount() > 0;
     const checkbox = document.getElementById('quick_reminder_enabled');
-    const enabled = offsets.length > 0;
     if (checkbox) {
         checkbox.checked = enabled;
     }
     setReminderPanelOpen(enabled);
     setReminderError('');
     reminderFormState.allowDefaultPrefill = (
-        !document.getElementById('quick_event_id')?.value && offsets.length === 0
+        !document.getElementById('quick_event_id')?.value && !enabled
     );
-
-    const selectedPeople = new Set();
-    list.forEach((item) => {
-        (item.recipient_ids || []).forEach((id) => selectedPeople.add(Number(id)));
-    });
 
     let people = [];
     try {
@@ -408,10 +472,24 @@ async function fillReminderFields(reminders) {
     if (token !== reminderFormState.fillToken) {
         return;
     }
-    renderReminderRecipients(Array.isArray(people) ? people : [], selectedPeople);
+    reminderFormState.people = Array.isArray(people) ? people : [];
     if (reminderFormState.allowDefaultPrefill) {
-        applyReminderDefaultsFromSelection(people);
+        applyReminderDefaultsForPeople(reminderFormState.people);
+        if (totalReminderCount() > 0) {
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+            setReminderPanelOpen(true);
+        }
     }
+    const withReminders = reminderFormState.people.find(
+        (person) => personReminderCount(person.id) > 0,
+    );
+    reminderFormState.activePersonId = withReminders
+        ? Number(withReminders.id)
+        : (reminderFormState.people[0] ? Number(reminderFormState.people[0].id) : null);
+    renderPersonTabs();
+    renderActivePersonOffsets();
 }
 
 function readReminderFields() {
@@ -420,28 +498,22 @@ function readReminderFields() {
         setReminderError('');
         return [];
     }
-    const offsets = new Set(reminderFormState.customOffsets);
-    document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip.is-selected').forEach((chip) => {
-        const value = Number(chip.dataset.offset);
-        if (Number.isInteger(value)) {
-            offsets.add(value);
-        }
+    const payload = [];
+    Object.keys(reminderFormState.byPerson).forEach((rawId) => {
+        const personId = Number(rawId);
+        const offsets = [...personReminderOffsets(personId)].sort((a, b) => a - b);
+        offsets.forEach((offset) => {
+            payload.push({
+                person_id: personId,
+                offset_minutes: offset,
+                recipient_ids: [personId],
+            });
+        });
     });
-    if (!offsets.size) {
-        setReminderError('בחרו מתי להזכיר, או בטלו את התזכורת');
-        return null;
-    }
-    const recipientIds = [];
-    document.querySelectorAll('#quick_reminder_recipients input:checked').forEach((input) => {
-        recipientIds.push(Number(input.value));
-    });
-    if (recipientIds.length === 0) {
-        setReminderError('נא לבחור לפחות נמען אחד לתזכורת');
+    if (!payload.length) {
+        setReminderError('בחרו מתי להזכיר בלשונית של לפחות אדם אחד, או בטלו את התזכורת');
         return null;
     }
     setReminderError('');
-    return [...offsets].sort((a, b) => a - b).map((offset) => ({
-        offset_minutes: offset,
-        recipient_ids: recipientIds,
-    }));
+    return payload;
 }

@@ -360,7 +360,7 @@
                     <option value="30">30</option>
                     <option value="50">50</option>
                 </select>
-                <span class="small text-muted">בעמוד</span>
+                <span class="small text-muted">בכל פעם</span>
                 <label for="sortOrderSelect" class="mb-0 small text-muted ms-2">סדר</label>
                 <select id="sortOrderSelect" class="form-select form-select-sm" style="width: auto;">
                     <option value="desc" selected>מהחדש לישן</option>
@@ -368,16 +368,6 @@
                 </select>
             </div>
             <div id="paginationInfo" class="small text-muted"></div>
-            <div class="d-flex align-items-center gap-2 flex-wrap" aria-label="ניווט עמודים">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="prevPageBtn">הקודם</button>
-                <div id="paginationPages" class="events-page-numbers d-flex align-items-center gap-1 flex-wrap"></div>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="nextPageBtn">הבא</button>
-                <div class="events-page-jump d-none align-items-center gap-1" id="pageJumpWrap">
-                    <label for="pageJumpInput" class="mb-0 small text-muted">לעמוד</label>
-                    <input type="number" id="pageJumpInput" class="form-control form-control-sm" min="1" style="width: 4.2rem;">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="pageJumpBtn">סע</button>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -388,19 +378,21 @@
 let debounceTimeout;
 const COLOR_OPACITY = 0.8;  // קבוע גלובלי לרמת השקיפות
 const LIST_PREFS_KEY = 'hebCal.eventsListPrefs';
+const SECTION_KEYS = ['past', 'today', 'future', 'recurring'];
 const CATEGORY_META = {
     past: { label: 'אירועים שעברו', rowClass: 'event-row-past', badgeClass: 'event-status-past', badgeText: 'עבר', separatorClass: 'events-time-separator-past' },
     today: { label: 'היום', rowClass: 'event-row-today', badgeClass: 'event-status-today', badgeText: 'היום', separatorClass: 'events-time-separator-today' },
     future: { label: 'מעכשיו והלאה', rowClass: 'event-row-upcoming', badgeClass: 'event-status-upcoming', badgeText: 'עתיד', separatorClass: '' },
+    recurring: { label: 'אירועים חוזרים', rowClass: 'event-row-upcoming', badgeClass: 'event-status-upcoming', badgeText: 'חוזר', separatorClass: '' },
 };
 
 let currentEventsDataset = [];
-let currentOneOffEvents = [];
-let currentRecurringEvents = [];
-let currentPage = 1;
+let sectionEvents = { past: [], today: [], future: [], recurring: [] };
+let sectionVisible = { past: 20, today: 20, future: 20, recurring: 20 };
 let pageSize = 20;
 let sortOrder = 'desc';
-let recurringOpen = true;
+/** ברירת מחדל: עבר סגור; היום/עתיד/חוזרים פתוחים */
+let sectionOpen = { past: false, today: true, future: true, recurring: true };
 
 function getTodayDateStr() {
     const parts = new Intl.DateTimeFormat('en-GB', {
@@ -443,15 +435,21 @@ function loadListPrefs() {
         const prefs = JSON.parse(raw);
         if ([10, 20, 30, 50].includes(Number(prefs.pageSize))) {
             pageSize = Number(prefs.pageSize);
+            SECTION_KEYS.forEach((key) => {
+                sectionVisible[key] = pageSize;
+            });
         }
         if (prefs.sortOrder === 'asc' || prefs.sortOrder === 'desc') {
             sortOrder = prefs.sortOrder;
         }
-        if (Number(prefs.page) >= 1) {
-            currentPage = Number(prefs.page);
-        }
-        if (typeof prefs.recurringOpen === 'boolean') {
-            recurringOpen = prefs.recurringOpen;
+        if (prefs.sectionOpen && typeof prefs.sectionOpen === 'object') {
+            SECTION_KEYS.forEach((key) => {
+                if (typeof prefs.sectionOpen[key] === 'boolean') {
+                    sectionOpen[key] = prefs.sectionOpen[key];
+                }
+            });
+        } else if (typeof prefs.recurringOpen === 'boolean') {
+            sectionOpen.recurring = prefs.recurringOpen;
         }
     } catch (error) {
         console.warn('לא ניתן לטעון העדפות רשימה:', error);
@@ -462,9 +460,8 @@ function saveListPrefs() {
     try {
         localStorage.setItem(LIST_PREFS_KEY, JSON.stringify({
             pageSize,
-            page: currentPage,
             sortOrder,
-            recurringOpen,
+            sectionOpen: { ...sectionOpen },
         }));
     } catch (error) {
         console.warn('לא ניתן לשמור העדפות רשימה:', error);
@@ -475,20 +472,33 @@ function eventIsRecurringMaster(event) {
     return Boolean(event && event.recurrence_freq);
 }
 
+function sortSectionEvents(key, events) {
+    const sorted = sortEventsChronologically(events || []);
+    if (key === 'past') {
+        // הקרובים להיום קודם (תאריך יורד)
+        return sorted.slice().sort((a, b) => String(b.gregorian_date || '').localeCompare(String(a.gregorian_date || '')));
+    }
+    if (key === 'future') {
+        // הבאים בתור קודם (תאריך עולה)
+        return sorted.slice().sort((a, b) => String(a.gregorian_date || '').localeCompare(String(b.gregorian_date || '')));
+    }
+    return sorted;
+}
+
 function partitionEventsList(events) {
-    const oneOff = [];
-    const recurring = [];
+    const buckets = { past: [], today: [], future: [], recurring: [] };
     (events || []).forEach((event) => {
         if (eventIsRecurringMaster(event)) {
-            recurring.push(event);
-        } else {
-            oneOff.push(event);
+            buckets.recurring.push(event);
+            return;
         }
+        buckets[getEventTimeCategory(event)].push(event);
     });
-    return {
-        oneOff: sortEventsChronologically(oneOff),
-        recurring: sortEventsChronologically(recurring),
-    };
+    const out = {};
+    SECTION_KEYS.forEach((key) => {
+        out[key] = sortSectionEvents(key, buckets[key]);
+    });
+    return out;
 }
 
 function applyPrefsToControls() {
@@ -528,13 +538,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const pageSizeSelect = document.getElementById('pageSizeSelect');
     const sortOrderSelect = document.getElementById('sortOrderSelect');
-    const prevPageBtn = document.getElementById('prevPageBtn');
-    const nextPageBtn = document.getElementById('nextPageBtn');
 
     if (pageSizeSelect) {
         pageSizeSelect.addEventListener('change', () => {
             pageSize = Number(pageSizeSelect.value) || 20;
-            currentPage = 1;
+            resetSectionVisibleCounts();
             saveListPrefs();
             renderEventsPage();
         });
@@ -542,51 +550,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (sortOrderSelect) {
         sortOrderSelect.addEventListener('change', () => {
             sortOrder = sortOrderSelect.value === 'desc' ? 'desc' : 'asc';
-            currentPage = 1;
+            resetSectionVisibleCounts();
             saveListPrefs();
-            currentEventsDataset = sortEventsChronologically(currentEventsDataset);
+            // מחלקים מחדש כי past/future מסודרים לפי קירבה, לא לפי sortOrder הגלובלי
+            sectionEvents = partitionEventsList(currentEventsDataset);
             renderEventsPage();
-        });
-    }
-    if (prevPageBtn) {
-        prevPageBtn.addEventListener('click', () => {
-            if (currentPage > 1) {
-                currentPage -= 1;
-                saveListPrefs();
-                renderEventsPage();
-            }
-        });
-    }
-    if (nextPageBtn) {
-        nextPageBtn.addEventListener('click', () => {
-            const totalPages = Math.max(1, Math.ceil(currentEventsDataset.length / pageSize));
-            if (currentPage < totalPages) {
-                currentPage += 1;
-                saveListPrefs();
-                renderEventsPage();
-            }
-        });
-    }
-
-    const pageJumpBtn = document.getElementById('pageJumpBtn');
-    const pageJumpInput = document.getElementById('pageJumpInput');
-    if (pageJumpBtn && pageJumpInput) {
-        const jumpToTypedPage = () => {
-            const totalPages = Math.max(1, Math.ceil(currentEventsDataset.length / pageSize) || 1);
-            const requested = Number(pageJumpInput.value);
-            if (!Number.isFinite(requested)) {
-                return;
-            }
-            currentPage = Math.min(totalPages, Math.max(1, Math.trunc(requested)));
-            saveListPrefs();
-            renderEventsPage();
-        };
-        pageJumpBtn.addEventListener('click', jumpToTypedPage);
-        pageJumpInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                jumpToTypedPage();
-            }
         });
     }
 
@@ -757,7 +725,7 @@ function rowIsGoogle(event) {
 
 function buildEventRowHtml(event) {
     const color = event.color ? convertToRGBA(event.color) : '';
-    const category = getEventTimeCategory(event);
+    const category = eventIsRecurringMaster(event) ? 'recurring' : getEventTimeCategory(event);
     const meta = CATEGORY_META[category];
     const fromGoogle = rowIsGoogle(event);
     const repeatNote = event.recurrence_freq === 'yearly'
@@ -832,107 +800,61 @@ function buildCategorySeparatorHtml(category) {
     `;
 }
 
-function getPaginationItems(current, total) {
-    if (total <= 1) {
-        return total === 1 ? [1] : [];
-    }
-    if (total <= 7) {
-        return Array.from({ length: total }, (_, i) => i + 1);
-    }
-
-    const items = [1];
-    const left = Math.max(2, current - 1);
-    const right = Math.min(total - 1, current + 1);
-
-    if (left > 2) {
-        items.push('ellipsis-left');
-    } else if (left === 2) {
-        // אין צורך ב־ellipsis
-    }
-
-    for (let page = left; page <= right; page += 1) {
-        items.push(page);
-    }
-
-    if (right < total - 1) {
-        items.push('ellipsis-right');
-    } else if (right === total - 1) {
-        // אין צורך ב־ellipsis
-    }
-
-    items.push(total);
-    return items;
+function resetSectionVisibleCounts() {
+    SECTION_KEYS.forEach((key) => {
+        sectionVisible[key] = pageSize;
+    });
 }
 
-function goToPage(page) {
-    const totalPages = Math.max(1, Math.ceil(currentEventsDataset.length / pageSize) || 1);
-    const nextPage = Math.min(totalPages, Math.max(1, Number(page) || 1));
-    if (nextPage === currentPage) {
+function updateListSummary() {
+    const total = currentEventsDataset.length;
+    const info = document.getElementById('paginationInfo');
+    if (!info) {
         return;
     }
-    currentPage = nextPage;
-    saveListPrefs();
-    renderEventsPage();
+    if (total === 0) {
+        info.textContent = 'אין אירועים';
+        return;
+    }
+    const parts = SECTION_KEYS
+        .filter((key) => (sectionEvents[key] || []).length)
+        .map((key) => `${CATEGORY_META[key].label}: ${(sectionEvents[key] || []).length}`);
+    info.textContent = `${total} אירועים · ${parts.join(' · ')}`;
 }
 
-function updatePaginationControls() {
-    const total = currentOneOffEvents.length;
-    const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
-    if (currentPage > totalPages) {
-        currentPage = totalPages;
+function buildSectionHtml(key) {
+    const events = sectionEvents[key] || [];
+    if (!events.length) {
+        return '';
     }
-    if (currentPage < 1) {
-        currentPage = 1;
-    }
-
-    const start = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-    const end = Math.min(currentPage * pageSize, total);
-    const info = document.getElementById('paginationInfo');
-    if (info) {
-        info.textContent = total === 0
-            ? 'אין אירועים'
-            : `${start}–${end} מתוך ${total} · עמוד ${currentPage} מתוך ${totalPages}`;
-    }
-
-    const prevPageBtn = document.getElementById('prevPageBtn');
-    const nextPageBtn = document.getElementById('nextPageBtn');
-    if (prevPageBtn) {
-        prevPageBtn.disabled = currentPage <= 1 || total === 0;
-    }
-    if (nextPageBtn) {
-        nextPageBtn.disabled = currentPage >= totalPages || total === 0;
-    }
-
-    const pagesWrap = document.getElementById('paginationPages');
-    if (pagesWrap) {
-        if (total === 0 || totalPages <= 1) {
-            pagesWrap.innerHTML = '';
-        } else {
-            pagesWrap.innerHTML = getPaginationItems(currentPage, totalPages).map((item) => {
-                if (String(item).startsWith('ellipsis')) {
-                    return '<span class="events-page-ellipsis px-1">…</span>';
-                }
-                const active = item === currentPage ? ' active' : '';
-                return `<button type="button" class="btn btn-sm btn-outline-secondary events-page-btn${active}" data-page="${item}">${item}</button>`;
-            }).join('');
-
-            pagesWrap.querySelectorAll('button[data-page]').forEach((btn) => {
-                btn.addEventListener('click', () => goToPage(btn.getAttribute('data-page')));
-            });
-        }
-    }
-
-    const pageJumpWrap = document.getElementById('pageJumpWrap');
-    const pageJumpInput = document.getElementById('pageJumpInput');
-    if (pageJumpWrap) {
-        // קפיצה ידנית רק כשיש הרבה עמודים — אחרת המספרים מספיקים
-        pageJumpWrap.classList.toggle('d-none', totalPages < 8);
-        pageJumpWrap.classList.toggle('d-flex', totalPages >= 8);
-    }
-    if (pageJumpInput) {
-        pageJumpInput.max = String(totalPages);
-        pageJumpInput.value = String(currentPage);
-    }
+    const meta = CATEGORY_META[key];
+    const visibleCount = Math.min(sectionVisible[key] || pageSize, events.length);
+    const shown = events.slice(0, visibleCount);
+    const remaining = events.length - visibleCount;
+    const openAttr = sectionOpen[key] ? ' open' : '';
+    const moreBtn = remaining > 0
+        ? `<button type="button" class="btn btn-outline-secondary btn-sm events-show-more-btn" data-section="${key}">הצג עוד (${Math.min(pageSize, remaining)})</button>`
+        : '';
+    return `
+        <tr class="events-section-row events-section-${key}">
+            <td colspan="6" class="events-section-cell">
+                <details class="events-section-details" data-section="${key}"${openAttr}>
+                    <summary class="events-section-summary">
+                        ${meta.label}
+                        <span class="events-section-count">(${events.length})</span>
+                    </summary>
+                    <div class="events-section-list">
+                        <table class="table table-hover events-section-table mb-0">
+                            <tbody>
+                                ${shown.map((event) => buildEventRowHtml(event)).join('')}
+                            </tbody>
+                        </table>
+                        ${moreBtn ? `<div class="events-show-more-wrap">${moreBtn}</div>` : ''}
+                    </div>
+                </details>
+            </td>
+        </tr>
+    `;
 }
 
 function renderEventsPage() {
@@ -941,76 +863,49 @@ function renderEventsPage() {
         return;
     }
 
-    updatePaginationControls();
+    updateListSummary();
     saveListPrefs();
 
-    if (currentOneOffEvents.length === 0 && currentRecurringEvents.length === 0) {
+    const hasAny = SECTION_KEYS.some((key) => (sectionEvents[key] || []).length > 0);
+    if (!hasAny) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center">לא נמצאו תוצאות</td></tr>';
         return;
     }
 
-    const startIndex = (currentPage - 1) * pageSize;
-    const pageEvents = currentOneOffEvents.slice(startIndex, startIndex + pageSize);
-    let newContent = '';
-    let previousCategory = startIndex > 0
-        ? getEventTimeCategory(currentOneOffEvents[startIndex - 1])
-        : null;
+    // סדר תצוגה: עתיד → היום → עבר → חוזרים
+    const order = ['future', 'today', 'past', 'recurring'];
+    tbody.innerHTML = order.map((key) => buildSectionHtml(key)).join('');
 
-    pageEvents.forEach((event) => {
-        const category = getEventTimeCategory(event);
-        if (previousCategory !== category) {
-            newContent += buildCategorySeparatorHtml(category);
-        }
-
-        newContent += buildEventRowHtml(event);
-        previousCategory = category;
-    });
-
-    if (currentRecurringEvents.length) {
-        const count = currentRecurringEvents.length;
-        const openAttr = recurringOpen ? ' open' : '';
-        newContent += `
-            <tr class="events-recurring-section">
-                <td colspan="6" class="events-recurring-cell">
-                    <details class="events-recurring-details"${openAttr}>
-                        <summary class="events-recurring-summary">
-                            אירועים חוזרים
-                            <span class="events-recurring-count">(${count})</span>
-                        </summary>
-                        <div class="events-recurring-list">
-                            <table class="table table-hover events-recurring-table mb-0">
-                                <tbody>
-                                    ${currentRecurringEvents.map((event) => buildEventRowHtml(event)).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </details>
-                </td>
-            </tr>
-        `;
-    }
-
-    tbody.innerHTML = newContent;
-    const details = tbody.querySelector('.events-recurring-details');
-    if (details) {
+    tbody.querySelectorAll('.events-section-details').forEach((details) => {
         details.addEventListener('toggle', () => {
-            recurringOpen = details.open;
+            const key = details.getAttribute('data-section');
+            if (!SECTION_KEYS.includes(key)) {
+                return;
+            }
+            sectionOpen[key] = details.open;
             saveListPrefs();
         });
-    }
+    });
+    tbody.querySelectorAll('.events-show-more-btn').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const key = btn.getAttribute('data-section');
+            if (!SECTION_KEYS.includes(key)) {
+                return;
+            }
+            sectionVisible[key] = (sectionVisible[key] || pageSize) + pageSize;
+            renderEventsPage();
+        });
+    });
 }
 
 function updateTable(events, options = {}) {
-    const { resetPage = true, restorePage = false } = options;
-    const savedPage = currentPage;
+    const { resetPage = true } = options;
     currentEventsDataset = sortEventsChronologically(events || []);
-    const parts = partitionEventsList(currentEventsDataset);
-    currentOneOffEvents = parts.oneOff;
-    currentRecurringEvents = parts.recurring;
-    if (resetPage && !restorePage) {
-        currentPage = 1;
-    } else if (restorePage) {
-        currentPage = savedPage;
+    sectionEvents = partitionEventsList(currentEventsDataset);
+    if (resetPage) {
+        resetSectionVisibleCounts();
     }
     renderEventsPage();
 }

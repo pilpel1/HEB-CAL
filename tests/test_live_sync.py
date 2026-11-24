@@ -320,7 +320,8 @@ def test_events_list_refreshes_in_place(threaded_server, client):
                 "/api/events",
                 json={
                     "title": "ברשימה מרחוק",
-                    "gregorian_date": "2026-11-01",
+                    # עתיד — מקטע «מעכשיו והלאה» פתוח כברירת מחדל (עבר סגור)
+                    "gregorian_date": "2027-11-01",
                     "hebrew_date": "א",
                 },
                 headers={CLIENT_HEADER: "phone-x"},

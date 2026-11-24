@@ -26,9 +26,10 @@ DEFAULT_DATABASE_PATH = Path("data/calendar.db")
 # (גם על בסיס שכבר על 8).
 # גרסה 9: end_time (HH:MM, nullable) על events ועל event_exceptions.
 # גרסה 10: shift_hours JSON על users + user_reminder_defaults.
+# גרסה 11: תזכורות לפי אדם — person_id על reminders, פיצול recipient_ids משותפים.
 # בסיס ישן נשאר על 0 עד המעבר הראשון. להעלאת גרסה כשמוסיפים מיגרציה חדשה —
 # גוף ה-DDL אידמפוטנטי, אז הרצה חוזרת על בסיס שכבר שודרג בטוחה.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 # מילישניות. חייב להיות מוגדר לפני BEGIN IMMEDIATE, אחרת החיבור השני
 # נכשל מיד ב-database is locked במקום לחכות שהראשון יסיים.
 SCHEMA_BUSY_TIMEOUT_MS = 15000
@@ -209,9 +210,13 @@ def apply_pending_migrations(db) -> None:
         ensure_end_time_schema(db)
         ensure_shift_schema(db)
         ensure_gcal_schema(db)
-        from app.reminders.repository import backfill_people_role_flags
+        from app.reminders.repository import (
+            backfill_people_role_flags,
+            expand_reminders_to_per_person,
+        )
 
         backfill_people_role_flags(db)
+        expand_reminders_to_per_person(db)
         from app.reminders.repository import ensure_unique_people_names
 
         ensure_unique_people_names(db)

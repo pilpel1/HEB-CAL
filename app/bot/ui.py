@@ -678,10 +678,27 @@ def add_confirm_screen(draft: dict, today: date, *, error: str = "", people: dic
     )
 
 
-def _reminder_offsets(draft: dict) -> list[int]:
+def _reminder_person_id(item: dict) -> int | None:
+    raw = item.get("person_id")
+    if raw is not None and raw != "":
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            pass
+    for raw in item.get("recipient_ids") or []:
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _reminder_offsets(draft: dict, person_id: int | None = None) -> list[int]:
     found = []
     for item in draft.get("reminders") or []:
         if not isinstance(item, dict):
+            continue
+        if person_id is not None and _reminder_person_id(item) != person_id:
             continue
         try:
             minutes = int(item.get("offset_minutes"))
@@ -697,63 +714,81 @@ def _reminder_recipient_ids(draft: dict) -> list[int]:
     for item in draft.get("reminders") or []:
         if not isinstance(item, dict):
             continue
-        for raw in item.get("recipient_ids") or []:
-            try:
-                person_id = int(raw)
-            except (TypeError, ValueError):
-                continue
-            if person_id not in found:
-                found.append(person_id)
+        person_id = _reminder_person_id(item)
+        if person_id is None:
+            continue
+        if person_id not in found:
+            found.append(person_id)
     return found
 
 
 def _reminder_line(draft: dict, people: dict | None) -> str:
-    offsets = _reminder_offsets(draft)
-    if not offsets:
+    by_person: dict[int, list[int]] = {}
+    for item in draft.get("reminders") or []:
+        if not isinstance(item, dict):
+            continue
+        person_id = _reminder_person_id(item)
+        if person_id is None:
+            continue
+        try:
+            minutes = int(item.get("offset_minutes"))
+        except (TypeError, ValueError):
+            continue
+        by_person.setdefault(person_id, [])
+        if minutes not in by_person[person_id]:
+            by_person[person_id].append(minutes)
+    if not by_person:
         return "בלי תזכורת"
-    labels = [offset_label(minutes) for minutes in offsets]
-    names = []
-    if people:
-        for person_id in _reminder_recipient_ids(draft):
-            person = people.get(person_id) or {}
-            name = person.get("name") or ""
-            if name and name not in names:
-                names.append(name)
-    line = "תזכורת: " + ", ".join(labels)
-    if names:
-        line += " · " + ", ".join(names)
-    return line
+    bits = []
+    for person_id, offsets in by_person.items():
+        labels = ", ".join(offset_label(minutes) for minutes in offsets)
+        name = ""
+        if people:
+            name = (people.get(person_id) or {}).get("name") or ""
+        bits.append(f"{name or person_id}: {labels}" if name or person_id else labels)
+    return "תזכורת: " + " · ".join(bits)
 
 
-def add_reminder_screen(draft: dict) -> tuple[str, dict]:
-    selected = set(_reminder_offsets(draft))
-    lines = ["מתי להזכיר?", "אפשר כמה. בלי בחירה אין תזכורת."]
-    presets = []
-    for minutes, label in PRESET_OFFSETS:
-        shown = f"• {label}" if minutes in selected else label
-        presets.append((shown, f"add:ro:{minutes}"))
-    rows = _pairs(presets)
-    rows.append([("בלי תזכורת", "add:rm0")])
-    if selected:
-        rows.append([("למי", "add:who")])
-    rows.append(_back_cancel("back:add"))
-    return "\n".join(lines), kb(rows)
-
-
-def add_reminder_people_screen(draft: dict, people: list[dict]) -> tuple[str, dict]:
-    selected = set(_reminder_recipient_ids(draft))
+def add_reminder_screen(draft: dict, people: list[dict]) -> tuple[str, dict]:
+    """בחירת אדם — לכל אחד offsets משלו."""
     lines = [
-        "למי לשלוח?",
-        "אפשר כמה. בלי נמען התזכורת תופיע בדפדפן כשהלוח פתוח.",
+        "תזכורת לפי אדם",
+        "בחרו אדם ואז מתי להזכיר. אפשר offsets שונים לכל אחד.",
     ]
     if not people:
         lines.append("אין עדיין אנשים לתזכורת.")
     rows = []
     for person in people:
+        person_id = person.get("id")
         name = person.get("name") or "בלי שם"
-        mark = "• " if person.get("id") in selected else ""
-        rows.append([(f"{mark}{name}", f"add:rp:{person.get('id')}")])
-    rows.append([("סיום", "back:add"), ("זמנים", "add:rem")])
+        count = len(_reminder_offsets(draft, person_id))
+        mark = f" ({count})" if count else ""
+        rows.append([(f"{name}{mark}", f"add:rp:{person_id}")])
+    rows.append([("בלי תזכורת", "add:rm0")])
+    rows.append(_back_cancel("back:add"))
+    return "\n".join(lines), kb(rows)
+
+
+def add_reminder_people_screen(draft: dict, people: list[dict]) -> tuple[str, dict]:
+    """תאימות לשם הישן — אותו מסך בחירת אדם."""
+    return add_reminder_screen(draft, people)
+
+
+def add_reminder_person_offsets_screen(draft: dict, person: dict) -> tuple[str, dict]:
+    person_id = int(person["id"])
+    selected = set(_reminder_offsets(draft, person_id))
+    name = person.get("name") or "בלי שם"
+    lines = [
+        f"מתי להזכיר ל{name}?",
+        "אפשר כמה. בלי בחירה אין תזכורת לאדם הזה.",
+    ]
+    presets = []
+    for minutes, label in PRESET_OFFSETS:
+        shown = f"• {label}" if minutes in selected else label
+        presets.append((shown, f"add:ro:{person_id}:{minutes}"))
+    rows = _pairs(presets)
+    rows.append([("נקה לאדם", f"add:rc:{person_id}"), ("אנשים", "add:rem")])
+    rows.append(_back_cancel("back:add"))
     return "\n".join(lines), kb(rows)
 
 

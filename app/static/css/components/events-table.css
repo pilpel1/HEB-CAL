@@ -234,6 +234,98 @@ td span[style*="background-color"] {
     border-bottom-color: #ffc107;
 }
 
+.events-section-cell {
+    padding: 0.35rem 0 !important;
+    border: 0;
+    background: transparent;
+}
+
+.events-section-details {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    background: #fff;
+    overflow: hidden;
+}
+
+.events-section-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.85rem;
+    cursor: pointer;
+    font-weight: 700;
+    list-style: none;
+    user-select: none;
+}
+
+.events-section-summary::-webkit-details-marker {
+    display: none;
+}
+
+.events-section-summary::before {
+    content: '▾';
+    display: inline-block;
+    transition: transform 0.15s ease;
+    color: #6c757d;
+}
+
+.events-section-details:not([open]) > .events-section-summary::before {
+    transform: rotate(90deg);
+}
+
+.events-section-count {
+    color: #6c757d;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.events-section-past .events-section-summary {
+    color: #6c757d;
+    background: #f8f9fa;
+}
+
+.events-section-today .events-section-summary {
+    color: #9a6700;
+    background: #fff8e1;
+}
+
+.events-section-future .events-section-summary {
+    color: #0b5ed7;
+    background: #e7f1ff;
+}
+
+.events-section-recurring .events-section-summary {
+    color: #5a3d8a;
+    background: #f3eefc;
+}
+
+.events-section-list {
+    border-top: 1px solid #dee2e6;
+}
+
+.events-section-table {
+    margin: 0;
+}
+
+.events-show-more-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 0.5rem 0.75rem 0.65rem;
+}
+
+.events-show-more-btn {
+    min-width: 8rem;
+}
+
+[data-bs-theme="dark"] .events-section-details {
+    background: var(--bs-body-bg);
+    border-color: #495057;
+}
+
+[data-bs-theme="dark"] .events-section-list {
+    border-top-color: #495057;
+}
+
 .events-tools-menu {
     min-width: 220px;
 }

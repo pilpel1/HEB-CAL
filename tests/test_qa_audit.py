@@ -310,7 +310,9 @@ def test_partial_telegram_failure_does_not_duplicate_first_chat(client, app):
 
     now = datetime(2026, 3, 1, 9, 0, tzinfo=TZ)
     with app.app_context():
-        assert process_due_reminders(now=now, send=flaky, token="t") == 0
+        # אחרי פיצול לפי אדם: שורת 111 מצליחה (delivered+=1), שורת 222 נכשלת
+        first_pass = process_due_reminders(now=now, send=flaky, token="t")
+        assert first_pass == 1
         assert process_due_reminders(now=now, send=flaky, token="t") == 0
     assert sent.count("111") == 1
     assert sent.count("222") >= 1

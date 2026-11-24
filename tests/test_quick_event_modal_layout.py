@@ -210,7 +210,7 @@ def _open_modal(page, kind):
         }"""
     )
     page.wait_for_selector(
-        "#quick_reminder_recipients label, #quick_reminder_recipients .reminder-empty-people",
+        "#quick_reminder_person_tabs .reminder-person-tab, #quick_reminder_empty_people:not([hidden])",
         state="attached",
     )
     return dialog
@@ -232,7 +232,7 @@ def _expand(page, _width):
     expect(page.locator("#quick_reminder_panel")).to_be_visible()
     page.click("#quick_reminder_custom_toggle")
     expect(page.locator("#quick_reminder_custom_row")).to_be_visible()
-    expect(page.locator(".reminder-recipients")).to_contain_text("למי להזכיר")
+    expect(page.locator("#quick_reminder_person_tabs")).to_be_visible()
 
 
 @pytest.mark.parametrize("kind,width,height,expand", VIEWPORTS)
@@ -270,10 +270,10 @@ def test_event_modal_footer_stays_and_sections_scroll(live_server, client, kind,
             page.locator('#quickEventModal .modal-footer .btn-outline-secondary').click(trial=True)
             page.locator("#quickEventModal .btn-close").click(trial=True)
 
-            recipients = page.evaluate(_METRICS_JS, "#quick_reminder_recipients label:last-child")
+            recipients = page.evaluate(_METRICS_JS, "#quick_reminder_person_tabs .reminder-person-tab:last-child")
             _assert_chrome(recipients, f"recipients {kind} {width}x{height}")
             _assert_target_in_body(recipients, f"recipients {kind} {width}x{height}")
-            page.locator("#quick_reminder_recipients label:last-child input").click(trial=True)
+            page.locator("#quick_reminder_person_tabs .reminder-person-tab:last-child").click(trial=True)
 
             until = page.evaluate(_METRICS_JS, "#quick_recurrence_until")
             _assert_chrome(until, f"until {kind} {width}x{height}")

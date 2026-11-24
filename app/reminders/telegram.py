@@ -6,9 +6,12 @@ from __future__ import annotations
 
 import html
 import json
+import logging
 import sys
 import urllib.error
 import urllib.request
+
+log = logging.getLogger("hebcal.telegram")
 
 
 class TelegramError(RuntimeError):
@@ -219,6 +222,12 @@ def deliver_outgoing(token: str, api, outgoing: dict) -> None:
             )
             return
         except TelegramError as exc:
+            # Bot API 10.4 sendWidget - אם השרת דוחה (גרסה/מגבלות) נופלים לטקסט
+            log.warning(
+                "sendWidget fallback to text: %s (status=%s)",
+                exc,
+                getattr(exc, "status_code", None),
+            )
             print(f"sendWidget failed, falling back to text: {exc}", file=sys.stderr)
             if not outgoing.get("text"):
                 return

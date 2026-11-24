@@ -59,12 +59,20 @@ def test_dispatch_today_widget_returns_widget_payload(app, client):
                 },
             }
         )
+        via_command = handle_update(
+            {
+                "update_id": 2,
+                "message": {"text": "/today", "chat": {"id": 42}},
+            }
+        )
     assert outgoing.get("chat_id") == 42
     assert outgoing.get("widget")
     assert outgoing["widget"]["html"]
     assert "TelegramWidget" in outgoing["widget"]["html"]
     # fallback text also present
     assert "סיכום היום" in (outgoing.get("text") or "")
+    assert via_command.get("widget")
+    assert "סיכום היום" in (via_command.get("text") or "")
 
 
 def test_menu_has_today_widget_button():

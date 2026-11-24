@@ -336,7 +336,7 @@ def test_schema_v9_adds_nullable_end_time(tmp_path):
     assert row["title"] == "ישן"
     assert row["time"] == "10:00"
     assert row["end_time"] is None
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 10
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 11
     conn.close()
 
 

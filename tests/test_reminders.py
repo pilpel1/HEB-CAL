@@ -50,12 +50,15 @@ def test_custom_offsets_and_presets():
             {"offset_minutes": 0, "recipient_ids": [1]},
             {"amount": 2, "unit": "hours", "recipient_ids": [2, 2]},
             {"offset_minutes": 120, "recipient_ids": [1]},
+            {"person_id": 2, "offset_minutes": 15},
         ],
         {1, 2},
     )
     assert parsed == [
-        {"offset_minutes": 0, "recipient_ids": [1]},
-        {"offset_minutes": 120, "recipient_ids": [2, 1]},
+        {"person_id": 1, "offset_minutes": 0, "recipient_ids": [1]},
+        {"person_id": 2, "offset_minutes": 15, "recipient_ids": [2]},
+        {"person_id": 1, "offset_minutes": 120, "recipient_ids": [1]},
+        {"person_id": 2, "offset_minutes": 120, "recipient_ids": [2]},
     ]
     with pytest.raises(OffsetError, match="נמען לא קיים"):
         parse_reminders_payload([{"offset_minutes": 5, "recipient_ids": [9]}], {1})
@@ -149,9 +152,14 @@ def test_event_reminders_api_round_trip(client):
     event_id = created.get_json()["id"]
 
     body = client.get(f"/api/events/{event_id}").get_json()
-    assert [(item["offset_minutes"], item["recipient_ids"]) for item in body["reminders"]] == [
-        (15, [person["id"]]),
-        (120, [person["id"], other["id"]]),
+    got = [
+        (item["person_id"], item["offset_minutes"], item["recipient_ids"])
+        for item in body["reminders"]
+    ]
+    assert got == [
+        (person["id"], 15, [person["id"]]),
+        (person["id"], 120, [person["id"]]),
+        (other["id"], 120, [other["id"]]),
     ]
 
     kept = client.put(
@@ -160,7 +168,7 @@ def test_event_reminders_api_round_trip(client):
     )
     assert kept.status_code == 200
     still = client.get(f"/api/events/{event_id}").get_json()
-    assert len(still["reminders"]) == 2
+    assert len(still["reminders"]) == 3
     assert still["title"] == "בלי לגעת בתזכורות"
 
     cleared = client.put(f"/api/events/{event_id}", json={**SAMPLE, "reminders": []})

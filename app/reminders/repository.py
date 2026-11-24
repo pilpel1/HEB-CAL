@@ -32,6 +32,7 @@ def _has_people_table(db) -> bool:
 
 _REMINDER_COLUMNS = (
     ("event_id", "INTEGER"),
+    ("person_id", "INTEGER"),
     ("offset_minutes", "INTEGER NOT NULL DEFAULT 0"),
     ("recipient_ids", "TEXT NOT NULL DEFAULT '[]'"),
     ("sent_at", "TEXT"),
@@ -69,6 +70,7 @@ def ensure_reminder_schema(db) -> None:
             CREATE TABLE IF NOT EXISTS reminders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id INTEGER NOT NULL,
+                person_id INTEGER,
                 offset_minutes INTEGER NOT NULL,
                 recipient_ids TEXT NOT NULL DEFAULT '[]',
                 sent_at TEXT,
@@ -82,13 +84,26 @@ def ensure_reminder_schema(db) -> None:
                 _add_column_if_missing(db, table, name, decl)
         for name, decl in _REMINDER_COLUMNS:
             _add_column_if_missing(db, "reminders", name, decl)
+        expand_reminders_to_per_person(db)
         _schema_execute(
             db,
             "CREATE INDEX IF NOT EXISTS idx_reminders_event ON reminders(event_id)",
         )
         _schema_execute(
             db,
+            "CREATE INDEX IF NOT EXISTS idx_reminders_person ON reminders(person_id)",
+        )
+        _schema_execute(
+            db,
             "CREATE INDEX IF NOT EXISTS idx_reminders_unsent ON reminders(sent_at)",
+        )
+        _schema_execute(
+            db,
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_reminders_event_person_offset
+            ON reminders(event_id, person_id, offset_minutes)
+            WHERE person_id IS NOT NULL
+            """,
         )
         if _has_people_table(db):
             people_table = resolve_people_table(db)
@@ -273,26 +288,37 @@ def reminder_recipient_event_ids(person_id: int) -> list[int]:
     db = get_db()
     found: list[int] = []
     seen: set[int] = set()
-    for row in db.execute("SELECT event_id, recipient_ids FROM reminders"):
-        try:
-            ids = json.loads(row["recipient_ids"] or "[]")
-        except (TypeError, json.JSONDecodeError):
-            ids = []
-        if not isinstance(ids, list):
-            continue
-        for item in ids:
+    cols = {row[1] for row in db.execute("PRAGMA table_info(reminders)")}
+    select = "event_id, recipient_ids"
+    if "person_id" in cols:
+        select = "event_id, person_id, recipient_ids"
+    for row in db.execute(f"SELECT {select} FROM reminders"):
+        matched = False
+        if "person_id" in cols and row["person_id"] is not None:
             try:
-                number = int(item)
+                matched = int(row["person_id"]) == person_id
             except (TypeError, ValueError):
-                continue
-            if number != person_id:
-                continue
-            event_id = row["event_id"]
-            if event_id in seen:
-                break
-            seen.add(event_id)
-            found.append(event_id)
-            break
+                matched = False
+        if not matched:
+            try:
+                ids = json.loads(row["recipient_ids"] or "[]")
+            except (TypeError, json.JSONDecodeError):
+                ids = []
+            if isinstance(ids, list):
+                for item in ids:
+                    try:
+                        if int(item) == person_id:
+                            matched = True
+                            break
+                    except (TypeError, ValueError):
+                        continue
+        if not matched:
+            continue
+        event_id = row["event_id"]
+        if event_id in seen:
+            continue
+        seen.add(event_id)
+        found.append(event_id)
     return found
 
 
@@ -390,27 +416,146 @@ def person_to_dict(row) -> dict:
     }
 
 
-def reminder_to_dict(row) -> dict:
-    raw = row["recipient_ids"] if "recipient_ids" in row.keys() else "[]"
-    try:
-        recipient_ids = json.loads(raw or "[]")
-    except (TypeError, json.JSONDecodeError):
-        recipient_ids = []
-    if not isinstance(recipient_ids, list):
-        recipient_ids = []
-    clean_ids = []
-    for item in recipient_ids:
+def _person_id_from_row(row) -> int | None:
+    keys = row.keys()
+    if "person_id" in keys and row["person_id"] is not None:
         try:
-            clean_ids.append(int(item))
+            return int(row["person_id"])
         except (TypeError, ValueError):
-            continue
+            pass
+    raw = row["recipient_ids"] if "recipient_ids" in keys else "[]"
+    ids = _parse_recipient_ids(raw)
+    return ids[0] if ids else None
+
+
+def reminder_to_dict(row) -> dict:
+    person_id = _person_id_from_row(row)
+    clean_ids = [person_id] if person_id is not None else []
     return {
         "id": row["id"],
         "event_id": row["event_id"],
+        "person_id": person_id,
         "offset_minutes": row["offset_minutes"],
         "recipient_ids": clean_ids,
         "sent_at": row["sent_at"],
     }
+
+
+def _rows_as_dicts(cursor) -> list[dict]:
+    """עובד גם בלי ``row_factory=sqlite3.Row`` (מיגרציות / סקריפטים)."""
+    names = [col[0] for col in (cursor.description or ())]
+    return [dict(zip(names, raw)) for raw in cursor.fetchall()]
+
+
+def expand_reminders_to_per_person(db) -> int:
+    """מפצל שורות ישנות (offset × כמה נמענים) לשורה לכל אדם.
+
+    אידמפוטנטי: שורות עם person_id כבר מוגדר לא נוגעים בהן.
+    שומר sent_at ו-reminder_sends: העתקה לצ'אט של הנמען או לחותמת ריקה.
+    """
+    tables = {
+        row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "reminders" not in tables:
+        return 0
+    cols = {row[1] for row in db.execute("PRAGMA table_info(reminders)")}
+    if "person_id" not in cols:
+        _add_column_if_missing(db, "reminders", "person_id", "INTEGER")
+        cols.add("person_id")
+    if "recipient_ids" not in cols or "offset_minutes" not in cols:
+        return 0
+    people_chat: dict[int, str] = {}
+    if _has_people_table(db):
+        table = _people(db)
+        for prow in _rows_as_dicts(db.execute(f"SELECT id, telegram_chat_id FROM {table}")):
+            chat = str(prow.get("telegram_chat_id") or "").strip()
+            if chat:
+                people_chat[int(prow["id"])] = chat
+    has_sends = "reminder_sends" in tables
+    created = 0
+    rows = _rows_as_dicts(
+        db.execute(
+            """
+            SELECT id, event_id, offset_minutes, recipient_ids, sent_at, person_id
+            FROM reminders
+            """
+        )
+    )
+    for row in rows:
+        if row.get("person_id") is not None:
+            current = _parse_recipient_ids(row.get("recipient_ids"))
+            expected = [int(row["person_id"])]
+            if current != expected:
+                db.execute(
+                    "UPDATE reminders SET recipient_ids = ? WHERE id = ?",
+                    (json.dumps(expected), row["id"]),
+                )
+            continue
+        ids = _parse_recipient_ids(row.get("recipient_ids"))
+        if not ids:
+            continue
+        first = ids[0]
+        db.execute(
+            "UPDATE reminders SET person_id = ?, recipient_ids = ? WHERE id = ?",
+            (first, json.dumps([first]), row["id"]),
+        )
+        sends = []
+        if has_sends:
+            sends = _rows_as_dicts(
+                db.execute(
+                    """
+                    SELECT occurrence_date, chat_id, sent_at
+                    FROM reminder_sends WHERE reminder_id = ?
+                    """,
+                    (row["id"],),
+                )
+            )
+        for person_id in ids[1:]:
+            cursor = db.execute(
+                """
+                INSERT INTO reminders (event_id, person_id, offset_minutes, recipient_ids, sent_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    row["event_id"],
+                    person_id,
+                    row["offset_minutes"],
+                    json.dumps([person_id]),
+                    row.get("sent_at"),
+                ),
+            )
+            new_id = cursor.lastrowid
+            created += 1
+            if not has_sends or not sends:
+                continue
+            person_chat = people_chat.get(person_id, "")
+            for send in sends:
+                chat_id = send.get("chat_id") or ""
+                if chat_id and person_chat and chat_id != person_chat:
+                    continue
+                if chat_id and not person_chat:
+                    continue
+                db.execute(
+                    """
+                    INSERT OR IGNORE INTO reminder_sends
+                        (reminder_id, occurrence_date, chat_id, sent_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (new_id, send["occurrence_date"], chat_id, send.get("sent_at")),
+                )
+        if has_sends and sends and len(ids) > 1:
+            first_chat = people_chat.get(first, "")
+            for send in sends:
+                chat_id = send.get("chat_id") or ""
+                if chat_id and first_chat and chat_id != first_chat:
+                    db.execute(
+                        """
+                        DELETE FROM reminder_sends
+                        WHERE reminder_id = ? AND occurrence_date = ? AND chat_id = ?
+                        """,
+                        (row["id"], send["occurrence_date"], chat_id),
+                    )
+    return created
 
 
 def list_people(*, role: str | None = None) -> list[dict]:
@@ -581,7 +726,15 @@ def _parse_recipient_ids(raw) -> list[int]:
 def _remap_person_refs(db, old_id: int, new_id: int) -> None:
     if old_id == new_id:
         return
-    for row in db.execute("SELECT id, recipient_ids FROM reminders"):
+    cols = {row[1] for row in db.execute("PRAGMA table_info(reminders)")}
+    select = "id, recipient_ids"
+    if "person_id" in cols:
+        select = "id, person_id, recipient_ids"
+        db.execute(
+            "UPDATE reminders SET person_id = ? WHERE person_id = ?",
+            (new_id, old_id),
+        )
+    for row in db.execute(f"SELECT {select} FROM reminders"):
         ids = _parse_recipient_ids(row["recipient_ids"])
         changed = False
         remapped: list[int] = []
@@ -591,11 +744,21 @@ def _remap_person_refs(db, old_id: int, new_id: int) -> None:
                 changed = True
             if value not in remapped:
                 remapped.append(value)
+        person_id = remapped[0] if remapped else None
+        if "person_id" in cols and row["person_id"] == old_id:
+            changed = True
+            person_id = new_id
         if changed or remapped != ids:
-            db.execute(
-                "UPDATE reminders SET recipient_ids = ? WHERE id = ?",
-                (json.dumps(remapped), row["id"]),
-            )
+            if "person_id" in cols:
+                db.execute(
+                    "UPDATE reminders SET person_id = ?, recipient_ids = ? WHERE id = ?",
+                    (person_id, json.dumps(remapped), row["id"]),
+                )
+            else:
+                db.execute(
+                    "UPDATE reminders SET recipient_ids = ? WHERE id = ?",
+                    (json.dumps(remapped), row["id"]),
+                )
     tables = {
         row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
@@ -1097,22 +1260,31 @@ def reminders_for_events(event_ids: list[int] | None = None) -> dict[int, list[d
     db = get_db()
     if event_ids is not None and not event_ids:
         return {}
+    cols = {row[1] for row in db.execute("PRAGMA table_info(reminders)")}
+    select_cols = "id, event_id, offset_minutes, recipient_ids, sent_at"
+    if "person_id" in cols:
+        select_cols = "id, event_id, person_id, offset_minutes, recipient_ids, sent_at"
+    order = (
+        "ORDER BY offset_minutes, person_id, id"
+        if "person_id" in cols
+        else "ORDER BY offset_minutes, id"
+    )
     if event_ids is None:
         rows = db.execute(
-            """
-            SELECT id, event_id, offset_minutes, recipient_ids, sent_at
+            f"""
+            SELECT {select_cols}
             FROM reminders
-            ORDER BY offset_minutes, id
+            {order}
             """
         ).fetchall()
     else:
         marks = ",".join("?" for _ in event_ids)
         rows = db.execute(
             f"""
-            SELECT id, event_id, offset_minutes, recipient_ids, sent_at
+            SELECT {select_cols}
             FROM reminders
             WHERE event_id IN ({marks})
-            ORDER BY offset_minutes, id
+            {order}
             """,
             tuple(event_ids),
         ).fetchall()
@@ -1130,49 +1302,87 @@ def attach_reminders(events: list[dict]) -> list[dict]:
 
 
 def replace_event_reminders(event_id: int, reminders: list[dict], *, commit: bool = True) -> None:
-    """מחליף את תזכורות האירוע.
+    """מחליף את תזכורות האירוע — שורה לכל (אדם, offset).
 
-    אותו offset שומר ``sent_at`` כל עוד רשימת הנמענים לא השתנתה, כדי שעריכת
-    כותרת לא תשלח שוב. שינוי נמענים מאפס את sent_at.
-    ``sent_at`` בפריט (ייבוא) נשמר רק בשורה חדשה.
+    אותו (person_id, offset) שומר ``sent_at``. ``sent_at`` בפריט (ייבוא)
+    נשמר רק בשורה חדשה.
     """
     db = get_db()
+    cols = {row[1] for row in db.execute("PRAGMA table_info(reminders)")}
+    select_cols = "id, offset_minutes, recipient_ids, sent_at"
+    if "person_id" in cols:
+        select_cols = "id, person_id, offset_minutes, recipient_ids, sent_at"
     existing = db.execute(
-        "SELECT id, offset_minutes, recipient_ids, sent_at FROM reminders WHERE event_id = ?",
+        f"SELECT {select_cols} FROM reminders WHERE event_id = ?",
         (event_id,),
     ).fetchall()
-    by_offset: dict[int, list] = {}
+    by_key: dict[tuple[int, int], list] = {}
     for row in existing:
-        by_offset.setdefault(row["offset_minutes"], []).append(row)
+        person_id = _person_id_from_row(row)
+        if person_id is None:
+            continue
+        by_key.setdefault((person_id, int(row["offset_minutes"])), []).append(row)
 
-    seen: set[int] = set()
+    seen: set[tuple[int, int]] = set()
     for item in reminders:
         offset = int(item["offset_minutes"])
-        ids_json = json.dumps(list(item.get("recipient_ids") or []))
-        seen.add(offset)
-        rows = by_offset.get(offset) or []
+        person_id = item.get("person_id")
+        if person_id is None:
+            ids = list(item.get("recipient_ids") or [])
+            if not ids:
+                continue
+            person_id = int(ids[0])
+        else:
+            person_id = int(person_id)
+        ids_json = json.dumps([person_id])
+        key = (person_id, offset)
+        seen.add(key)
+        rows = by_key.get(key) or []
         if rows:
             primary = rows[0]
-            if (primary["recipient_ids"] or "[]") != ids_json:
+            if "person_id" in cols:
                 db.execute(
-                    "UPDATE reminders SET recipient_ids = ?, sent_at = NULL WHERE id = ?",
-                    (ids_json, primary["id"]),
+                    """
+                    UPDATE reminders
+                    SET person_id = ?, recipient_ids = ?
+                    WHERE id = ?
+                    """,
+                    (person_id, ids_json, primary["id"]),
                 )
-                db.execute("DELETE FROM reminder_sends WHERE reminder_id = ?", (primary["id"],))
+            else:
+                if (primary["recipient_ids"] or "[]") != ids_json:
+                    db.execute(
+                        "UPDATE reminders SET recipient_ids = ?, sent_at = NULL WHERE id = ?",
+                        (ids_json, primary["id"]),
+                    )
+                    db.execute(
+                        "DELETE FROM reminder_sends WHERE reminder_id = ?",
+                        (primary["id"],),
+                    )
             for extra in rows[1:]:
                 db.execute("DELETE FROM reminder_sends WHERE reminder_id = ?", (extra["id"],))
                 db.execute("DELETE FROM reminders WHERE id = ?", (extra["id"],))
         else:
-            db.execute(
-                """
-                INSERT INTO reminders (event_id, offset_minutes, recipient_ids, sent_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (event_id, offset, ids_json, item.get("sent_at")),
-            )
+            if "person_id" in cols:
+                db.execute(
+                    """
+                    INSERT INTO reminders
+                        (event_id, person_id, offset_minutes, recipient_ids, sent_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (event_id, person_id, offset, ids_json, item.get("sent_at")),
+                )
+            else:
+                db.execute(
+                    """
+                    INSERT INTO reminders (event_id, offset_minutes, recipient_ids, sent_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (event_id, offset, ids_json, item.get("sent_at")),
+                )
 
-    for offset, rows in by_offset.items():
-        if offset not in seen:
+    for key, rows in by_key.items():
+        if key not in seen:
             for row in rows:
                 db.execute("DELETE FROM reminder_sends WHERE reminder_id = ?", (row["id"],))
                 db.execute("DELETE FROM reminders WHERE id = ?", (row["id"],))
@@ -1309,11 +1519,14 @@ def clear_reminder_sends(reminder_id: int, *, commit: bool = False) -> None:
 def load_reminder_rows() -> list[dict]:
     """שורות גולמיות לחישוב due — אירוע + תזכורת, בלי סינון זמן."""
     db = get_db()
+    cols = {row[1] for row in db.execute("PRAGMA table_info(reminders)")}
+    person_select = "r.person_id AS person_id," if "person_id" in cols else "NULL AS person_id,"
     rows = db.execute(
-        """
+        f"""
         SELECT
             r.id AS id,
             r.event_id AS event_id,
+            {person_select}
             r.offset_minutes AS offset_minutes,
             r.recipient_ids AS recipient_ids,
             r.sent_at AS sent_at,
