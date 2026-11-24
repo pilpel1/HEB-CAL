@@ -1,10 +1,11 @@
 """הזנת משמרות לבית אחד.
 
-האפליקציה היא עותק אחד לבית (לא ריבוי דיירים). המתג ``household_settings``
-מדליק או מכבה את הפיצ'ר בכל בסיס הנתונים.
+האתר הוא עותק אחד לבית (לא ריבוי דיירים). המתג ``household_settings``
+מדליק או מכבה את הפיצ'ר בכל בסיס הנתונים בבית.
 
-אנשים הם טבלת ``users`` (לפני גרסה 8: ``reminder_people``). צבע ומשמרות
-מותרות (בוקר/ערב/לילה, בלי שעות, אפשר לפי יום בשבוע) יושבים על אותה שורה.
+אנשים הם טבלת ``users`` (לפני גרסה 8: ``reminder_people``). צבע, משמרות
+מותרות (בוקר/ערב/לילה, לפי יום בשבוע) ו-``shift_hours`` אופציונלי (JSON)
+יושבים על אותה שורה. בלילה שעת סיום לפני שעת התחלה = עד למחרת.
 
 שמירה מהרשת יוצרת אירועי יום שלם עם ``is_shift``. ברשת הכותרת היא סוג
 המשמרת (``בוקר``), והצבע הוא צבע האדם. הרשת מוצאת אותם לפי האדם, התאריך
@@ -77,6 +78,117 @@ def parse_shift_allowed(raw) -> dict:
                 norm.append(number)
         cleaned[label] = norm
     return cleaned
+
+
+def _clean_shift_hour(value) -> str | None:
+    from app.reminders.schedule import _parse_hhmm
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    parsed = _parse_hhmm(text)
+    if parsed is None:
+        raise ShiftError("שעת משמרת לא תקינה. צריך HH:MM")
+    hour, minute = parsed
+    return f"{hour:02d}:{minute:02d}"
+
+
+def parse_shift_hours(raw) -> dict | None:
+    """NULL או ריק = בלי שעות מוגדרות."""
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(raw, dict):
+        return None
+    cleaned: dict = {}
+    for label in SHIFT_LABELS:
+        block = raw.get(label)
+        if block is None:
+            continue
+        if not isinstance(block, dict):
+            continue
+        if block.get("start") in (None, "") or block.get("end") in (None, ""):
+            continue
+        try:
+            start = _clean_shift_hour(block.get("start"))
+            end = _clean_shift_hour(block.get("end"))
+        except ShiftError:
+            continue
+        cleaned[label] = {"start": start, "end": end}
+    return cleaned or None
+
+
+def dump_shift_hours(value) -> str | None:
+    """מאמת ושומר JSON. ``None`` = בלי שעות."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ShiftError("שעות משמרת צריכות להיות אובייקט")
+    cleaned = {}
+    for label in SHIFT_LABELS:
+        block = value.get(label)
+        if block is None:
+            continue
+        if not isinstance(block, dict):
+            raise ShiftError(f"שעות {label} חייבות להיות אובייקט")
+        start = _clean_shift_hour(block.get("start"))
+        end = _clean_shift_hour(block.get("end"))
+        cleaned[label] = {"start": start, "end": end}
+    if not cleaned:
+        return None
+    return json.dumps(cleaned, ensure_ascii=False, separators=(",", ":"))
+
+
+def format_shift_hours_range(person_or_hours, label: str) -> str | None:
+    """טווח שעות לתווית סטנדרטית. בלילה סיום לפני התחלה = יום למחרת (ללא סימון בטקסט)."""
+    if label not in SHIFT_LABELS:
+        return None
+    hours = None
+    if isinstance(person_or_hours, dict):
+        if "shift_hours" in person_or_hours or "shift_allowed" in person_or_hours:
+            hours = person_or_hours.get("shift_hours")
+            if not isinstance(hours, dict):
+                hours = parse_shift_hours(hours)
+        else:
+            hours = person_or_hours
+    else:
+        hours = parse_shift_hours(person_or_hours)
+    if not isinstance(hours, dict):
+        return None
+    block = hours.get(label)
+    if not isinstance(block, dict):
+        return None
+    start = block.get("start")
+    end = block.get("end")
+    if not start or not end:
+        return None
+    return f"{start}-{end}"
+
+
+def shift_event_display_clock(event: dict, people: dict | None = None) -> str | None:
+    """שעות תצוגה למשמרת סטנדרטית בלי ``time`` / ``end_time`` משלה."""
+    if not event.get("is_shift") or event.get("time") or event.get("end_time"):
+        return None
+    label = str(event.get("shift_label") or "").strip()
+    if label not in SHIFT_LABELS:
+        return None
+    person_id = event.get("shift_person_id")
+    person = None
+    if people is not None and person_id is not None:
+        person = people.get(int(person_id))
+    if person is None and person_id is not None:
+        from app.reminders.repository import get_person
+
+        person = get_person(int(person_id))
+    if person is None:
+        return None
+    return format_shift_hours_range(person, label)
 
 
 def dump_shift_allowed(value) -> str | None:
@@ -374,6 +486,7 @@ def ensure_shift_schema(db) -> None:
             _add_column_if_missing(
                 db, people, "works_shifts", "INTEGER NOT NULL DEFAULT 0"
             )
+            _add_column_if_missing(db, people, "shift_hours", "TEXT")
 
         _schema_execute(
             db,
@@ -675,4 +788,7 @@ def annotate_shift_events(events: list[dict]) -> list[dict]:
         person = people.get(event.get("shift_person_id"))
         if person and person.get("color"):
             event["color"] = person["color"]
+        clock = shift_event_display_clock(event, people)
+        if clock:
+            event["shift_display_time"] = clock
     return events

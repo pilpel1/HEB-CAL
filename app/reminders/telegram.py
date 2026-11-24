@@ -76,6 +76,63 @@ def send_message(token: str, chat_id, text: str, *, reply_markup: dict | None = 
     return True
 
 
+def send_widget(
+    token: str,
+    chat_id,
+    *,
+    html: str,
+    chat_data: str | None = None,
+    public_data: str | None = None,
+    caption: str | None = None,
+    allow_queries: bool = False,
+    reply_markup: dict | None = None,
+    api=telegram_api,
+) -> dict:
+    """Bot API 10.4 sendWidget. מעלה TelegramError אם השרת לא תומך."""
+    payload: dict = {"chat_id": chat_id, "html": html}
+    if chat_data is not None:
+        payload["chat_data"] = chat_data
+    if public_data is not None:
+        payload["public_data"] = public_data
+    if caption:
+        payload["caption"] = caption
+        payload["parse_mode"] = "HTML"
+    if allow_queries:
+        payload["allow_queries"] = True
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    return api(token, "sendWidget", payload)
+
+
+def edit_message_widget_data(
+    token: str,
+    *,
+    chat_id=None,
+    message_id: int | None = None,
+    inline_message_id: str | None = None,
+    chat_data: str | None = None,
+    public_data: str | None = None,
+    api=telegram_api,
+) -> bool:
+    payload: dict = {}
+    if inline_message_id:
+        payload["inline_message_id"] = inline_message_id
+    else:
+        payload["chat_id"] = chat_id
+        payload["message_id"] = message_id
+    if chat_data is not None:
+        payload["chat_data"] = chat_data
+    if public_data is not None:
+        payload["public_data"] = public_data
+    api(token, "editMessageWidgetData", payload)
+    return True
+
+
+def answer_widget_query(token: str, widget_query_id: str, *, api=telegram_api) -> bool:
+    api(token, "answerWidgetQuery", {"widget_query_id": widget_query_id})
+    return True
+
+
 CALLBACK_ACK = "פותח…"
 
 
@@ -104,7 +161,12 @@ def ack_callback(token: str, api, callback_id: str) -> bool:
 
 
 def deliver_outgoing(token: str, api, outgoing: dict) -> None:
-    """שולח תשובה אחת. עריכת הודעה נכשלת? נשלחת הודעה חדשה."""
+    """שולח תשובה אחת. עריכת הודעה נכשלת? נשלחת הודעה חדשה.
+
+    ``widget``: מילון ל-sendWidget. אם נכשל - נופלים ל-``text`` אם יש.
+    ``widget_edit``: chat_data/public_data ל-editMessageWidgetData.
+    ``widget_query_id``: answerWidgetQuery.
+    """
     callback_id = outgoing.get("callback_id")
     if callback_id:
         payload = {"callback_query_id": callback_id}
@@ -115,7 +177,53 @@ def deliver_outgoing(token: str, api, outgoing: dict) -> None:
             api(token, "answerCallbackQuery", payload)
         except TelegramError as exc:
             print(f"answerCallbackQuery failed: {exc}", file=sys.stderr)
-    if outgoing.get("skip") or not outgoing.get("text"):
+
+    widget_query_id = outgoing.get("widget_query_id")
+    if widget_query_id:
+        try:
+            answer_widget_query(token, str(widget_query_id), api=api)
+        except TelegramError as exc:
+            print(f"answerWidgetQuery failed: {exc}", file=sys.stderr)
+
+    widget_edit = outgoing.get("widget_edit")
+    if isinstance(widget_edit, dict):
+        try:
+            edit_message_widget_data(
+                token,
+                chat_id=outgoing.get("chat_id"),
+                message_id=widget_edit.get("message_id") or outgoing.get("edit_id"),
+                inline_message_id=widget_edit.get("inline_message_id"),
+                chat_data=widget_edit.get("chat_data"),
+                public_data=widget_edit.get("public_data"),
+                api=api,
+            )
+        except TelegramError as exc:
+            print(f"editMessageWidgetData failed: {exc}", file=sys.stderr)
+
+    if outgoing.get("skip"):
+        return
+
+    widget = outgoing.get("widget")
+    if isinstance(widget, dict) and widget.get("html"):
+        try:
+            send_widget(
+                token,
+                outgoing["chat_id"],
+                html=widget["html"],
+                chat_data=widget.get("chat_data"),
+                public_data=widget.get("public_data"),
+                caption=widget.get("caption"),
+                allow_queries=bool(widget.get("allow_queries")),
+                reply_markup=outgoing.get("markup"),
+                api=api,
+            )
+            return
+        except TelegramError as exc:
+            print(f"sendWidget failed, falling back to text: {exc}", file=sys.stderr)
+            if not outgoing.get("text"):
+                return
+
+    if not outgoing.get("text"):
         return
     body = {
         "chat_id": outgoing["chat_id"],
@@ -125,7 +233,7 @@ def deliver_outgoing(token: str, api, outgoing: dict) -> None:
     if outgoing.get("markup"):
         body["reply_markup"] = outgoing["markup"]
     edit_id = outgoing.get("edit_id")
-    if edit_id:
+    if edit_id and not widget:
         edited = dict(body)
         edited["message_id"] = edit_id
         try:
@@ -168,7 +276,10 @@ def start_chat_id(update: dict):
 
 def consume_updates(token: str, offset: int | None, *, long_poll: int = 0, api=telegram_api) -> int | None:
     """קורא עדכונים, מפעיל את תפריט הבוט, ומחזיר את ה-offset הבא."""
-    payload = {"timeout": int(long_poll), "allowed_updates": ["message", "callback_query"]}
+    payload = {
+        "timeout": int(long_poll),
+        "allowed_updates": ["message", "callback_query", "widget_query"],
+    }
     if offset is not None:
         payload["offset"] = offset
     timeout = max(10, int(long_poll) + 10)

@@ -21,6 +21,7 @@ const reminderFormState = {
     fillToken: 0,
     customOffsets: [],
     ready: false,
+    allowDefaultPrefill: false,
 };
 
 const REMINDER_MAX_MINUTES = 365 * 24 * 60;
@@ -162,7 +163,10 @@ function renderReminderRecipients(people, selected) {
         input.type = 'checkbox';
         input.value = String(person.id);
         input.checked = selected.has(Number(person.id));
-        input.addEventListener('change', () => updateReminderChatWarning(people));
+        input.addEventListener('change', () => {
+            updateReminderChatWarning(people);
+            applyReminderDefaultsFromSelection(people);
+        });
         const name = document.createElement('span');
         name.textContent = person.name;
         label.append(input, name);
@@ -281,6 +285,82 @@ function initReminderFields() {
     });
 }
 
+function currentSelectedReminderOffsets() {
+    const offsets = new Set(reminderFormState.customOffsets);
+    document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip.is-selected').forEach((chip) => {
+        const value = Number(chip.dataset.offset);
+        if (Number.isInteger(value)) {
+            offsets.add(value);
+        }
+    });
+    return offsets;
+}
+
+function applyOffsetChipSelection(offsets) {
+    const presetValues = new Set(REMINDER_PRESETS.map(([value]) => value));
+    const selected = new Set([...offsets].map(Number));
+    reminderFormState.customOffsets = [...selected].filter((value) => !presetValues.has(value));
+    document.querySelectorAll('#quick_reminder_offsets .reminder-offset-chip').forEach((chip) => {
+        if (!chip.dataset.offset) {
+            return;
+        }
+        const on = selected.has(Number(chip.dataset.offset));
+        chip.classList.toggle('is-selected', on);
+        chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    renderCustomOffsets();
+    const checkbox = document.getElementById('quick_reminder_enabled');
+    if (checkbox) {
+        checkbox.checked = selected.size > 0;
+    }
+    setReminderPanelOpen(selected.size > 0);
+}
+
+function applyReminderDefaultsFromSelection(people) {
+    if (!reminderFormState.allowDefaultPrefill) {
+        return;
+    }
+    if (currentSelectedReminderOffsets().size) {
+        return;
+    }
+    const selectedIds = [];
+    document.querySelectorAll('#quick_reminder_recipients input:checked').forEach((input) => {
+        selectedIds.push(Number(input.value));
+    });
+    const merged = new Set();
+    selectedIds.forEach((id) => {
+        const person = (people || []).find((item) => Number(item.id) === id);
+        (person?.reminder_defaults || []).forEach((offset) => merged.add(Number(offset)));
+    });
+    if (!merged.size) {
+        return;
+    }
+    applyOffsetChipSelection(merged);
+}
+
+function applyShiftPersonReminderDefaults(personId) {
+    if (!reminderFormState.allowDefaultPrefill || !personId) {
+        return;
+    }
+    if (currentSelectedReminderOffsets().size) {
+        return;
+    }
+    const person = (typeof shiftUiState !== 'undefined' ? shiftUiState.people : [])
+        .find((item) => String(item.id) === String(personId));
+    const offsets = new Set((person?.reminder_defaults || []).map(Number));
+    if (!offsets.size) {
+        return;
+    }
+    applyOffsetChipSelection(offsets);
+    const recipient = document.querySelector(`#quick_reminder_recipients input[value="${personId}"]`);
+    if (recipient && !recipient.checked) {
+        recipient.checked = true;
+        updateReminderChatWarning(
+            (typeof shiftUiState !== 'undefined' ? shiftUiState.people : []),
+        );
+    }
+}
+
 async function fillReminderFields(reminders) {
     initReminderFields();
     const token = ++reminderFormState.fillToken;
@@ -307,6 +387,9 @@ async function fillReminderFields(reminders) {
     }
     setReminderPanelOpen(enabled);
     setReminderError('');
+    reminderFormState.allowDefaultPrefill = (
+        !document.getElementById('quick_event_id')?.value && offsets.length === 0
+    );
 
     const selectedPeople = new Set();
     list.forEach((item) => {
@@ -326,6 +409,9 @@ async function fillReminderFields(reminders) {
         return;
     }
     renderReminderRecipients(Array.isArray(people) ? people : [], selectedPeople);
+    if (reminderFormState.allowDefaultPrefill) {
+        applyReminderDefaultsFromSelection(people);
+    }
 }
 
 function readReminderFields() {

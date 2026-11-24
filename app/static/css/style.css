@@ -1,7 +1,1 @@
-/* ייבוא הקבצים המפוצלים */
-@import 'components/variables.css';
-@import 'components/calendar.css';
-@import 'components/events-table.css';
-@import 'components/forms.css';
-@import 'components/dark-theme.css';
- 
+/* Component CSS files are linked from base.html with ?v=VERSION. No CSS imports here. */

@@ -271,6 +271,7 @@ def test_start_linked_is_only_the_menu(app):
     assert labels == [
         "🗓 אירועי השבוע",
         "📆 אירועי היום",
+        "☀️ סיכום היום",
         "👷 משמרות",
         "⏮ אירועי החודש",
         "👤 לפי אדם",
@@ -280,12 +281,17 @@ def test_start_linked_is_only_the_menu(app):
     ]
     rows = reply["markup"]["inline_keyboard"]
     assert [button["text"] for button in rows[0]] == ["🗓 אירועי השבוע", "📆 אירועי היום"]
-    assert [button["text"] for button in rows[1]] == ["👷 משמרות", "⏮ אירועי החודש"]
-    assert [button["text"] for button in rows[2]] == ["👤 לפי אדם", "🔍 חיפוש אירוע"]
-    assert [button["text"] for button in rows[3]] == ["➕ הוספת אירוע", "⚙️ הגדרות"]
+    assert [button["text"] for button in rows[1]] == ["☀️ סיכום היום", "👷 משמרות"]
+    assert [button["text"] for button in rows[2]] == ["⏮ אירועי החודש", "👤 לפי אדם"]
+    assert [button["text"] for button in rows[3]] == ["🔍 חיפוש אירוע", "➕ הוספת אירוע"]
+    assert [button["text"] for button in rows[4]] == ["⚙️ הגדרות"]
     _has_exit(reply)
     for button in _buttons(reply):
         screen = _go(app, _cb(button["callback_data"]))
+        # ווידג'ט סיכום היום מחזיר גם widget; הטקסט נשאר ל-fallback
+        if button["callback_data"] == "today_widget":
+            assert screen.get("widget") or screen.get("text")
+            continue
         _has_exit(screen)
         assert screen["text"]
         assert "<" not in screen["text"] or "<code>" in screen["text"] or "<b>" in screen["text"]

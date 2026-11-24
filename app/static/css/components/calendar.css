@@ -731,10 +731,10 @@
     body:has(.infinite-calendar) .container {
         margin-top: 0 !important;
         margin-bottom: 0;
-        padding-top: 0.3rem;
-        padding-bottom: 0.15rem;
-        padding-inline: 0.15rem;
-        --bs-gutter-x: 0.3rem;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+        --bs-gutter-x: 0;
         max-width: 100%;
         height: 100svh;
         display: flex;
@@ -745,9 +745,9 @@
         flex: 1 1 auto;
         min-height: 0;
         margin-bottom: 0;
-        padding: 0.35rem 0.1rem 0.2rem;
+        padding: 0;
         height: auto;
-        border-radius: 0.65rem;
+        border-radius: 0;
         /* ברירת מחדל 80/20. הגרירה קובעת פיקסלים; 0.25fr הוא אותו יחס לפני שהסקריפט רץ */
         display: grid;
         grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 0.25fr);

@@ -64,6 +64,28 @@ def parse_update(update: dict) -> dict | None:
             "callback_id": callback.get("id"),
             "edit_id": message.get("message_id"),
         }
+    widget_query = update.get("widget_query")
+    if isinstance(widget_query, dict):
+        chat_obj = widget_query.get("chat") or {}
+        chat = chat_obj.get("id")
+        if isinstance(chat, bool) or chat is None:
+            return None
+        query_type = widget_query.get("type") or {}
+        data = ""
+        if isinstance(query_type, dict):
+            raw = query_type.get("data")
+            if isinstance(raw, str):
+                data = raw.strip()
+        return {
+            "chat_id": chat,
+            "kind": "widget_query",
+            "text": "",
+            "data": data or "refresh",
+            "callback_id": None,
+            "edit_id": widget_query.get("message_id"),
+            "widget_query_id": widget_query.get("id"),
+            "inline_message_id": widget_query.get("inline_message_id"),
+        }
     message = update.get("message")
     if not isinstance(message, dict):
         return None
@@ -203,6 +225,59 @@ class Bot:
     def out(self, text: str, markup: dict | None) -> dict:
         return {"text": text, "markup": markup, "toast": self.toast}
 
+    def _today_digest_lines(self) -> tuple[list[str], list[str]]:
+        """מחזיר (שורות HTML לטקסט, שורות פשוטות לווידג'ט)."""
+        import html as html_lib
+
+        from app.bot.query import collect_list
+        from app.reminders.digest import format_digest_event
+
+        rows = collect_list("today", self.today)
+        html_lines = [format_digest_event(event, self.by_id) for event in rows]
+        plain = [html_lib.unescape(line) for line in html_lines]
+        return html_lines, plain
+
+    def show_today_widget(self) -> dict:
+        """ווידג'ט סיכום היום; אם גדול מדי - טקסט רגיל מאותן שורות."""
+        from app.bot.widget import today_digest_widget_payload
+
+        self._clear_flow()
+        html_lines, plain_lines = self._today_digest_lines()
+        text_body = "\n".join(html_lines) if html_lines else "אין אירועים היום"
+        text = f"☀️ סיכום היום\n{text_body}"
+        markup = ui.kb([[(ui.BTN_MENU, "home")]])
+        try:
+            widget = today_digest_widget_payload(self.today, plain_lines)
+        except ValueError:
+            return self.out(text, markup)
+        result = self.out(text, markup)
+        result["widget"] = widget
+        return result
+
+    def refresh_today_widget(self, parsed: dict) -> dict:
+        from app.bot.widget import today_digest_widget_payload
+
+        _html_lines, plain_lines = self._today_digest_lines()
+        try:
+            widget = today_digest_widget_payload(self.today, plain_lines)
+        except ValueError:
+            return {
+                "skip": True,
+                "widget_query_id": parsed.get("widget_query_id"),
+                "toast": self.toast,
+            }
+        return {
+            "text": "",
+            "markup": None,
+            "toast": self.toast,
+            "widget_query_id": parsed.get("widget_query_id"),
+            "widget_edit": {
+                "message_id": parsed.get("edit_id"),
+                "inline_message_id": parsed.get("inline_message_id"),
+                "chat_data": widget["chat_data"],
+            },
+        }
+
     def _clear_flow(self) -> None:
         self.session["flow"] = None
         self.session["draft"] = {}
@@ -228,6 +303,8 @@ class Bot:
     def run(self, parsed: dict) -> dict:
         if not self.linked and not self._allow_unlinked(parsed):
             return {"skip": True}
+        if parsed["kind"] == "widget_query":
+            return self.refresh_today_widget(parsed)
         if parsed["kind"] == "callback":
             data = parsed["data"]
             if not data or not _CB.fullmatch(data):
@@ -275,6 +352,8 @@ class Bot:
             return self.go_home(cancelled=(data == "cancel" or bool(self.session.get("flow"))))
         if data == "today":
             return self.show_list("today", clear_flow=True)
+        if data == "today_widget":
+            return self.show_today_widget()
         if data == "week":
             return self.show_list("week", clear_flow=True)
         if data == "soon":
@@ -1340,7 +1419,14 @@ def handle_update(update: dict, *, now: datetime | None = None) -> dict:
     if bot is not None:
         save_session(parsed["chat_id"], bot.session)
     result["chat_id"] = parsed["chat_id"]
-    result["callback_id"] = parsed["callback_id"]
-    result["edit_id"] = parsed["edit_id"] if parsed["kind"] == "callback" else None
+    result["callback_id"] = parsed.get("callback_id")
+    if parsed["kind"] == "callback":
+        result["edit_id"] = parsed.get("edit_id")
+    elif parsed["kind"] == "widget_query":
+        result.setdefault("widget_query_id", parsed.get("widget_query_id"))
+        if "widget_edit" not in result and parsed.get("edit_id"):
+            result.setdefault("edit_id", parsed.get("edit_id"))
+    else:
+        result["edit_id"] = None
     result.setdefault("toast", "")
     return result

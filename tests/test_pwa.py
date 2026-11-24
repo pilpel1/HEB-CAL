@@ -82,11 +82,19 @@ def test_service_worker_is_served_from_root(client):
     assert not (REPO / "app" / "static" / "js" / "sw.js").exists()
     static_copy = client.get("/static/sw.js")
     assert static_copy.status_code == 200
-    assert "heb-cal-shell-v3" in body
+    from app.updates.version import installed_version
+
+    version = installed_version()
+    assert f"CACHE_VERSION = '{version}'" in body
+    assert "heb-cal-shell-" in body
+    assert "__HEB_CAL_VERSION__" not in body
+    assert "heb-cal-shell-v3" not in body
     assert "SKIP_WAITING" in body
     assert "no-store" in body
     assert "clients.claim" in body
     assert "skipWaiting" in body
+    assert "?v=' + CACHE_VERSION" in body
+    assert response.headers.get("Cache-Control") == "no-cache"
 
 
 def test_favicon_files_and_ico_route(client):

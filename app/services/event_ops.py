@@ -126,7 +126,9 @@ def list_range(start: date, end: date) -> list[dict]:
             rows.extend(expand_event(event, event.get("exceptions") or [], start, end))
         except RecurrenceError:
             continue
-    return rows
+    from app.services.shifts import annotate_shift_events
+
+    return annotate_shift_events(rows)
 
 
 def occurrence_payload(event: dict, occurrence_date: str):

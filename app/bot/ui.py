@@ -118,9 +118,10 @@ def _pager(previous: str | None, following: str | None) -> list[tuple[str, str]]
 def menu_rows() -> list[list[tuple[str, str]]]:
     return [
         [("🗓 אירועי השבוע", "week"), ("📆 אירועי היום", "today")],
-        [("👷 משמרות", "shifts"), ("⏮ אירועי החודש", "soon")],
-        [("👤 לפי אדם", "who"), ("🔍 חיפוש אירוע", "find")],
-        [(BTN_ADD, "add"), ("⚙️ הגדרות", "set")],
+        [("☀️ סיכום היום", "today_widget"), ("👷 משמרות", "shifts")],
+        [("⏮ אירועי החודש", "soon"), ("👤 לפי אדם", "who")],
+        [("🔍 חיפוש אירוע", "find"), (BTN_ADD, "add")],
+        [("⚙️ הגדרות", "set")],
     ]
 
 
@@ -220,10 +221,13 @@ def _row_button(event: dict, people: dict, *, with_date: bool) -> str:
         day = None
     if with_date and day is not None:
         prefix = f"{day.day:02d}.{day.month:02d} "
-    elif event.get("time"):
+    else:
         from app.services.event_payload import format_event_time_range
+        from app.services.shifts import shift_event_display_clock
 
-        prefix = f"{format_event_time_range(event)} "
+        clock = format_event_time_range(event) or shift_event_display_clock(event, people)
+        if clock:
+            prefix = f"{clock} "
     return clip(f"{prefix}{title}")
 
 
@@ -407,11 +411,13 @@ def _event_line(
     bits = []
     if with_date and event.get("gregorian_date"):
         bits.append(esc(_safe_greg(event["gregorian_date"])))
-    if event.get("time"):
-        from app.services.event_payload import format_event_time_range
+    from app.services.event_payload import format_event_time_range
+    from app.services.shifts import shift_event_display_clock
 
-        bits.append(esc(format_event_time_range(event)))
-    else:
+    clock = format_event_time_range(event) or shift_event_display_clock(event, people)
+    if clock:
+        bits.append(esc(clock))
+    elif not event.get("is_shift"):
         bits.append("כל היום")
     if event.get("is_shift"):
         bits.append("משמרת · " + esc(_person_name(people, event.get("shift_person_id"))))
@@ -560,13 +566,13 @@ def event_screen(event: dict, people: dict, focus: date | None = None) -> tuple[
     if shown is not None:
         lines.append(f"יום {weekday_name(shown)} · {code(greg(shown))}")
         lines.append(esc(hebrew_display(shown)))
-    if event.get("is_shift"):
-        lines.append("כל היום")
-    elif event.get("time"):
-        from app.services.event_payload import format_event_time_range
+    from app.services.event_payload import format_event_time_range
+    from app.services.shifts import shift_event_display_clock
 
-        lines.append(f"שעה {code(format_event_time_range(event))}")
-    else:
+    clock = format_event_time_range(event) or shift_event_display_clock(event, people)
+    if clock:
+        lines.append(f"שעה {code(clock)}")
+    elif not event.get("is_shift"):
         lines.append("כל היום")
     end = event.get("end_date")
     if end and shown is not None and end[:10] != shown.isoformat():

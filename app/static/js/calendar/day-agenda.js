@@ -145,18 +145,17 @@ function agendaPixels(track, share, live) {
     return Math.max(0, Math.min(track.available, agendaPx));
 }
 
+/** נעילה רכה רק בקצוות (סגור / מלא). באמצע נשמר הגובה המדויק. */
 function snapAgendaShare(share) {
-    const points = [0, 0.2, 0.5, 1];
-    let best = points[0];
-    let dist = Infinity;
-    for (const point of points) {
-        const delta = Math.abs(point - share);
-        if (delta < dist) {
-            dist = delta;
-            best = point;
-        }
+    const clamped = clampAgendaShare(share);
+    const latch = 0.025;
+    if (clamped <= latch) {
+        return 0;
     }
-    return best;
+    if (clamped >= 1 - latch) {
+        return 1;
+    }
+    return clamped;
 }
 
 function activeAgendaShare() {
@@ -507,26 +506,20 @@ function bindAgendaResize() {
     handle.addEventListener('pointercancel', finishDrag);
 
     handle.addEventListener('keydown', (event) => {
-        const order = [0, 0.2, 0.5, 1];
         const current = snapAgendaShare(activeAgendaShare());
-        let index = order.indexOf(current);
-        if (index < 0) {
-            index = 1;
-        }
-        let nextIndex = index;
+        let next = current;
         if (event.key === 'ArrowUp') {
-            nextIndex = Math.min(order.length - 1, index + 1);
+            next = snapAgendaShare(current + 0.05);
         } else if (event.key === 'ArrowDown') {
-            nextIndex = Math.max(0, index - 1);
+            next = snapAgendaShare(current - 0.05);
         } else if (event.key === 'Home') {
-            nextIndex = 0;
+            next = 0;
         } else if (event.key === 'End') {
-            nextIndex = order.length - 1;
+            next = 1;
         } else {
             return;
         }
         event.preventDefault();
-        const next = order[nextIndex];
         if (next === current) {
             return;
         }

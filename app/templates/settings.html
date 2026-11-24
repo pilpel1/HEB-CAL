@@ -311,6 +311,38 @@
         </div>
     </section>
 
+    <section class="card mb-3 settings-section" id="settingsReminderDefaults" data-settings-section="settingsReminderDefaults" aria-labelledby="settings-reminder-defaults-title">
+        <h2 class="h5 settings-section-title" id="settings-reminder-defaults-title">
+            <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="settingsReminderDefaults-body">
+                <span class="settings-section-label">תזכורות</span>
+                <span class="settings-section-chevron" aria-hidden="true"></span>
+            </button>
+        </h2>
+        <div class="card-body settings-section-body" id="settingsReminderDefaults-body">
+            <p class="text-muted small mb-2">ברירת מחדל לתזכורות באירועים חדשים. בוחרים אדם, ואז מתי להזכיר. לא משנה תזכורות שכבר קיימות על אירועים ישנים.</p>
+            <div id="reminderDefaultsPeople" class="reminder-defaults-people mb-2" role="tablist" aria-label="אנשים"></div>
+            <p id="reminderDefaultsPersonHint" class="text-muted small mb-2" hidden>בחרו אדם כדי לערוך ברירת מחדל.</p>
+            <div id="reminderDefaultsOffsets" class="reminder-offset-grid" hidden></div>
+            <div id="reminderDefaultsCustom" class="reminder-custom-offset" hidden>
+                <div id="reminderDefaultsCustomRow" class="reminder-custom-row" hidden>
+                    <input type="number" id="reminderDefaultsCustomAmount" class="form-control" min="1" step="1" inputmode="numeric" placeholder="מספר">
+                    <select id="reminderDefaultsCustomUnit" class="form-select">
+                        <option value="minutes">דקות</option>
+                        <option value="hours">שעות</option>
+                        <option value="days">ימים</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="reminderDefaultsCustomAdd">הוספה</button>
+                </div>
+                <ul id="reminderDefaultsCustomList" class="reminder-custom-offset-list"></ul>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                <button type="button" class="btn btn-primary" id="reminderDefaultsSave" hidden>שמור</button>
+                <span id="reminderDefaultsSaved" class="person-saved-flag" hidden>נשמר</span>
+            </div>
+            <p id="reminderDefaultsError" class="reminder-form-error mt-2" hidden></p>
+        </div>
+    </section>
+
     <section class="card mb-3 settings-section" id="shiftSettings" data-settings-section="shiftSettings" aria-labelledby="settings-shifts-title">
         <h2 class="h5 settings-section-title" id="settings-shifts-title">
             <button type="button" class="settings-section-toggle" aria-expanded="false" aria-controls="shiftSettings-body">
@@ -349,6 +381,9 @@
                     <div class="form-label mb-1">משמרות מותרות</div>
                     <p class="text-muted small mb-1">אפשר לסמן רק חלק מהימים — למשל בלי שישי־שבת, או בלי לילה.</p>
                     <div id="personShiftMatrix"></div>
+                    <div class="form-label mb-1 mt-3">שעות משמרת (אופציונלי)</div>
+                    <p class="text-muted small mb-1">מוצג בלוח כשאין שעה לאירוע. בלילה שעת סיום לפני התחלה = עד למחרת.</p>
+                    <div id="personShiftHours" class="shift-hours-grid"></div>
                     <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
                         <button type="submit" class="btn btn-primary" id="shiftPersonSave">שמור</button>
                         <button type="button" class="btn btn-outline-secondary" id="shiftPersonCancel" hidden>ביטול</button>

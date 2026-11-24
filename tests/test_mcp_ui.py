@@ -242,7 +242,8 @@ def test_create_shows_the_key_once_and_revoke_confirms(live_server, app, ai_sett
         expect(page.locator("#mcpKeyPermission")).to_have_value("read")
         page.locator("#mcpKeyLabel").fill("Cursor בטלפון")
         page.locator("#mcpKeyPermission").select_option("write")
-        page.locator("#mcpKeyAbsolute").fill("2026-11-20")
+        # תפוגה סופית לפני חלון ה-30 יום — כדי ש-effective < sliding
+        page.locator("#mcpKeyAbsolute").fill("2026-12-01")
         page.locator("#mcpKeyCreate").click()
         dialog = page.locator("#mcpKeyModal")
         expect(dialog).to_be_visible()
