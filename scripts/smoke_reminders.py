@@ -84,9 +84,10 @@ def main() -> int:
         expect(page.locator(".reminder-settings-gear")).to_be_visible()
         expect(page.locator(".reminder-settings-gear")).to_have_attribute("aria-label", "הגדרות תזכורות")
         expect(page.locator("#quick_hebrew_date")).not_to_have_value("")
-        recipient = page.locator(f'#quick_reminder_recipients input[value="{person["id"]}"]')
-        expect(recipient).to_be_visible()
-        recipient.check()
+        tab = page.locator(f'#quick_reminder_person_tabs .reminder-person-tab[data-person-id="{person["id"]}"]')
+        expect(tab).to_be_visible()
+        tab.click()
+        # הצ'יפים כבר נלחצו — שייכים ללשונית הפעילה
 
         footer = page.locator("#quickEventModal .modal-footer")
         expect(footer).to_be_visible()

@@ -87,6 +87,11 @@ def _press(app, reply, label, *, chat=42, now=NOW):
     return _go(app, _cb(chosen[0]["callback_data"], chat=chat), now=now)
 
 
+def _today_list(app, *, chat=42, now=NOW):
+    """רשימת אירועי היום (כפתור «אירועי היום»). ``/today`` שולח ווידג'ט סיכום."""
+    return _go(app, _cb("today", chat=chat), now=now)
+
+
 def _event(app, title, day, **kwargs):
     with app.app_context():
         from app.database import create_event
@@ -153,7 +158,7 @@ def test_screen_styles_match_the_action(app):
     assert styles["⚙️ הגדרות"] is None
 
     _event(app, "פגישה", TODAY, time="10:00")
-    card = _press(app, _go(app, _msg("/today")), "פגישה")
+    card = _press(app, _today_list(app), "פגישה")
     card_styles = {button["text"]: button.get("style") for button in _buttons(card)}
     assert card_styles["✏️ עריכה"] == "primary"
     assert card_styles["🗑 מחיקה"] == "danger"
@@ -344,7 +349,7 @@ def test_unlinked_chat_is_silent_except_start(app):
     assert "בחרו כפתור" in hello["text"]
     nope = _go(app, _msg("/nope"))
     assert "אין פקודה" in nope["text"]
-    today = _go(app, _msg("/today"))
+    today = _today_list(app)
     assert today.get("skip") is not True
     assert today.get("text")
 
@@ -381,7 +386,7 @@ def test_today_week_soon_and_pagination(app):
     for index in range(6):
         _event(app, f"רצף-{index}", TODAY)
 
-    today = _go(app, _msg("/today"))
+    today = _today_list(app)
     assert hebrew_display(TODAY) in today["text"]
     assert "<code>22.10.2026</code>" in today["text"]
     assert "מחר-אירוע" not in today["text"]
@@ -445,7 +450,7 @@ def test_filters_person_and_find(app):
 
         set_shifts_enabled(True)
 
-    listed = _go(app, _msg("/today"))
+    listed = _today_list(app)
     assert "פגישה" in listed["text"]
     assert "בוקר" in listed["text"]
     only_shifts = _press(app, listed, "משמרות")
@@ -547,7 +552,7 @@ def test_add_defaults_invalid_input_and_cancel(app):
 def test_edit_delete_conflict_and_missing(app):
     _person(app, "דני", chat=42)
     event_id = _event(app, "ישן", TODAY, time="10:00")
-    listed = _go(app, _msg("/today"))
+    listed = _today_list(app)
     card = _press(app, listed, "ישן")
     assert "מזהה:" not in card["text"]
     assert f"<code>{event_id}</code>" not in card["text"]
@@ -617,7 +622,7 @@ def test_edit_delete_conflict_and_missing(app):
     _has_exit(missing)
 
     event_id = _event(app, "יימחק", TODAY)
-    listed = _go(app, _msg("/today"))
+    listed = _today_list(app)
     card = _press(app, listed, "יימחק")
     editor = _press(app, card, "עריכה")
     with app.app_context():
@@ -641,7 +646,7 @@ def test_html_escape_and_recurring_delete_warning(app):
             "recurrence_count": 3,
         },
     )
-    listed = _go(app, _msg("/today"))
+    listed = _today_list(app)
     assert "<b>xss</b>" not in listed["text"]
     assert "&lt;b&gt;xss&lt;/b&gt;" in listed["text"]
     card = _press(app, listed, "xss")
@@ -663,7 +668,7 @@ def test_weekly_shows_on_today_and_bot_edits_the_series(app):
             "recurrence_calendar": "gregorian",
         },
     )
-    listed = _go(app, _msg("/today"))
+    listed = _today_list(app)
     assert "חוג שבועי" in listed["text"]
     assert "חוזר" in listed["text"]
     card = _press(app, listed, "חוג שבועי")
@@ -737,7 +742,7 @@ def test_shift_detail_edit_reaches_title_note_person_and_label(app):
     _person(app, "אורח", works_shifts=0)
     _event(app, "בוקר", TODAY, shift=(1, danny["id"], "בוקר"))
 
-    card = _press(app, _go(app, _msg("/today")), "בוקר")
+    card = _press(app, _today_list(app), "בוקר")
     labels = [button["text"] for button in _buttons(card)]
     assert "אפשר לערוך, למחוק, או לחזור לרשימה." in card["text"]
     assert any("עריכה" in label for label in labels)
@@ -823,7 +828,7 @@ def test_shift_detail_edit_reaches_title_note_person_and_label(app):
     assert not shift["end_date"]
 
     plain = _event(app, "בוקר", TODAY, shift=(1, danny["id"], "בוקר"))
-    listed = _go(app, _msg("/today"))
+    listed = _today_list(app)
     card = _press(app, listed, "בוקר")
     editor = _press(app, card, "עריכה")
     saved = _press(app, _press(app, _press(app, editor, "סוג משמרת"), "ערב"), "שמירה")
@@ -840,7 +845,7 @@ def test_shift_detail_edit_reaches_title_note_person_and_label(app):
 def test_shift_display_uses_label_when_title_differs(app):
     person = _person(app, "דני", chat=42, works_shifts=1)
     _event(app, "בוקר מוקדם", TODAY, shift=(1, person["id"], "בוקר"))
-    listed = _go(app, _msg("/today"))
+    listed = _today_list(app)
     assert "<b>בוקר</b>" in listed["text"]
     assert "בוקר מוקדם" not in listed["text"]
     card = _press(app, listed, "בוקר")
@@ -977,7 +982,7 @@ def test_other_date_hint_and_edit_field_saved(app):
     assert "24.10.2026" in chosen["text"]
 
     _event(app, "בלי", TODAY)
-    card = _press(app, _go(app, _msg("/today")), "בלי")
+    card = _press(app, _today_list(app), "בלי")
     editor = _press(app, card, "עריכה")
     desc = _press(app, editor, "תיאור")
     assert "בלי תיאור מוחק את התיאור." in desc["text"]
@@ -992,7 +997,7 @@ def test_other_date_hint_and_edit_field_saved(app):
 def test_edit_time_and_replace_lonely_chat(app):
     _person(app, "עורך", chat=42)
     _event(app, "שעה", TODAY)
-    card = _press(app, _go(app, _msg("/today")), "שעה")
+    card = _press(app, _today_list(app), "שעה")
     editor = _press(app, card, "עריכה")
     times = _press(app, editor, "שעה")
     picked = _press(app, times, "18:00")
@@ -1032,6 +1037,7 @@ def test_today_during_draft_cancels_it(app):
     _go(app, _msg("טיוטה"))
     listed = _go(app, _msg("/today"))
     assert "הטיוטה בוטלה" in listed["text"]
+    assert listed.get("widget") or "סיכום היום" in listed["text"]
     assert _titles(app) == []
 
 
@@ -1374,7 +1380,7 @@ def test_person_view_groups_shifts_then_events(app):
 
         replace_event_reminders(meeting, [{"offset_minutes": 0, "recipient_ids": [person["id"]]}])
 
-    today = _go(app, _msg("/today"))
+    today = _today_list(app)
     assert "• <b>פגישה</b>" in today["text"]
     assert "👷" not in today["text"]
     assert "🔔" not in today["text"]
@@ -1402,20 +1408,25 @@ def test_person_view_groups_shifts_then_events(app):
     assert "•" not in only_shifts["text"]
 
 
-def test_add_event_reminder_uses_the_same_offsets(app):
+def test_add_event_reminder_uses_per_person_offsets(app):
     person = _person(app, "דני", chat=42, receives_reminders=1)
+    other = _person(app, "נועה", chat=43, receives_reminders=1)
     _go(app, _msg("/add"))
     confirm = _go(app, _msg("אירוע בדיקה"))
     assert "בלי תזכורת" in confirm["text"]
     timed = _press(app, _press(app, confirm, "שעה"), "12:00")
     tomorrow = _press(app, timed, "מחר")
     remind = _press(app, tomorrow, "תזכורת")
-    assert "מתי להזכיר" in remind["text"]
-    picked = _press(app, _press(app, remind, "15 דקות"), "יום")
-    who = _press(app, picked, "למי")
-    chosen = _press(app, who, "דני")
-    done = _press(app, chosen, "סיום")
-    assert "תזכורת: 15 דקות, יום · דני" in done["text"]
+    assert "תזכורת לפי אדם" in remind["text"]
+    danny = _press(app, remind, "דני")
+    assert "מתי להזכיר לדני" in danny["text"]
+    picked = _press(app, _press(app, danny, "15 דקות"), "יום")
+    people = _press(app, picked, "אנשים")
+    noa = _press(app, people, "נועה")
+    noa_picked = _press(app, noa, "שעה")
+    done = _press(app, noa_picked, "חזרה")
+    assert "דני: 15 דקות, יום" in done["text"]
+    assert "נועה: שעה" in done["text"]
     assert "12:00" in done["text"]
     saved = _press(app, done, "שמירה")
     assert "נשמר" in saved["text"]
@@ -1428,9 +1439,12 @@ def test_add_event_reminder_uses_the_same_offsets(app):
     assert rows[0]["time"] == "12:00"
     assert rows[0]["gregorian_date"] == (TODAY + timedelta(days=1)).isoformat()
     reminders = rows[0]["reminders"]
-    assert [item["offset_minutes"] for item in reminders] == [15, 1440]
-    assert reminders[0]["recipient_ids"] == [person["id"]]
-    assert reminders[1]["recipient_ids"] == [person["id"]]
+    pairs = sorted((item["person_id"], item["offset_minutes"]) for item in reminders)
+    assert pairs == [
+        (person["id"], 15),
+        (person["id"], 1440),
+        (other["id"], 60),
+    ]
 
     skipped = _go(app, _msg("/add"))
     plain = _go(app, _msg("בלי תזכורת עכשיו"))
@@ -1452,7 +1466,7 @@ def test_find_shows_description_in_italics_under_the_title(app):
     labels = [button["text"] for button in _buttons(found)]
     assert any(label.startswith("22.10 פגישה") for label in labels)
     assert all("עוגה" not in label for label in labels)
-    today = _go(app, _msg("/today"))
+    today = _today_list(app)
     assert "<i>" not in today["text"]
     assert "עוגה" not in today["text"]
     plain = _go(app, _msg("/find בלי תיאור"))

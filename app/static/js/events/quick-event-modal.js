@@ -630,13 +630,17 @@ async function openQuickEndDate() {
     endInput?.focus();
 }
 
-function syncQuickEndTimeHint() {
-    const input = document.getElementById('quick_end_time');
-    const wrap = input && input.closest('.quick-end-time-wrap');
+function syncQuickTimeHint(inputId) {
+    const input = document.getElementById(inputId);
+    const wrap = input && input.closest('.quick-time-wrap');
     if (!wrap) {
         return;
     }
     wrap.classList.toggle('has-value', Boolean((input.value || '').trim()));
+}
+
+function syncQuickEndTimeHint() {
+    syncQuickTimeHint('quick_end_time');
 }
 
 function setQuickTimeInput(inputId, timeValue) {
@@ -646,23 +650,17 @@ function setQuickTimeInput(inputId, timeValue) {
     }
     if (!timeValue) {
         input.value = '';
-        if (inputId === 'quick_end_time') {
-            syncQuickEndTimeHint();
-        }
+        syncQuickTimeHint(inputId);
         return;
     }
     const match = String(timeValue).match(/^(\d{1,2}):(\d{2})/);
     if (!match) {
         input.value = '';
-        if (inputId === 'quick_end_time') {
-            syncQuickEndTimeHint();
-        }
+        syncQuickTimeHint(inputId);
         return;
     }
     input.value = `${match[1].padStart(2, '0')}:${match[2]}`;
-    if (inputId === 'quick_end_time') {
-        syncQuickEndTimeHint();
-    }
+    syncQuickTimeHint(inputId);
 }
 
 function getQuickTimeInput(inputId) {
@@ -942,13 +940,16 @@ function initQuickEventModal() {
     if (typeof initQuickShiftFields === 'function') {
         initQuickShiftFields();
     }
-    const endTimeInput = document.getElementById('quick_end_time');
-    if (endTimeInput && !endTimeInput.dataset.hintBound) {
-        endTimeInput.dataset.hintBound = '1';
-        endTimeInput.addEventListener('input', syncQuickEndTimeHint);
-        endTimeInput.addEventListener('change', syncQuickEndTimeHint);
-        syncQuickEndTimeHint();
-    }
+    ['quick_time', 'quick_end_time'].forEach((inputId) => {
+        const input = document.getElementById(inputId);
+        if (!input || input.dataset.hintBound) {
+            return;
+        }
+        input.dataset.hintBound = '1';
+        input.addEventListener('input', () => syncQuickTimeHint(inputId));
+        input.addEventListener('change', () => syncQuickTimeHint(inputId));
+        syncQuickTimeHint(inputId);
+    });
     const markDirty = () => {
         if (!quickEventFormMute) {
             quickEventFormDirty = true;

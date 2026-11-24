@@ -128,8 +128,9 @@ def coerce_offset_minutes(value) -> int:
 
 
 def normalize_reminder_item(item) -> dict:
-    """מחזיר ``{offset_minutes, recipient_ids}``.
+    """מחזיר ``{offset_minutes, person_id, recipient_ids}`` לשורה אחת לאדם.
 
+    מתקבל ``person_id`` או ``recipient_ids`` (מערך — יפוצל ב-``parse_reminders_payload``).
     מתקבל או ``offset_minutes`` (כולל 0), או ``amount`` + ``unit``.
     """
     if not isinstance(item, dict):
@@ -144,10 +145,22 @@ def normalize_reminder_item(item) -> dict:
     else:
         raise OffsetError("חסר זמן לתזכורת")
 
-    raw_ids = item.get("recipient_ids") or []
+    recipient_ids: list[int] = []
+    raw_person = item.get("person_id")
+    if raw_person is not None and raw_person != "":
+        try:
+            person_id = int(raw_person)
+        except (TypeError, ValueError) as exc:
+            raise OffsetError("מזהה נמען חייב להיות מספר") from exc
+        if person_id <= 0:
+            raise OffsetError("מזהה נמען חייב להיות מספר")
+        recipient_ids.append(person_id)
+
+    raw_ids = item.get("recipient_ids") if "recipient_ids" in item else None
+    if raw_ids is None:
+        raw_ids = []
     if not isinstance(raw_ids, list):
         raise OffsetError("רשימת הנמענים חייבת להיות מערך")
-    recipient_ids = []
     for raw in raw_ids:
         try:
             person_id = int(raw)
@@ -157,38 +170,47 @@ def normalize_reminder_item(item) -> dict:
             raise OffsetError("מזהה נמען חייב להיות מספר")
         if person_id not in recipient_ids:
             recipient_ids.append(person_id)
-    
+
     if len(recipient_ids) == 0:
         raise OffsetError("נא לבחור לפחות נמען אחד לתזכורת")
-    
-    return {"offset_minutes": minutes, "recipient_ids": recipient_ids}
+
+    return {
+        "offset_minutes": minutes,
+        "person_id": recipient_ids[0],
+        "recipient_ids": recipient_ids,
+    }
 
 
 def parse_reminders_payload(raw, valid_people_ids: set[int] | None = None) -> list[dict]:
-    """מאחד כפילויות של אותו offset ומאמת שנמענים קיימים."""
+    """מפרק ל־(אדם, offset) — כל שורה לאדם אחד.
+
+    קלט ישן עם כמה נמענים לאותו offset מתפצל לשורות נפרדות.
+    """
     if raw is None:
         return []
     if not isinstance(raw, list):
         raise OffsetError("תזכורות חייבות להיות רשימה")
 
-    merged: dict[int, list[int]] = {}
-    order: list[int] = []
+    seen: set[tuple[int, int]] = set()
+    out: list[dict] = []
     allowed = valid_people_ids
     for item in raw:
         normal = normalize_reminder_item(item)
         offset = normal["offset_minutes"]
-        if offset not in merged:
-            merged[offset] = []
-            order.append(offset)
         for person_id in normal["recipient_ids"]:
             if allowed is not None and person_id not in allowed:
                 raise OffsetError(f"נמען לא קיים: {person_id}")
-            if person_id not in merged[offset]:
-                merged[offset].append(person_id)
-    return [
-        {"offset_minutes": offset, "recipient_ids": merged[offset]}
-        for offset in order
-    ]
+            key = (person_id, offset)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "person_id": person_id,
+                "offset_minutes": offset,
+                "recipient_ids": [person_id],
+            })
+    out.sort(key=lambda row: (row["offset_minutes"], row["person_id"]))
+    return out
 
 
 def offset_label(minutes: int) -> str:
